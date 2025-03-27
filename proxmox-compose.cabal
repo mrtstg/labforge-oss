@@ -1,0 +1,69 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.37.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           proxmox-compose
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/mrtstg/proxmox-compose#readme>
+homepage:       https://github.com/mrtstg/proxmox-compose#readme
+bug-reports:    https://github.com/mrtstg/proxmox-compose/issues
+author:         Ilya Zamaratskikh
+maintainer:     mrtstgdev@gmail.com
+copyright:      2025 Ilya Zamaratskikh
+license:        BSD-3-Clause
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/mrtstg/proxmox-compose
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_proxmox_compose
+  autogen-modules:
+      Paths_proxmox_compose
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+    , servant ==0.19.1
+  default-language: Haskell2010
+
+executable proxmox-compose-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_proxmox_compose
+  autogen-modules:
+      Paths_proxmox_compose
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , proxmox-compose
+    , servant ==0.19.1
+  default-language: Haskell2010
+
+test-suite proxmox-compose-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_proxmox_compose
+  autogen-modules:
+      Paths_proxmox_compose
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , proxmox-compose
+    , servant ==0.19.1
+  default-language: Haskell2010
