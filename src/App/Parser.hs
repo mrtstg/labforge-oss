@@ -12,6 +12,7 @@ destroyParser = pure Destroy
 appParser :: Parser AppOpts
 appParser = AppOpts <$>
   optional (strOption (long "file" <> short 'f' <> metavar "FILE" <> help "Path to configuration file")) <*>
+  optional (strOption (long "token" <> short 't' <> metavar "TOKEN" <> help "Proxmox API access token to use")) <*>
   subparser (
     command "up" (info deployParser (progDesc "Deploy VMs")) <>
     command "down" (info destroyParser (progDesc "Destroy VMs"))

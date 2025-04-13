@@ -28,13 +28,14 @@ library
       Api.Proxmox.Client
       Api.Proxmox.Models
       Api.Proxmox.Models.Version
+      Api.Proxmox.Models.VM
       Api.Ssl
       App.Commands
       App.Parser
       App.Types
       Data.Models.Config
+      Data.Models.Config.Deploy
       Data.Models.Config.Template
-      Lib
       Utils
   other-modules:
       Paths_proxmox_compose
