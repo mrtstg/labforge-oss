@@ -19,6 +19,25 @@ import Data.Models.Config.Deploy
 import Data.Models.Config
 import Api.Ssl (noSSLManager)
 import Network.HTTP.Client (newManager, defaultManagerSettings)
+import System.Log.Handler (LogHandler(setFormatter))
+import System.Log.Handler.Simple
+import System.Log.Formatter
+import System.IO
+import System.Log
+import System.Log.Logger (infoM, updateGlobalLogger, setLevel, rootLoggerName, setHandlers, errorM)
+
+loggerName = "ProxmoxCompose.Main"
+
+setupFormatter :: LogHandler a => a -> a
+setupFormatter x = do
+  setFormatter x (simpleLogFormatter "$time $prio $loggername: $msg")
+
+setupLogging :: IO ()
+setupLogging = do
+  handler <- streamHandler stdout INFO >>= \x -> pure $ setupFormatter x
+  updateGlobalLogger rootLoggerName $ setHandlers [handler]
+  updateGlobalLogger rootLoggerName (setLevel INFO)
+  infoM loggerName "Started logging!"
 
 runUpCommand :: AppOpts -> IO ()
 runUpCommand opts = putStrLn "Up!"
@@ -35,19 +54,19 @@ parseDeployConfig AppOpts { .. } = let
   (configPath', checkedPaths) <- findExistingFile configFiles'
   case configPath' of
     Nothing -> do
-      putStrLn $ "No available config files found. Checked: " <> intercalate "," checkedPaths
+      errorM loggerName $ "No available config files found. Checked: " <> intercalate "," checkedPaths
       exitWith (ExitFailure 1)
     (Just configPath) -> do
       configParseResult <- decodeDeployConfig configPath
       case configParseResult of
         (Left parseError) -> do
-          putStrLn $ displayException parseError
+          errorM loggerName $ displayException parseError
           exitWith (ExitFailure 1)
         (Right deployConfig') -> do
           let deployConfig = updateDeployConfigToken optsToken deployConfig'
           case (deployToken . deployParameters) deployConfig of
             Nothing -> do
-              putStrLn "Access token is not provided in file or command. Exiting..."
+              errorM loggerName "Access token is not provided in file or command. Exiting..."
               exitWith (ExitFailure 1)
             _tokenExists -> do
               return deployConfig
@@ -59,11 +78,12 @@ substituteProxmoxToken (DeployConfig { deployParameters = DeployParams { deployT
 
 runCommand :: AppOpts -> IO ()
 runCommand opts@(AppOpts { .. }) = do
+  _ <- setupLogging
   deployConfig <- parseDeployConfig opts
   urlParseResult <- (try . parseBaseUrl . T.unpack . deployUrl . deployParameters) deployConfig :: (IO (Either SomeException BaseUrl))
   case urlParseResult of
     (Left a) -> do
-      putStrLn $ "Failed to parse proxmox API URL: " <> displayException a
+      errorM loggerName $ "Failed to parse proxmox API URL: " <> displayException a
       exitWith (ExitFailure 1)
     (Right proxmoxUrl) -> do
       manager <- if (deployIgnoreSSL . deployParameters) deployConfig then noSSLManager else newManager defaultManagerSettings
@@ -71,10 +91,10 @@ runCommand opts@(AppOpts { .. }) = do
       pvePingResult <- runProxmoxClient' proxmoxState (substituteProxmoxToken deployConfig C.getVersion)
       case pvePingResult of
         (Left e) -> do
-          putStrLn $ "Proxmox version API request error: " <> displayException e
+          errorM loggerName $ "Proxmox version API request error: " <> displayException e
           exitWith (ExitFailure 1)
         (Right (ProxmoxResponse (ProxmoxVersion { proxmoxVersion = proxmoxVersion }))) -> do
-          putStrLn $ "Found proxmox v" <> T.unpack proxmoxVersion
+          infoM loggerName $ "Found proxmox v" <> T.unpack proxmoxVersion
           case appCommand of
             Deploy -> runUpCommand opts
             Destroy -> runDownCommand opts
