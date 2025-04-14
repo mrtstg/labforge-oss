@@ -7,6 +7,7 @@ module Data.Models.Config
 
 import Data.Models.Config.Deploy
 import Data.Models.Config.Template
+import Data.Models.Config.VM
 import Data.Aeson
 import qualified Data.Yaml as Y
 import Data.Text (Text)
@@ -14,12 +15,14 @@ import Data.Text (Text)
 data DeployConfig = DeployConfig 
   { deployTemplates :: ![ConfigTemplate]
   , deployParameters :: !DeployParams
+  , deployVMs :: ![ConfigVM]
   } deriving Show
 
 instance FromJSON DeployConfig where
   parseJSON = withObject "DeployConfig" $ \v -> DeployConfig
     <$> v .:? "templates" .!= []
     <*> v .: "deploy"
+    <*> v .:? "vms" .!= []
 
 decodeDeployConfig :: FilePath -> IO (Either Y.ParseException DeployConfig)
 decodeDeployConfig = Y.decodeFileEither
