@@ -8,6 +8,7 @@ module Api.Proxmox.Client
   , getNodeVMsMap
   , getNodeNetworks
   , getBridgeNodeNetworks
+  , getSDNZones
   ) where
 
 import Data.Text (Text)
@@ -28,6 +29,7 @@ api :: Proxy ProxmoxAPI
 api = Proxy
 
 getVersion 
+  :<|> getSDNZones
   :<|> getVMConfig 
   :<|> getNodeVMs 
   :<|> getNodeNetworks = client api

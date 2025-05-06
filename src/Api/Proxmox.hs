@@ -20,15 +20,18 @@ import Control.Monad.Trans.Reader
 import Control.Monad.IO.Class
 import Network.HTTP.Conduit
 import Servant.Client
+import Api.Proxmox.Models.SDNZone
 
 data ProxmoxState = ProxmoxState BaseUrl Manager
 
 type ProxmoxM m = ReaderT ProxmoxState IO m
+type NodeNameCapture = Capture "nodename" Text
 
 type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
-  :<|> "nodes" :> Capture "nodename" Text :> "qemu" :> Capture "vmid" Integer :> "config" :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))
-  :<|> "nodes" :> Capture "nodename" Text :> "qemu" :> Get '[JSON] (ProxmoxResponse [ProxmoxVM])
-  :<|> "nodes" :> Capture "nodename" Text :> "network" :> QueryParam "type" ProxmoxNetworkFilter :> Get '[JSON] (ProxmoxResponse [ProxmoxNetwork])
+  :<|> "cluster" :> "sdn" :> "zones" :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNZone])
+  :<|> "nodes" :> NodeNameCapture :> "qemu" :> Capture "vmid" Integer :> "config" :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))
+  :<|> "nodes" :> NodeNameCapture :> "qemu" :> Get '[JSON] (ProxmoxResponse [ProxmoxVM])
+  :<|> "nodes" :> NodeNameCapture :> "network" :> QueryParam "type" ProxmoxNetworkFilter :> Get '[JSON] (ProxmoxResponse [ProxmoxNetwork])
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT
