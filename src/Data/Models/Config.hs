@@ -5,6 +5,7 @@ module Data.Models.Config
   , updateDeployConfigToken
   ) where
 
+import Data.Models.Config.Network
 import Data.Models.Config.Deploy
 import Data.Models.Config.Template
 import Data.Models.Config.VM
@@ -16,6 +17,7 @@ data DeployConfig = DeployConfig
   { deployTemplates :: ![ConfigTemplate]
   , deployParameters :: !DeployParams
   , deployVMs :: ![ConfigVM]
+  , deployNetworks :: ![ConfigNetwork]
   } deriving Show
 
 instance FromJSON DeployConfig where
@@ -23,6 +25,7 @@ instance FromJSON DeployConfig where
     <$> v .:? "templates" .!= []
     <*> v .: "deploy"
     <*> v .:? "vms" .!= []
+    <*> v .:? "networks" .!= []
 
 decodeDeployConfig :: FilePath -> IO (Either Y.ParseException DeployConfig)
 decodeDeployConfig = Y.decodeFileEither
