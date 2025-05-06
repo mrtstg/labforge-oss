@@ -6,6 +6,8 @@ module Api.Proxmox.Client
   , getVMConfig
   , getNodeVMs
   , getNodeVMsMap
+  , getNodeNetworks
+  , getBridgeNodeNetworks
   ) where
 
 import Data.Text (Text)
@@ -20,13 +22,23 @@ import Api.Proxmox
 import qualified Servant.Client.Streaming as S
 import Api.Proxmox.Models.VM (ProxmoxVM(..))
 import Api.Proxmox.Models (ProxmoxResponse(..))
+import Api.Proxmox.Models.Network
 
 api :: Proxy ProxmoxAPI
 api = Proxy
 
-getVersion :<|> getVMConfig :<|> getNodeVMs = client api
+getVersion 
+  :<|> getVMConfig 
+  :<|> getNodeVMs 
+  :<|> getNodeNetworks = client api
 
-getNodeVMsMap :: Text -> Maybe Text -> ClientM (M.Map Int ProxmoxVM)
-getNodeVMsMap node token = getNodeVMs node token >>= f where
+getNodeVMsMap :: Text -> ClientM (M.Map Int ProxmoxVM)
+getNodeVMsMap node = getNodeVMs node >>= f where
   f :: ProxmoxResponse [ProxmoxVM] -> ClientM (M.Map Int ProxmoxVM)
   f (ProxmoxResponse vms) = (pure . M.fromList) $ map (\x -> (vmID x, x)) vms
+
+-- shortcut for getting networks for plugging vms into
+getBridgeNodeNetworks :: Text -> ClientM [ProxmoxNetwork]
+getBridgeNodeNetworks node = do
+  (ProxmoxResponse nets) <- getNodeNetworks node (Just AnyBridge)
+  return nets

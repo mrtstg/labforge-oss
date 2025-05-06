@@ -15,6 +15,7 @@ import Api.Proxmox.Models.Version
 import Api.Proxmox.Models
 import Api.Proxmox.Models.VM (ProxmoxVM)
 import Api.Proxmox.Models.VMConfig (ProxmoxVMConfig)
+import Api.Proxmox.Models.Network (ProxmoxNetwork, ProxmoxNetworkType, ProxmoxNetworkFilter)
 import Control.Monad.Trans.Reader
 import Control.Monad.IO.Class
 import Network.HTTP.Conduit
@@ -24,11 +25,10 @@ data ProxmoxState = ProxmoxState BaseUrl Manager
 
 type ProxmoxM m = ReaderT ProxmoxState IO m
 
-type AuthHeader = Header "Authorization" Text
-
-type ProxmoxAPI = "version" :> AuthHeader :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
-  :<|> "nodes" :> Capture "nodename" Text :> "qemu" :> Capture "vmid" Integer :> "config" :> AuthHeader :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))
-  :<|> "nodes" :> Capture "nodename" Text :> "qemu" :> AuthHeader :> Get '[JSON] (ProxmoxResponse [ProxmoxVM])
+type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
+  :<|> "nodes" :> Capture "nodename" Text :> "qemu" :> Capture "vmid" Integer :> "config" :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))
+  :<|> "nodes" :> Capture "nodename" Text :> "qemu" :> Get '[JSON] (ProxmoxResponse [ProxmoxVM])
+  :<|> "nodes" :> Capture "nodename" Text :> "network" :> QueryParam "type" ProxmoxNetworkFilter :> Get '[JSON] (ProxmoxResponse [ProxmoxNetwork])
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT

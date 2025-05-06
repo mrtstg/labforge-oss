@@ -16,15 +16,13 @@ import System.Exit
 import Data.List (intercalate)
 import Data.Models.Config.Deploy
 import Data.Models.Config
-import Api.Ssl (noSSLManager)
-import Network.HTTP.Client (newManager, defaultManagerSettings)
+import Api.Ssl (createProxmoxManager)
 import System.Log.Handler (LogHandler(setFormatter))
 import System.Log.Handler.Simple
 import System.Log.Formatter
 import System.IO
 import System.Log
 import System.Log.Logger (infoM, updateGlobalLogger, setLevel, rootLoggerName, setHandlers, errorM)
-import Deploy
 import Data.Models.Config.Template
 import Deploy.Template
 import Deploy.VM
@@ -49,7 +47,7 @@ runUpCommand proxmoxState deployConfig@(DeployConfig
     , deployVMs = vms
     }) = do
   infoM loggerName "Retrieving node virtual machines info..."
-  vmMapRes <- runProxmoxClient' proxmoxState $ substituteProxmoxToken deployConfig (C.getNodeVMsMap nodeName)
+  vmMapRes <- runProxmoxClient' proxmoxState $ C.getNodeVMsMap nodeName
   case vmMapRes of
     (Left err) -> do
       errorM loggerName ("Failed to get node VMs: " <> displayException err)
@@ -108,9 +106,9 @@ runCommand opts@(AppOpts { .. }) = do
       errorM loggerName $ "Failed to parse proxmox API URL: " <> displayException a
       exitWith (ExitFailure 1)
     (Right proxmoxUrl) -> do
-      manager <- if (deployIgnoreSSL . deployParameters) deployConfig then noSSLManager else newManager defaultManagerSettings
+      manager <- createProxmoxManager deployConfig
       let proxmoxState = ProxmoxState proxmoxUrl manager
-      pvePingResult <- runProxmoxClient' proxmoxState (substituteProxmoxToken deployConfig C.getVersion)
+      pvePingResult <- runProxmoxClient' proxmoxState C.getVersion
       case pvePingResult of
         (Left e) -> do
           errorM loggerName $ "Proxmox version API request error: " <> displayException e

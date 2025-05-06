@@ -27,6 +27,7 @@ library
       Api.Proxmox
       Api.Proxmox.Client
       Api.Proxmox.Models
+      Api.Proxmox.Models.Network
       Api.Proxmox.Models.Version
       Api.Proxmox.Models.VM
       Api.Proxmox.Models.VMConfig
@@ -37,8 +38,9 @@ library
       Data.Models.Config
       Data.Models.Config.Deploy
       Data.Models.Config.Template
-      Deploy
+      Data.Models.Config.VM
       Deploy.Template
+      Deploy.VM
       Utils
   other-modules:
       Paths_proxmox_compose
@@ -50,6 +52,8 @@ library
   build-depends:
       aeson ==2.1.2.1
     , base >=4.7 && <5
+    , bytestring ==0.11.5.2
+    , case-insensitive ==1.2.1.0
     , connection ==0.3.1
     , containers ==0.6.7
     , directory ==1.3.7.1
@@ -76,6 +80,8 @@ executable proxmox-compose-exe
   build-depends:
       aeson ==2.1.2.1
     , base >=4.7 && <5
+    , bytestring ==0.11.5.2
+    , case-insensitive ==1.2.1.0
     , connection ==0.3.1
     , containers ==0.6.7
     , directory ==1.3.7.1
@@ -104,6 +110,8 @@ test-suite proxmox-compose-test
   build-depends:
       aeson ==2.1.2.1
     , base >=4.7 && <5
+    , bytestring ==0.11.5.2
+    , case-insensitive ==1.2.1.0
     , connection ==0.3.1
     , containers ==0.6.7
     , directory ==1.3.7.1
