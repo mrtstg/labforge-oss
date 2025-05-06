@@ -33,12 +33,15 @@ library
       Api.Proxmox.Models.VMConfig
       Api.Ssl
       App.Commands
+      App.Commands.Up
       App.Parser
       App.Types
       Data.Models.Config
       Data.Models.Config.Deploy
+      Data.Models.Config.Network
       Data.Models.Config.Template
       Data.Models.Config.VM
+      Deploy.Network
       Deploy.Template
       Deploy.VM
       Utils

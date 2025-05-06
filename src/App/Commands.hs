@@ -23,9 +23,7 @@ import System.Log.Formatter
 import System.IO
 import System.Log
 import System.Log.Logger (infoM, updateGlobalLogger, setLevel, rootLoggerName, setHandlers, errorM)
-import Data.Models.Config.Template
-import Deploy.Template
-import Deploy.VM
+import App.Commands.Up
 
 loggerName = "ProxmoxCompose.Main"
 
@@ -39,33 +37,6 @@ setupLogging = do
   updateGlobalLogger rootLoggerName $ setHandlers [handler]
   updateGlobalLogger rootLoggerName (setLevel INFO)
   infoM loggerName "Started logging!"
-
-runUpCommand :: ProxmoxState -> DeployConfig -> IO ()
-runUpCommand proxmoxState deployConfig@(DeployConfig 
-    { deployParameters = DeployParams { deployNodeName = nodeName }
-    , deployTemplates = templates
-    , deployVMs = vms
-    }) = do
-  infoM loggerName "Retrieving node virtual machines info..."
-  vmMapRes <- runProxmoxClient' proxmoxState $ C.getNodeVMsMap nodeName
-  case vmMapRes of
-    (Left err) -> do
-      errorM loggerName ("Failed to get node VMs: " <> displayException err)
-      exitWith (ExitFailure 1)
-    (Right vmMap) -> do
-      case vmIDPresent vmMap (map configTemplateID templates) of
-        (Left missingIDs) -> do
-          let missingTemplatesData = filter ((`elem` missingIDs) . configTemplateID) templates
-          errorM loggerName $ "Following templates was not found: " <> intercalate ", " (map configTemplateName missingTemplatesData)
-          exitWith (ExitFailure 1)
-        (Right _) -> do
-          infoM loggerName "All templates are present!"
-          case validateVMsData templates vms of
-            (Left err) -> do
-              errorM loggerName (show err)
-              exitWith (ExitFailure 1)
-            _dataOk -> do
-              exitSuccess
 
 runDownCommand :: AppOpts -> IO ()
 runDownCommand opts = putStrLn "Down!"
