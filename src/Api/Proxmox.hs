@@ -21,6 +21,7 @@ import Control.Monad.IO.Class
 import Network.HTTP.Conduit
 import Servant.Client
 import Api.Proxmox.Models.SDNZone
+import Api.Proxmox.Models.SDNNetwork
 
 data ProxmoxState = ProxmoxState BaseUrl Manager
 
@@ -29,6 +30,7 @@ type NodeNameCapture = Capture "nodename" Text
 
 type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "cluster" :> "sdn" :> "zones" :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNZone])
+  :<|> "cluster" :> "sdn" :> "vnets" :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNNetwork])
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> Capture "vmid" Integer :> "config" :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> Get '[JSON] (ProxmoxResponse [ProxmoxVM])
   :<|> "nodes" :> NodeNameCapture :> "network" :> QueryParam "type" ProxmoxNetworkFilter :> Get '[JSON] (ProxmoxResponse [ProxmoxNetwork])
