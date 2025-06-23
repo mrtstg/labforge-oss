@@ -23,18 +23,15 @@ import Api.Proxmox.Models.VM
 import System.Log.Logger
 import Data.Models.Config.Network
 import Deploy.Network
+import Utils
+import Api.Proxmox.Models.SDNNetwork
 
 loggerName = "ProxmoxCompose.Main"
 
-getNodeVMs' :: ProxmoxState -> Text -> IO (Map Int ProxmoxVM)
-getNodeVMs' proxmoxState nodeName = do
+getActiveNodesVMMap' :: ProxmoxState -> IO (Map Int ProxmoxVM)
+getActiveNodesVMMap' proxmoxState = do
   infoM loggerName "Retrieving node virtual machines info..."
-  vmMapRes <- runProxmoxClient' proxmoxState $ C.getNodeVMsMap nodeName
-  case vmMapRes of
-    (Left err) -> do
-      errorM loggerName ("Failed to get node VMs: " <> displayException err)
-      exitWith (ExitFailure 1)
-    (Right vmMap) -> return vmMap
+  commonErrorStdoutHandler loggerName (runProxmoxClient' proxmoxState C.getActiveNodesVMMap) (\err -> "Failed to get node VMs: " <> displayException err)
 
 checkTemplates :: Map Int ProxmoxVM -> [ConfigTemplate] -> [ConfigVM] -> IO ()
 checkTemplates vmMap templates vms = do
@@ -45,29 +42,20 @@ checkTemplates vmMap templates vms = do
       exitWith (ExitFailure 1)
     (Right _) -> do
       infoM loggerName "All templates are present!"
-      case validateVMsData templates vms of
-        (Left err) -> do
-          errorM loggerName (show err)
-          exitWith (ExitFailure 1)
-        _ -> return ()
+      commonErrorStdoutHandler' loggerName (pure $ validateVMsData templates vms)
 
 getBridges' :: ProxmoxState -> Text -> IO [ProxmoxNetwork]
 getBridges' proxmoxState nodeName = do
   infoM loggerName "Getting node bridges..."
-  res <- runProxmoxClient' proxmoxState $ getBridgeNodeNetworks nodeName
-  case res of
-    (Left e) -> do
-      errorM loggerName $ "Failed to get node bridges: " <> displayException e
-      exitWith (ExitFailure 1)
-    (Right networks) -> return networks
+  commonErrorStdoutHandler loggerName (runProxmoxClient' proxmoxState $ getBridgeNodeNetworks nodeName) (\e -> "Failed to get node bridges: " <> displayException e)
 
 validateNetworks' :: [ConfigNetwork] -> [ProxmoxNetwork] -> IO ()
-validateNetworks' cfg pve = do
-  case validateConfigNetworks cfg pve of
-    (Left e) -> do
-      errorM loggerName (show e)
-      exitWith (ExitFailure 1)
-    (Right _) -> pure ()
+validateNetworks' cfg pve = commonErrorStdoutHandler' loggerName (pure $ validateConfigNetworks cfg pve)
+
+getSDNNetworks' :: ProxmoxState -> IO [ProxmoxSDNNetwork]
+getSDNNetworks' proxmoxState = do
+  (ProxmoxResponse networks) <- commonErrorStdoutHandler loggerName (runProxmoxClient' proxmoxState getSDNNetworks) (\e -> "Failed to get SDN networks: " <> displayException e)
+  return networks
 
 runUpCommand :: ProxmoxState -> DeployConfig -> IO ()
 runUpCommand proxmoxState deployConfig@(DeployConfig 
@@ -76,10 +64,13 @@ runUpCommand proxmoxState deployConfig@(DeployConfig
     , deployVMs = vms
     , deployNetworks = networks
     }) = do
-    vmMap <- getNodeVMs' proxmoxState nodeName
+    vmMap <- getActiveNodesVMMap' proxmoxState
+    print vmMap
     () <- checkTemplates vmMap templates vms
     bridges <- getBridges' proxmoxState nodeName
     () <- validateNetworks' networks bridges
+    
+    sdnNetworks <- getSDNNetworks' proxmoxState
 
     -- TODO: delete
     infoM loggerName (show deployConfig)

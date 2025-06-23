@@ -2,9 +2,16 @@ module Utils
   ( findExistingFile
   , defaultConfigFiles
   , returnFirstDuplicate
+  , commonErrorStdoutHandler
+  , commonErrorStdoutHandler'
   ) where
 
 import System.Directory
+import Servant.Client
+import System.Log.Logger
+import System.Exit
+
+type LoggerName = String
 
 returnFirstDuplicate :: (Eq a) => [a] -> Maybe a
 returnFirstDuplicate = helper [] where
@@ -23,3 +30,15 @@ findExistingFile = f [] where
   f acc (path:paths) = do
     fileExists <- doesFileExist path
     if fileExists then return (Just path, acc) else f (acc ++ [path]) paths
+
+commonErrorStdoutHandler' :: (Show e) => LoggerName -> IO (Either e a) -> IO a
+commonErrorStdoutHandler' loggerName res = commonErrorStdoutHandler loggerName res show
+
+commonErrorStdoutHandler :: (Show e) => LoggerName -> IO (Either e a) -> (e -> String) -> IO a
+commonErrorStdoutHandler loggerName res errorF = do
+  v <- res
+  case v of
+    (Left e) -> do
+      errorM loggerName (errorF e)
+      exitWith (ExitFailure 1)
+    (Right r) -> return r
