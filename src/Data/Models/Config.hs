@@ -3,6 +3,7 @@ module Data.Models.Config
   ( DeployConfig(..)
   , decodeDeployConfig
   , updateDeployConfigToken
+  , emptyDeployConfig
   ) where
 
 import Data.Models.Config.Network
@@ -33,3 +34,7 @@ decodeDeployConfig = Y.decodeFileEither
 updateDeployConfigToken :: Maybe Text -> DeployConfig -> DeployConfig
 updateDeployConfigToken (Just token) c@(DeployConfig {deployParameters = p@(DeployParams {deployToken = Nothing })}) = c { deployParameters = p { deployToken = Just token } }
 updateDeployConfigToken _ p = p
+
+-- used for tests, at least now
+emptyDeployConfig :: DeployConfig
+emptyDeployConfig = DeployConfig {deployTemplates=[], deployParameters=DeployParams {deployUrl="", deployToken=Nothing, deployNodeName="", deployIgnoreSSL=False}, deployVMs=[], deployNetworks=[]}

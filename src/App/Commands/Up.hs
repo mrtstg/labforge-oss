@@ -3,7 +3,6 @@ module App.Commands.Up
   ) where
 
 import Data.Models.Config.Template
-import Deploy.Template
 import Deploy.VM
 import Api.Proxmox
 import Api.Proxmox.Models.Version
