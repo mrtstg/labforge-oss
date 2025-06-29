@@ -10,7 +10,7 @@ import Control.Applicative
 data ConfigSubnetRange = ConfigSubnetRange
   { configSubnetRangeStart :: !String
   , configSubnetRangeEnd :: !String
-  } deriving Show
+  } deriving (Show, Eq)
 
 instance FromJSON ConfigSubnetRange where
   parseJSON = withObject "ConfigSubnetRange" $ \v -> ConfigSubnetRange
@@ -24,7 +24,7 @@ data ConfigSubnet = ConfigSubnet
   , configSubnetGateway :: !(Maybe String)
   , configSubnetSNAT :: !Bool
   , configSubnetRanges :: ![ConfigSubnetRange]
-  } deriving Show
+  } deriving (Show, Eq)
 
 instance FromJSON ConfigSubnet where
   parseJSON = withObject "ConfigSubnet" $ \v -> ConfigSubnet
@@ -42,9 +42,8 @@ data ConfigNetwork = ExistingNetwork
   { configNetworkSubnets :: ![ConfigSubnet]
   , configNetworkZone :: !String
   , configNetworkName :: !String
-  , configNetworkDisplayName :: !(Maybe String)
   , configNetworkVLANAware :: !(Maybe Bool)
-  } deriving Show
+  } deriving (Show, Eq)
 
 instance FromJSON ConfigNetwork where
   parseJSON = let
@@ -54,7 +53,6 @@ instance FromJSON ConfigNetwork where
       <$> v .:? "subnets" .!= []
       <*> v .: "zone"
       <*> v .: "name"
-      <*> v .:? "display_name"
       <*> v .:? "vlanaware"
     in withObject "ConfigNetwork" $ \v -> case KV.lookup "type" v of
     Nothing -> existingNetworkParser v
