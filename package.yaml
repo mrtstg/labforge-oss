@@ -68,3 +68,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - proxmox-compose
+    - hspec >= 2.0.0
+    - hspec-discover
