@@ -13,10 +13,10 @@ type Name = String
 
 data ProxmoxSDNNetwork = ProxmoxSDNNetwork
   { sdnNetworkZone   :: !String
-  , sdnNetworkTag    :: !(Maybe String)
+  , sdnNetworkTag    :: !(Maybe Int)
   , sdnNetworkName   :: !String
   , sdnNetworkDigest :: !(Maybe String)
-  } deriving Show
+  } deriving (Show, Eq)
 
 instance FromJSON ProxmoxSDNNetwork where
   parseJSON = withObject "ProxmoxSDNNetwork" $ \v -> ProxmoxSDNNetwork
@@ -28,7 +28,7 @@ instance FromJSON ProxmoxSDNNetwork where
 instance ToJSON ProxmoxSDNNetwork where
   toJSON (ProxmoxSDNNetwork { .. }) = object
     [ "zone" .= sdnNetworkZone
-    , "tag" .= sdnNetworkTag
+    , "tag" .= sdnNetworkTag -- TODO: PARSER ON CONVERTING TO STRING
     , "vnet" .= sdnNetworkName
     , "digest" .= sdnNetworkDigest
     ]
@@ -39,7 +39,7 @@ data ProxmoxSDNNetworkCreate = ProxmoxSDNNetworkCreate
   , sdnNetworkCreateTag       :: !(Maybe Int)
   , sdnNetworkCreateAlias     :: !(Maybe String)
   , sdnNetworkCreateVlanaware :: !(Maybe Bool)
-  } deriving Show
+  } deriving (Show, Eq)
 
 instance ToJSON ProxmoxSDNNetworkCreate where
   toJSON (ProxmoxSDNNetworkCreate { .. }) = object $ baseFields ++ tagField ++ aliasField ++ vlanField where

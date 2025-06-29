@@ -7,17 +7,17 @@ module Api.Proxmox.Models.SDNZone
 import           Data.Aeson
 
 data ProxmoxSDNZone = ProxmoxSDNZone
-  { sdnZoneType       :: !String
-  , sdnZoneName       :: !String
-  , sdnZoneDhcp       :: !(Maybe String)
-  , sdnZoneDns        :: !(Maybe String)
-  , sdnZoneDnszone    :: !(Maybe String)
-  , sdnZoneIpam       :: !(Maybe String)
-  , sdnZoneMtu        :: !(Maybe Int)
-  , sdnZoneNodes      :: !(Maybe String)
-  , sdnZonePending    :: !(Maybe Bool)
-  , sdnZoneReverseDns :: !(Maybe String)
-  , sdnZoneState      :: !(Maybe String)
+  { proxmoxSDNZoneType       :: !String
+  , proxmoxSDNZoneName       :: !String
+  , proxmoxSDNZoneDhcp       :: !(Maybe String)
+  , proxmoxSDNZoneDns        :: !(Maybe String)
+  , proxmoxSDNZoneDnszone    :: !(Maybe String)
+  , proxmoxSDNZoneIpam       :: !(Maybe String)
+  , proxmoxSDNZoneMtu        :: !(Maybe Int)
+  , proxmoxSDNZoneNodes      :: !(Maybe String)
+  , proxmoxSDNZonePending    :: !(Maybe Bool)
+  , proxmoxSDNZoneReverseDns :: !(Maybe String)
+  , proxmoxSDNZoneState      :: !(Maybe String)
   } deriving Show
 
 instance FromJSON ProxmoxSDNZone where

@@ -21,7 +21,7 @@ instance Show ProxmoxNetworkFilter where
 instance ToHttpApiData ProxmoxNetworkFilter where
   toQueryParam = pack . show
 
-data ProxmoxNetworkType = Bridge | Bond | Eth | Alias | Vlan | OVSBridge | OVSBond | OVSPort | OVSIntPort | Vnet | Unknown Text
+data ProxmoxNetworkType = Bridge | Bond | Eth | Alias | Vlan | OVSBridge | OVSBond | OVSPort | OVSIntPort | Vnet | Unknown Text deriving (Eq)
 
 instance FromJSON ProxmoxNetworkType where
   parseJSON = withText "ProxmoxNetworkType" $ \case
