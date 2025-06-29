@@ -8,6 +8,7 @@ import Data.Text (Text)
 data AppOpts = AppOpts 
   { configFile :: !(Maybe FilePath)
   , optsToken :: !(Maybe Text)
+  , verboseFlag :: !Bool
   , appCommand :: !AppCommand
   } deriving Show
 
