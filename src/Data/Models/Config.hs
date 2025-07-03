@@ -37,4 +37,4 @@ updateDeployConfigToken _ p = p
 
 -- used for tests, at least now
 emptyDeployConfig :: DeployConfig
-emptyDeployConfig = DeployConfig {deployTemplates=[], deployParameters=DeployParams {deployUrl="", deployToken=Nothing, deployNodeName="", deployIgnoreSSL=False}, deployVMs=[], deployNetworks=[]}
+emptyDeployConfig = DeployConfig {deployTemplates=[], deployParameters=DeployParams {deployUrl="", deployToken=Nothing, deployNodeName="", deployIgnoreSSL=False, deployStartVMID = 100}, deployVMs=[], deployNetworks=[]}

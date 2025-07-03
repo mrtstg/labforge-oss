@@ -11,6 +11,7 @@ data DeployParams = DeployParams
   , deployToken :: !(Maybe Text)
   , deployUrl :: !Text
   , deployIgnoreSSL :: !Bool
+  , deployStartVMID :: !Int
   } deriving Show
 
 instance FromJSON DeployParams where
@@ -19,3 +20,4 @@ instance FromJSON DeployParams where
     <*> v .:? "token"
     <*> v .: "url"
     <*> v .:? "ignore_ssl" .!= False
+    <*> v .:? "start_vmid" .!= 100
