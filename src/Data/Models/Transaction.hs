@@ -7,10 +7,11 @@ module Data.Models.Transaction
   , TransactionState(..)
   , StatefulTransactionM
   , StatelessTransactionM
+  , DeployTarget(..)
+  , defaultClientErrorWrapper
   ) where
 
 import Api.Proxmox
-import Data.Aeson
 import Data.Models.Config.Network
 import Data.Models.Config.VM
 import Data.Models.Config.Template
@@ -18,7 +19,9 @@ import Api.Proxmox.Models.SDNNetwork
 import Api.Proxmox.Models.VMClone
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Except
-import qualified Data.Map as M
+import Deploy.Types
+import Servant.Client
+import Data.Models.Config
 
 data TransactionStage 
   = NetworkExists ConfigNetwork
@@ -35,25 +38,35 @@ data TransactionAction
   | AssignVMID String
   | CloneVM ProxmoxVMCloneParams
   | CreateVM ConfigVM -- replace
-  | DestroyVM Int
+  | DestroyVM String
   | StopVM String
   | StartVM String
   | PauseSeconds Int
   deriving (Show, Eq)
 
-data DeployTarget = Deploy | Destroy deriving Show
+data DeployTarget = Deploy | Destroy deriving (Show, Eq)
 
 data TransactionException = BridgeNotFound String 
-  | SDNZoneNotFound String 
-  | TemplateNotFound ConfigTemplate 
-  | NonTemplateLink ConfigTemplate 
-  | UnknownError String deriving Show
+  | SDNZoneNotFound String
+  | SDNVnetNotFound String
+  | SDNVnetDeleteError String
+  | TemplateNotFound ConfigTemplate
+  | TemplateNodeNotFound ConfigTemplate
+  | NonTemplateLink ConfigTemplate
+  | FileError String
+  | ClientError ClientError
+  | MachineHasNoID String
+  | VMDeleteError Int
+  | VMLocked Int
+  | UnknownError String
+  | VMIDTaken Int deriving Show
 
 data TransactionState = TransactionState 
-  { transactionAllocateVMIDF :: () -> StatefulTransactionM Int
+  { transactionAllocateVMIDF :: StatefulTransactionM Int
+  , transactionDataGetF :: StatefulTransactionM TransactionData
+  , transactionDataSetF :: TransactionData -> StatefulTransactionM ()
   , transactionActions :: ![TransactionAction]
-  , transactionCompletedActions :: ![TransactionAction]
-  , transactionVMIDMap :: M.Map String Int
+  , transactionDeployConfig :: !DeployConfig
   , transactionProxmoxState :: !ProxmoxState
   }
 
@@ -62,3 +75,7 @@ type StatelessTransactionM a = TransactionM IO a
 type StatefulTransactionM a = TransactionM (StateT TransactionState IO) a
 
 type TransactionM m a = ExceptT TransactionException m a
+
+defaultClientErrorWrapper :: Either ClientError a -> StatefulTransactionM a
+defaultClientErrorWrapper (Left e) = throwE (ClientError e)
+defaultClientErrorWrapper (Right v) = pure v
