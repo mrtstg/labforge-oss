@@ -32,6 +32,7 @@ dependencies:
 - containers == 0.6.7
 - case-insensitive == 1.2.1.0
 - bytestring == 0.11.5.2
+- filepath == 1.4.2.2
 
 ghc-options:
 - -Wall
