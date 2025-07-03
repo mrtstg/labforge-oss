@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Api.Proxmox.Client 
   ( getVersion
   , getVMConfig
@@ -17,6 +18,13 @@ module Api.Proxmox.Client
   , startVM
   , stopVM
   , getVMPower
+  , deleteVM
+  , deleteVM'
+  , cloneVM
+  , getActiveNodeVMNodeMap
+  , createSDNNetwork
+  , applySDNSettings
+  , deleteSDNNetwork
   ) where
 
 import Data.Text (Text, pack)
@@ -29,11 +37,12 @@ import Servant.API
 import Servant.Client
 import Api.Proxmox
 import qualified Servant.Client.Streaming as S
-import Api.Proxmox.Models.VM (ProxmoxVM(..))
-import Api.Proxmox.Models (ProxmoxResponse(..))
+import Api.Proxmox.Models.VM
+import Api.Proxmox.Models
 import Api.Proxmox.Models.Network
 import Api.Proxmox.Models.SDNNetwork
 import Api.Proxmox.Models.Node
+import Api.Proxmox.Models.VMClone
 
 api :: Proxy ProxmoxAPI
 api = Proxy
@@ -49,13 +58,36 @@ getVersion
   :<|> getNodes 
   :<|> startVM
   :<|> stopVM
-  :<|> getVMPower = client api
+  :<|> getVMPower
+  :<|> deleteVM
+  :<|> cloneVM
+  :<|> deleteSDNNetwork = client api
+
+deleteVM' :: Text -> Int -> ProxmoxVMDeleteRequest -> ClientM (ProxmoxResponse String)
+deleteVM' node vmid (ProxmoxVMDeleteRequest { .. }) = deleteVM 
+  node 
+  vmid 
+  (Just . NumericBoolWrapper $ proxmoxDestroyUnrefferenced)
+  (Just . NumericBoolWrapper $ proxmoxPurgeVM)
+  (Just . NumericBoolWrapper $ proxmoxSkipLock)
 
 getActiveNodesVMMap :: ClientM (M.Map Int ProxmoxVM)
 getActiveNodesVMMap = do
   nodes <- getActiveNodes
   nodeMaps <- traverse (getNodeVMsMap . pack . nodeName) nodes
   return $ foldr (M.unionWith const) M.empty nodeMaps
+
+getActiveNodeVMNodeMap :: ClientM (M.Map Int String)
+getActiveNodeVMNodeMap = let
+  f :: M.Map Int String -> [ProxmoxNode] -> ClientM (M.Map Int String)
+  f acc [] = pure acc
+  f acc (ProxmoxNode { nodeName = nodeName }:nodes) = do
+    nodeMap <- getNodeVMsMap (pack nodeName)
+    let newAcc = foldr (\(vmid, _) acc' -> M.insert vmid nodeName acc') acc (M.toList nodeMap)
+    f newAcc nodes
+  in do
+    nodes <- getActiveNodes
+    f M.empty nodes
 
 getNodeVMsMap :: Text -> ClientM (M.Map Int ProxmoxVM)
 getNodeVMsMap node = getNodeVMs node >>= f where
