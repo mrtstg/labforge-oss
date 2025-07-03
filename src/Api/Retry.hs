@@ -3,6 +3,7 @@ module Api.Retry
   ( retryClient
   , defaultRetryClient
   , defaultRetryClient'
+  , waitForClient
   ) where
 
 import System.Log.Logger
@@ -31,4 +32,23 @@ retryClient env res retryA retryT = do
       debugM loggerName $ "Retrying client error: " <> show e
       threadDelay retryT
       retryClient env res (retryA - 1) retryT
-    (Right v) -> (pure . Right) v 
+    (Right v) -> (pure . Right) v
+
+type FailureMessage = String
+type MaxRetryT = Int
+
+waitForClient :: MaxRetryT -> FailureMessage -> RetryAmount -> RetryTimeout -> IO (Either ClientError a) -> (a -> Bool) -> IO (Either ClientError Bool)
+waitForClient maxRetryT failMessage retryA retryT' v f = do
+  let retryT = min maxRetryT retryT'
+  res' <- v
+  case res' of
+    (Left e) -> if retryA <= 1 then (pure . Left) e else do
+      errorM loggerName "Error during API request. Retry..."
+      threadDelay retryT
+      waitForClient maxRetryT failMessage (retryA - 1) retryT v f
+    (Right res) -> do
+      let checkRes = f res
+      if checkRes || retryA <= 1 then (pure . Right) checkRes else do
+        infoM loggerName failMessage
+        threadDelay retryT
+        waitForClient maxRetryT failMessage (retryA - 1) (retryT * 2) v f
