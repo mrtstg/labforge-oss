@@ -41,7 +41,7 @@ setupLogging opts = do
   updateGlobalLogger rootLoggerName (setLevel level)
   infoM loggerName "Started logging!"
 
-parseDeployConfig :: AppOpts -> IO DeployConfig
+parseDeployConfig :: AppOpts -> IO (FilePath, DeployConfig)
 parseDeployConfig AppOpts { .. } = let
  configFiles' = case configFile of
   Nothing -> defaultConfigFiles
@@ -65,12 +65,12 @@ parseDeployConfig AppOpts { .. } = let
               errorM loggerName "Access token is not provided in file or command. Exiting..."
               exitWith (ExitFailure 1)
             _tokenExists -> do
-              return deployConfig
+              return (configPath, deployConfig)
 
 runCommand :: AppOpts -> IO ()
 runCommand opts@(AppOpts { .. }) = do
   _ <- setupLogging opts
-  deployConfig <- parseDeployConfig opts
+  (deployConfigPath, deployConfig) <- parseDeployConfig opts
   urlParseResult <- (try . parseBaseUrl . T.unpack . deployUrl . deployParameters) deployConfig :: (IO (Either SomeException BaseUrl))
   case urlParseResult of
     (Left a) -> do
@@ -87,5 +87,5 @@ runCommand opts@(AppOpts { .. }) = do
         (Right (ProxmoxResponse (ProxmoxVersion { proxmoxVersion = proxmoxVersion }))) -> do
           infoM loggerName $ "Found proxmox v" <> T.unpack proxmoxVersion
           case appCommand of
-            Deploy -> runUpCommand proxmoxState deployConfig
-            Destroy -> runDownCommand proxmoxState deployConfig
+            Deploy -> runUpCommand proxmoxState deployConfig deployConfigPath
+            Destroy -> runDownCommand proxmoxState deployConfig deployConfigPath

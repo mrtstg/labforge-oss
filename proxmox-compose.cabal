@@ -28,13 +28,18 @@ library
       Api.Proxmox.Client
       Api.Proxmox.Models
       Api.Proxmox.Models.Network
+      Api.Proxmox.Models.Node
       Api.Proxmox.Models.SDNNetwork
       Api.Proxmox.Models.SDNZone
       Api.Proxmox.Models.Version
       Api.Proxmox.Models.VM
+      Api.Proxmox.Models.VMClone
       Api.Proxmox.Models.VMConfig
+      Api.Retry
       Api.Ssl
       App.Commands
+      App.Commands.Common
+      App.Commands.Down
       App.Commands.Up
       App.Parser
       App.Types
@@ -43,8 +48,9 @@ library
       Data.Models.Config.Network
       Data.Models.Config.Template
       Data.Models.Config.VM
-      Deploy.Network
-      Deploy.Template
+      Data.Models.Transaction
+      Deploy.Transaction
+      Deploy.Types
       Deploy.VM
       Utils
   other-modules:
@@ -62,6 +68,7 @@ library
     , connection ==0.3.1
     , containers ==0.6.7
     , directory ==1.3.7.1
+    , filepath ==1.4.2.2
     , hslogger ==1.3.1.0
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
@@ -90,6 +97,7 @@ executable proxmox-compose-exe
     , connection ==0.3.1
     , containers ==0.6.7
     , directory ==1.3.7.1
+    , filepath ==1.4.2.2
     , hslogger ==1.3.1.0
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
@@ -106,6 +114,8 @@ test-suite proxmox-compose-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      App.Commands.CommonSpec
+      Deploy.TransactionSpec
       Paths_proxmox_compose
   autogen-modules:
       Paths_proxmox_compose
@@ -120,7 +130,10 @@ test-suite proxmox-compose-test
     , connection ==0.3.1
     , containers ==0.6.7
     , directory ==1.3.7.1
+    , filepath ==1.4.2.2
     , hslogger ==1.3.1.0
+    , hspec >=2.0.0
+    , hspec-discover
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
     , optparse-applicative ==0.17.1.0
