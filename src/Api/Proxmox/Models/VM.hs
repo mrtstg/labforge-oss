@@ -1,14 +1,33 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 module Api.Proxmox.Models.VM 
   ( ProxmoxVM(..)
   , ProxmoxVMStatus(..)
   , ProxmoxVMStatusWrapper(..)
+  , ProxmoxVMDeleteRequest(..)
+  , defaultProxmoxVMDeleteRequest
   ) where
 
 import Data.Aeson
 import Data.Text
 import qualified Data.Aeson.KeyMap as KM
+
+data ProxmoxVMDeleteRequest = ProxmoxVMDeleteRequest
+  { proxmoxPurgeVM :: !Bool
+  , proxmoxSkipLock :: !Bool
+  , proxmoxDestroyUnrefferenced :: !Bool
+  } deriving (Show, Eq)
+
+instance ToJSON ProxmoxVMDeleteRequest where
+  toJSON (ProxmoxVMDeleteRequest { .. }) = object
+    [ "purge" .= if proxmoxPurgeVM then String "1" else "0"
+    , "destroy-unreferenced-disks" .= if proxmoxPurgeVM then String "1" else "0"
+    , "skiplock" .= if proxmoxSkipLock then String "1" else "0"
+    ]
+
+defaultProxmoxVMDeleteRequest :: ProxmoxVMDeleteRequest
+defaultProxmoxVMDeleteRequest = ProxmoxVMDeleteRequest True False False
 
 newtype ProxmoxVMStatusWrapper = ProxmoxVMStatusWrapper ProxmoxVMStatus deriving Show
 
@@ -25,6 +44,7 @@ instance FromJSON ProxmoxVMStatus where
     otherValue -> pure (VMUnknown otherValue)
 
 -- common vm details, represented in /nodes/{node}/qemu requets
+-- TODO: add proxmox prefix
 data ProxmoxVM = ProxmoxVM
   { vmID :: !Int
   , vmName :: !(Maybe String)
