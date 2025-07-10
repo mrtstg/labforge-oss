@@ -28,6 +28,7 @@ library
       Api.Proxmox.Client
       Api.Proxmox.Models
       Api.Proxmox.Models.Network
+      Api.Proxmox.Models.NetworkInterface
       Api.Proxmox.Models.Node
       Api.Proxmox.Models.SDNNetwork
       Api.Proxmox.Models.SDNZone
@@ -52,6 +53,7 @@ library
       Deploy.Transaction
       Deploy.Types
       Deploy.VM
+      Parsers
       Utils
   other-modules:
       Paths_proxmox_compose
@@ -73,6 +75,7 @@ library
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
     , optparse-applicative ==0.17.1.0
+    , scientific ==0.3.7.0
     , servant ==0.19.1
     , servant-client ==0.19
     , text ==2.0.2
@@ -103,6 +106,7 @@ executable proxmox-compose-exe
     , http-conduit ==2.3.8.1
     , optparse-applicative ==0.17.1.0
     , proxmox-compose
+    , scientific ==0.3.7.0
     , servant ==0.19.1
     , servant-client ==0.19
     , text ==2.0.2
@@ -138,6 +142,7 @@ test-suite proxmox-compose-test
     , http-conduit ==2.3.8.1
     , optparse-applicative ==0.17.1.0
     , proxmox-compose
+    , scientific ==0.3.7.0
     , servant ==0.19.1
     , servant-client ==0.19
     , text ==2.0.2

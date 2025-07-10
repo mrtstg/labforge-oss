@@ -29,6 +29,8 @@ data TransactionStage
   | VMExists ConfigVM
   | VMNotExists ConfigVM
   | TemplateExists ConfigTemplate
+  | NetworkConnected String ConfigVMNetwork
+  | NetworksRemoved String
   deriving (Show, Eq)
 
 data TransactionAction 
@@ -42,6 +44,8 @@ data TransactionAction
   | StopVM String
   | StartVM String
   | PauseSeconds Int
+  | RemoveNetworks String
+  | AttachNetwork String ConfigVMNetwork
   deriving (Show, Eq)
 
 data DeployTarget = Deploy | Destroy deriving (Show, Eq)
@@ -59,7 +63,9 @@ data TransactionException = BridgeNotFound String
   | VMDeleteError Int
   | VMLocked Int
   | UnknownError String
-  | VMIDTaken Int deriving Show
+  | VMIDTaken Int
+  | NetworkIsNotDeclared String
+  | VMConfigIsNotFound String deriving Show
 
 data TransactionState = TransactionState 
   { transactionAllocateVMIDF :: StatefulTransactionM Int
