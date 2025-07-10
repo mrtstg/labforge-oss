@@ -62,6 +62,7 @@ genericTransactionBuilder proxmoxState deployConfig@(DeployConfig
     , deployVMs = vms
     , deployNetworks = networks
     }) target = do
+  debugM loggerName $ "Parsed config: " <> show deployConfig
   () <- commonErrorStdoutHandler loggerName (pure $ validateVMsData templates vms) show
   vmMap <- getActiveNodesVMMap' proxmoxState
   bridges <- getBridges' proxmoxState nodeName
@@ -70,6 +71,7 @@ genericTransactionBuilder proxmoxState deployConfig@(DeployConfig
 
   infoM loggerName "Building transaction..."
   let stages = planTransactionStages deployConfig target
+  debugM loggerName $ "First stages: " <> show stages
   let transactionRes = planTransactionActions stages deployConfig bridges sdnZones sdnNetworks vmMap
   case transactionRes of
     (Left e) -> do
