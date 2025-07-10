@@ -25,8 +25,11 @@ module Api.Proxmox.Client
   , createSDNNetwork
   , applySDNSettings
   , deleteSDNNetwork
+  , putVMConfig
+  , deleteVMConfig
   ) where
 
+import Data.List (intercalate)
 import Data.Text (Text, pack)
 import qualified Data.Map as M
 import Data.Aeson
@@ -61,7 +64,12 @@ getVersion
   :<|> getVMPower
   :<|> deleteVM
   :<|> cloneVM
-  :<|> deleteSDNNetwork = client api
+  :<|> deleteSDNNetwork
+  :<|> putVMConfig = client api
+
+deleteVMConfig :: Text -> Int -> [String] -> ClientM (ProxmoxResponse ())
+deleteVMConfig _ _ [] = pure (ProxmoxResponse ())
+deleteVMConfig node vmid deleteList = putVMConfig node vmid (M.fromList [("delete", (String . pack . intercalate ",") deleteList)])
 
 deleteVM' :: Text -> Int -> ProxmoxVMDeleteRequest -> ClientM (ProxmoxResponse String)
 deleteVM' node vmid (ProxmoxVMDeleteRequest { .. }) = deleteVM 

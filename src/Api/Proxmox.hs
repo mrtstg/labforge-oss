@@ -9,6 +9,7 @@ module Api.Proxmox
   , runProxmoxClient'
   ) where
 
+import qualified Data.Map as M
 import Data.Text
 import Servant.API
 import Api.Proxmox.Models.Version
@@ -24,6 +25,7 @@ import Api.Proxmox.Models.SDNZone
 import Api.Proxmox.Models.SDNNetwork
 import Api.Proxmox.Models.Node
 import Api.Proxmox.Models.VMClone
+import Data.Aeson (Value)
 
 data ProxmoxState = ProxmoxState BaseUrl Manager
 
@@ -46,6 +48,7 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> QueryParam "destroy-unreferenced-disks" NumericBoolWrapper :> QueryParam "purge" NumericBoolWrapper :> QueryParam "skiplock" NumericBoolWrapper :> Delete '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "clone" :> ReqBody '[JSON] ProxmoxVMCloneParams :> Post '[JSON] (ProxmoxResponse String)
   :<|> "cluster" :> "sdn" :> "vnets" :> Capture "vnet" Text :> Delete '[JSON] ()
+  :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "config" :> ReqBody '[JSON] (M.Map String Value) :> Put '[JSON] (ProxmoxResponse ())
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT
