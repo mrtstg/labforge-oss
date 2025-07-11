@@ -49,6 +49,7 @@ data ConfigVM = TemplatedConfigVM
   , configVMID :: !(Maybe Int)
   , configVMDelay :: !Int
   , configVMNetworks :: !(Maybe [ConfigVMNetwork])
+  , configVMCleanNetworks :: !Bool
   } | RawVM 
   { configVMName :: !String
   , configVMID :: !(Maybe Int)
@@ -67,6 +68,7 @@ instance FromJSON ConfigVM where
       <*> v .:? "vmid"
       <*> v .:? "delay" .!= 0
       <*> v .:? "networks" .!= Nothing
+      <*> nullDefaultWrapper (KM.lookup "clean_networks" v) False variableBooleanParser
     _anyOtherType -> fail "clone_from field has incorrect value type!"
 
 isTemplateVM :: ConfigVM -> Bool

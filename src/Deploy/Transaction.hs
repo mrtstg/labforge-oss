@@ -37,6 +37,7 @@ import Data.Maybe
 import Data.Functor ((<&>))
 import Api.Proxmox.Models.VMConfig
 import Data.Aeson (Value(..))
+import Data.List (nub)
 
 loggerName = "ProxmoxCompose.Transaction"
 
@@ -312,8 +313,9 @@ planTransactionStages (DeployConfig { deployVMs=vms, deployTemplates=templates, 
     tell $ map TemplateExists templates
     tell $ map NetworkExists networks
     tell $ map VMExists vms
+    let networkCleanVM = nub $ (filter (null . fromJust . configVMNetworks) $ filter (isJust . configVMNetworks) vms) ++ filter configVMCleanNetworks vms
+    tell $ map (NetworksRemoved . configVMName) networkCleanVM
     tell $ foldMap generateNetworks vms
-    tell $ map (NetworksRemoved . configVMName) (filter (null . fromJust . configVMNetworks) $ filter (isJust . configVMNetworks) vms)
   f' :: WriterT [TransactionStage] Identity ()
   f' = do
     tell $ map VMNotExists (reverse vms)
