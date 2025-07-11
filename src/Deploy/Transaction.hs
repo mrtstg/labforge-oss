@@ -36,8 +36,13 @@ import Api.Proxmox.Models
 import Data.Maybe
 import Data.Functor ((<&>))
 import Api.Proxmox.Models.VMConfig
+import Data.Aeson (Value(..))
 
 loggerName = "ProxmoxCompose.Transaction"
+
+vmDevicePresent :: String ->ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
+vmDevicePresent _ (ProxmoxResponse Nothing) = False
+vmDevicePresent deviceName (ProxmoxResponse (Just cfg)) = ((deviceName `elem`) . M.keys . vmConfigMap) cfg
 
 vmNetworksEmpty :: ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
 vmNetworksEmpty (ProxmoxResponse Nothing) = False
@@ -158,6 +163,28 @@ executeTransactionAction (StartVM vmName) = do
             (Left e) -> throwE (ClientError e)
             (Right True) -> (liftIO . infoM loggerName) $ "Turned on VM " <> vmName <> "(#" <> show vmid <> ")"
             (Right False) -> (liftIO . warningM loggerName) $ "Failed to start VM " <> vmName <> "(#" <> show vmid <> ")"
+executeTransactionAction (AttachNetwork vmName networkConfig) = do
+  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- lift get
+  data' <- transactionDataGetF
+  case getVMID vmName data' deployConfig of
+    Nothing -> throwE (MachineHasNoID vmName)
+    (Just vmid) -> do
+      vmMap <- (liftIO . defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
+      case M.lookup vmid vmMap of
+        Nothing -> (liftIO . warningM loggerName) $ "VM with VMID " <> show vmid <> " not found."
+        _ -> do
+          case formatConfigVMNetwork networkConfig of
+            Nothing -> throwE (UnknownError $ "Failed to format network device string: " <> show networkConfig)
+            (Just (deviceName, deviceConfig)) -> do
+              _ <- (liftIO . defaultRetryClient' transactionProxmoxState) (putVMConfig nodeName vmid (M.fromList [(deviceName, (String . T.pack) deviceConfig)])) >>= defaultClientErrorWrapper
+              _ <- liftIO $ waitForClient
+                60_000_000
+                ("Waiting for configuration change of VM " <> show vmid)
+                10
+                1_000_000
+                (defaultRetryClient' transactionProxmoxState $ getVMConfig nodeName vmid)
+                (vmDevicePresent deviceName)
+              pure ()
 executeTransactionAction (RemoveNetworks vmName) = do
   (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- lift get
   data' <- transactionDataGetF

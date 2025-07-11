@@ -7,6 +7,7 @@ module Parsers
   , nonEmptyStringParser
   , nullMaybeWrapper
   , variableBooleanParser
+  , limitedNumberParser
   ) where
 
 import Data.Aeson
@@ -46,6 +47,11 @@ nonEmptyStringParser _ = fail "Invalid value type"
 replaceEmptyStringWithNumber :: String -> String
 replaceEmptyStringWithNumber "" = "0"
 replaceEmptyStringWithNumber v = v
+
+limitedNumberParser :: MonadFail f => (Int -> Bool) -> String -> Value -> f Int
+limitedNumberParser f errorText value= do
+  v <- intStringParser value
+  if (not . f) v then fail errorText else pure v
 
 intStringParser :: MonadFail f => Value -> f Int
 intStringParser (String v) = do

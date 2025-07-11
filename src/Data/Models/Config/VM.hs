@@ -1,22 +1,37 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 module Data.Models.Config.VM 
   ( ConfigVM(..)
   , ConfigVMNetwork(..)
   , isTemplateVM
+  , formatConfigVMNetwork
   ) where
 
 import Api.Proxmox.Models.NetworkInterface
 import Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Text as T
+import Data.List (intercalate)
+import Parsers
+import Data.Maybe
 
 data ConfigVMNetwork = ConfigVMNetwork
   { configVMNetworkName :: !String
   , configVMNetworkFirewall :: !Bool
   , configVMDeviceType :: !NetworkInterfaceType
-  , configVMNetworkTag :: !(Maybe String)
+  , configVMNetworkTag :: !(Maybe Int)
   , configVMNetworkNumber :: !(Maybe Int)
   } deriving (Show, Eq)
+
+formatConfigVMNetwork :: ConfigVMNetwork -> Maybe (String, String)
+formatConfigVMNetwork ConfigVMNetwork { .. } = case configVMNetworkNumber of
+  Nothing -> Nothing
+  (Just netNum) -> Just ("net" <> show netNum, intercalate "," $ 
+    [ "model=" <> show configVMDeviceType
+    , "firewall=" <> if configVMNetworkFirewall then "1" else "0"
+    , "bridge=" <> configVMNetworkName
+    ] 
+    ++ ["tag=" <> (show . fromJust) configVMNetworkTag | isJust configVMNetworkTag])
 
 instance FromJSON ConfigVMNetwork where
   parseJSON (String networkName) = pure $ ConfigVMNetwork (T.unpack networkName) True VIRTIO Nothing Nothing
@@ -25,7 +40,7 @@ instance FromJSON ConfigVMNetwork where
     <*> v .:? "firewall" .!= True
     <*> v .:? "type" .!= VIRTIO
     <*> v .:? "tag"
-    <*> v .:? "number"
+    <*> nullMaybeWrapper (KM.lookup "number" v) (limitedNumberParser (`elem` [0..31]) "Network number must be in range 0..32")
   parseJSON _ = error "ConfigVMNetwork has invalid type"
 
 data ConfigVM = TemplatedConfigVM 
