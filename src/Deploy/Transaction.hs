@@ -272,7 +272,7 @@ executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetwor
   if not (sdnNetworkExists vnetName bridgesResponse) then
     (liftIO . warningM loggerName) $ "SDN network " <> show vnetName <> " does not exists"
   else do
-    (liftIO . infoM loggerName) $ "Deleting SDN network" <> show vnetName
+    (liftIO . infoM loggerName) $ "Deleting SDN network " <> show vnetName
     _ <- (liftIO . defaultRetryClient' transactionProxmoxState) (deleteSDNNetwork (T.pack vnetName)) >>= defaultClientErrorWrapper
     (liftIO . infoM loggerName)$ "Applying SDN settings"
     _ <- (liftIO . defaultRetryClient' transactionProxmoxState) applySDNSettings
