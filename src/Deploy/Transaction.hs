@@ -1,43 +1,43 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NumericUnderscores #-}
-module Deploy.Transaction 
+{-# LANGUAGE RecordWildCards    #-}
+module Deploy.Transaction
   ( planTransactionStages
   , planTransactionActions
   , getVMIDRange
   , executeTransaction
   ) where
 
-import qualified Data.Text as T
-import qualified Data.Map as M
-import Api.Proxmox.Models.VM
-import Data.Map (Map)
-import Data.Models.Config.Deploy
-import Api.Proxmox.Models.VMClone
-import Data.Models.Config.VM
-import Data.Models.Config.Network
-import Api.Proxmox.Models.Network
-import Api.Proxmox.Models.SDNNetwork
-import Data.Models.Config.Template
-import Data.Models.Config
-import Api.Proxmox.Models.SDNZone
-import Control.Monad.Trans.Writer
-import Data.Functor.Identity
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
-import Data.Models.Transaction
-import Control.Monad.Trans.Class
-import Deploy.Types
-import System.Log.Logger
-import Control.Monad.IO.Class
-import Api.Retry
-import Api.Proxmox.Client
-import Control.Concurrent
-import Api.Proxmox.Models
-import Data.Maybe
-import Data.Functor ((<&>))
-import Api.Proxmox.Models.VMConfig
-import Data.Aeson (Value(..))
-import Data.List (nub)
+import           Api.Proxmox.Client
+import           Api.Proxmox.Models
+import           Api.Proxmox.Models.Network
+import           Api.Proxmox.Models.SDNNetwork
+import           Api.Proxmox.Models.SDNZone
+import           Api.Proxmox.Models.VM
+import           Api.Proxmox.Models.VMClone
+import           Api.Proxmox.Models.VMConfig
+import           Api.Retry
+import           Control.Concurrent
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.State
+import           Control.Monad.Trans.Writer
+import           Data.Aeson                    (Value (..))
+import           Data.Functor                  ((<&>))
+import           Data.Functor.Identity
+import           Data.List                     (nub, sortOn)
+import           Data.Map                      (Map)
+import qualified Data.Map                      as M
+import           Data.Maybe
+import           Data.Models.Config
+import           Data.Models.Config.Deploy
+import           Data.Models.Config.Network
+import           Data.Models.Config.Template
+import           Data.Models.Config.VM
+import           Data.Models.Transaction
+import qualified Data.Text                     as T
+import           Deploy.Types
+import           System.Log.Logger
 
 loggerName = "ProxmoxCompose.Transaction"
 
@@ -72,7 +72,7 @@ getVMID vmName (TransactionData vmIDMap) (DeployConfig {deployVMs=vms }) = do
   case M.lookup vmName vmIDMap of
     (Just vmid) -> Just vmid
     Nothing -> case filter ((==vmName) . configVMName) vms of
-      [] -> Nothing
+      []     -> Nothing
       (vm:_) -> configVMID vm
 
 executeTransactionAction :: TransactionAction -> StatefulTransactionM ()
@@ -99,7 +99,7 @@ executeTransactionAction (DestroyVM vmName) = do
   (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- lift get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
-    Nothing -> throwE (MachineHasNoID vmName)
+    Nothing -> (liftIO . warningM loggerName) $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
       vmMap <- (liftIO . defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
       if vmExists vmid vmMap then do
@@ -120,7 +120,7 @@ executeTransactionAction (StopVM vmName) = do
   (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- lift get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
-    Nothing -> throwE (MachineHasNoID vmName)
+    Nothing -> (liftIO . warningM loggerName) $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
       vmMap' <- (liftIO . defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap
       case vmMap' of
@@ -129,13 +129,12 @@ executeTransactionAction (StopVM vmName) = do
           case M.lookup vmid vmMap of
             Nothing -> (liftIO . warningM loggerName) $ "VM with VMID " <> show vmid <> " not found."
             _ -> do
-              _ <- (liftIO . defaultRetryClient' transactionProxmoxState) (stopVM nodeName vmid)
               powerResult <- liftIO $ waitForClient
-                60_000_000 
-                ("VM " <> show vmid <> " is not powered on. Waiting...") 
-                10
-                1_000_000 
-                (defaultRetryClient' transactionProxmoxState $ getVMPower nodeName vmid)
+                60_000_000
+                ("VM " <> show vmid <> " is not powered on. Waiting...")
+                15
+                1_000_000
+                (defaultRetryClient' transactionProxmoxState (stopVM nodeName vmid >> (liftIO . threadDelay) 5_000_000 >> getVMPower nodeName vmid))
                 (`vmStateIs` VMStopped)
               case powerResult of
                 (Left e) -> throwE (ClientError e)
@@ -152,13 +151,12 @@ executeTransactionAction (StartVM vmName) = do
       case M.lookup vmid vmMap of
         Nothing -> (liftIO . warningM loggerName) $ "VM with VMID " <> show vmid <> " not found."
         _ -> do
-          _ <- (liftIO . defaultRetryClient' transactionProxmoxState) (startVM nodeName vmid)
           powerResult <- liftIO $ waitForClient
-            60_000_000 
-            ("VM " <> show vmid <> " is not powered on. Waiting...") 
+            60_000_000
+            ("VM " <> show vmid <> " is not powered on. Waiting...")
             10
-            1_000_000 
-            (defaultRetryClient' transactionProxmoxState $ getVMPower nodeName vmid)
+            1_000_000
+            (defaultRetryClient' transactionProxmoxState (startVM nodeName vmid >> (liftIO . threadDelay) 5_000_000 >> getVMPower nodeName vmid))
             (`vmStateIs` VMRunning)
           case powerResult of
             (Left e) -> throwE (ClientError e)
@@ -225,7 +223,7 @@ executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneN
           case M.lookup proxmoxVMCloneVMID nodeMap of
             Nothing -> case filter ((==proxmoxVMCloneVMID) . configTemplateID) templates of
               (template:_) -> throwE (TemplateNodeNotFound template)
-              [] -> error "unreachable"
+              []           -> error "unreachable"
             (Just templateNodeName) -> do
               let fullParams = params { proxmoxVMCloneNewID = vmid }
               cloneRes' <- (liftIO . defaultRetryClient' transactionProxmoxState) $ cloneVM (T.pack templateNodeName) proxmoxVMCloneVMID fullParams
@@ -234,17 +232,19 @@ executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneN
                 (Right _) -> do
                   (liftIO . infoM loggerName) "VM is cloned, awaiting for unlocking VM..."
                   unlockResult <- liftIO $ waitForClient
-                    60_000_000 
-                    ("VM " <> show vmid <> " is locked. Waiting...") 
+                    60_000_000
+                    ("VM " <> show vmid <> " is locked. Waiting...")
                     120
                     1_000_000
-                    (defaultRetryClient' transactionProxmoxState $ getVMConfig (fromJust proxmoxVMCloneTarget) proxmoxVMCloneNewID)
+                    (defaultRetryClient' transactionProxmoxState $ getVMConfig (fromJust proxmoxVMCloneTarget) vmid)
                     vmUnlocked
                   case unlockResult of
-                    (Left e) -> throwE (ClientError e)
+                    (Left e)      -> throwE (ClientError e)
                     (Right False) -> throwE (VMLocked proxmoxVMCloneNewID)
-                    _ -> pure ()
-executeTransactionAction (PauseSeconds secondsPause) = (liftIO . threadDelay . (* 1_000_000)) secondsPause
+                    _             -> pure ()
+executeTransactionAction (TransactionDelayAfter secondsPause action) = do
+  () <- executeTransactionAction action
+  (liftIO . threadDelay . (* 1_000_000)) secondsPause
 executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = do
   (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- lift get
   bridgesResponse <- (liftIO . defaultRetryClient' transactionProxmoxState) (getNodeNetworks nodeName (Just AnyBridge)) >>= defaultClientErrorWrapper
@@ -256,10 +256,10 @@ executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreat
     (liftIO . infoM loggerName) $ "Applying SDN settings"
     _ <- (liftIO . defaultRetryClient' transactionProxmoxState) applySDNSettings
     bridgeResult <- liftIO $ waitForClient
-      60_000_000 
-      ("SDN network " <> show vnetName <> " is not created. Waiting...") 
+      60_000_000
+      ("SDN network " <> show vnetName <> " is not created. Waiting...")
       20
-      1_000_000 
+      1_000_000
       (defaultRetryClient' transactionProxmoxState $ getNodeNetworks nodeName (Just AnyBridge))
       (sdnNetworkExists vnetName)
     case bridgeResult of
@@ -277,10 +277,10 @@ executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetwor
     (liftIO . infoM loggerName)$ "Applying SDN settings"
     _ <- (liftIO . defaultRetryClient' transactionProxmoxState) applySDNSettings
     bridgeResult <- liftIO $ waitForClient
-      60_000_000 
-      ("SDN network " <> show vnetName <> " is existing. Waiting...") 
+      60_000_000
+      ("SDN network " <> show vnetName <> " is existing. Waiting...")
       20
-      1_000_000 
+      1_000_000
       (defaultRetryClient' transactionProxmoxState $ getNodeNetworks nodeName (Just AnyBridge))
       (not . sdnNetworkExists vnetName)
     case bridgeResult of
@@ -343,13 +343,14 @@ planTransactionStages (DeployConfig { deployVMs=vms, deployTemplates=templates, 
   in (snd . runIdentity . runWriterT) (if target == Deploy then f else f')
 
 planTransactionActions :: [TransactionStage] -> DeployConfig -> [ProxmoxNetwork] -> [ProxmoxSDNZone] -> [ProxmoxSDNNetwork] -> Map Int ProxmoxVM -> Either TransactionException [TransactionAction]
-planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName } }) bridges sdnZones sdnNetworks vmMap = (runIdentity . runExceptT) $ helper stages []  where
+planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName } }) bridges sdnZones sdnNetworks vmMap =
+  (fmap (sortOn transactionActionPriority) . runIdentity . runExceptT) $ helper stages [] where
   helper :: [TransactionStage] -> [TransactionAction] -> TransactionM Identity [TransactionAction]
   helper [] acc = (pure . reverse) acc
   helper ((NetworkExists (ExistingNetwork networkName)):ts) acc = if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts acc else
     throwE (BridgeNotFound networkName)
   helper ((NetworkExists SDNNetwork { .. }):ts) acc = do
-    let sdnCreate = ProxmoxSDNNetworkCreate 
+    let sdnCreate = ProxmoxSDNNetworkCreate
           { sdnNetworkCreateZone=configNetworkZone
           , sdnNetworkCreateVlanaware=Nothing
           , sdnNetworkCreateTag=Nothing
@@ -362,9 +363,9 @@ planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, d
       else do
         let matchingNameNetwork = filter (\x -> sdnNetworkName x == configNetworkName && sdnNetworkZone x /= configNetworkZone) sdnNetworks
         case matchingNameNetwork of
-          [] -> helper ts (PauseSeconds 5:DeploySDNNetwork sdnCreate:acc)
+          [] -> helper ts (defaultTransactionDelayAfter (DeploySDNNetwork sdnCreate):acc)
           ((ProxmoxSDNNetwork { sdnNetworkZone = conflictZone }):_) -> do
-            helper ts (PauseSeconds 5:DeploySDNNetwork sdnCreate:PauseSeconds 5:DestroySDNNetwork (sdnCreate { sdnNetworkCreateZone = conflictZone }):acc)
+            helper ts (defaultTransactionDelayAfter (DeploySDNNetwork sdnCreate):defaultTransactionDelayAfter (DestroySDNNetwork (sdnCreate { sdnNetworkCreateZone = conflictZone })):acc)
   helper ((NetworkNotExists (ExistingNetwork {})):ts) acc = helper ts acc
   helper ((NetworkNotExists (SDNNetwork { .. })):ts) acc = do
     if any (\x -> sdnNetworkZone x == configNetworkZone && sdnNetworkName x == configNetworkName) sdnNetworks then do
@@ -375,7 +376,7 @@ planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, d
            , sdnNetworkCreateTag=Nothing
            , sdnNetworkCreateAlias=Nothing
            }
-      helper ts (PauseSeconds 5:DestroySDNNetwork sdnCreate:acc)
+      helper ts (defaultTransactionDelayAfter (DestroySDNNetwork sdnCreate):acc)
     else helper ts acc
   helper ((TemplateExists t@(ConfigTemplate { configTemplateID = tID })):ts) acc = do
     case M.lookup tID vmMap of
@@ -384,23 +385,23 @@ planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, d
       _vmInvalid -> throwE (NonTemplateLink t)
   helper ((VMExists vm@(RawVM { configVMID = vmID, configVMName = vmName, configVMDelay = delay })):ts) acc = do
     case vmID of
-      Nothing -> helper ts (PauseSeconds delay:StartVM vmName:CreateVM vm:AssignVMID vmName:acc)
+      Nothing -> helper ts (TransactionDelayAfter delay (StartVM vmName):CreateVM vm:AssignVMID vmName:acc)
       (Just vmID') -> do
         case M.lookup vmID' vmMap of
           (Just _) -> helper ts acc -- TODO: reconfig VM (and unify vm check, wtf)
           Nothing -> do
-            helper ts (PauseSeconds delay:StartVM vmName:CreateVM vm:acc)
+            helper ts (TransactionDelayAfter delay (StartVM vmName):CreateVM vm:acc)
   helper ((VMExists (TemplatedConfigVM { configVMParentTemplate = parentTemplateName, configVMName = vmName, configVMID = vmID, configVMDelay = delay })):ts) acc = do
     case filter ((==) parentTemplateName . configTemplateName) vmTemplates of
       [] -> throwE (TemplateNotFound (ConfigTemplate {configTemplateName = parentTemplateName, configTemplateID = 0 }))
       (ConfigTemplate { configTemplateID = templateID }:_) -> do
         let cloneStage = CloneVM (ProxmoxVMCloneParams {proxmoxVMCloneVMID = templateID, proxmoxVMCloneStorage = Nothing, proxmoxVMCloneSnapname = Nothing, proxmoxVMCloneTarget = Just deployNodeName, proxmoxVMCloneNewID = fromMaybe (-1) vmID, proxmoxVMCloneName = (Just . T.pack) vmName, proxmoxVMCloneDescription=Nothing})
         case vmID of
-          Nothing -> helper ts (PauseSeconds delay:StartVM vmName:cloneStage:AssignVMID vmName:acc)
+          Nothing -> helper ts (TransactionDelayAfter delay (StartVM vmName):cloneStage:AssignVMID vmName:acc)
           (Just vmID') -> do
             case M.lookup vmID' vmMap of
               (Just _) -> helper ts acc -- TODO: reconfig VM (and unify vm check, wtf)
-              Nothing -> helper ts (PauseSeconds delay:StartVM vmName:cloneStage:acc)
+              Nothing -> helper ts (TransactionDelayAfter delay (StartVM vmName):cloneStage:acc)
   helper ((NetworksRemoved vmName):ts) acc = helper ts (RemoveNetworks vmName:acc)
   helper ((NetworkConnected vmName networkConfig):ts) acc = do
     let networkNames = map configNetworkName configNetworks
