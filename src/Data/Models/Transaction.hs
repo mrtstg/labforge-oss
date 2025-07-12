@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Data.Models.Transaction 
+module Data.Models.Transaction
   ( TransactionStage(..)
   , TransactionAction(..)
   , TransactionException(..)
@@ -9,21 +9,23 @@ module Data.Models.Transaction
   , StatelessTransactionM
   , DeployTarget(..)
   , defaultClientErrorWrapper
+  , defaultTransactionDelayAfter
+  , transactionActionPriority
   ) where
 
-import Api.Proxmox
-import Data.Models.Config.Network
-import Data.Models.Config.VM
-import Data.Models.Config.Template
-import Api.Proxmox.Models.SDNNetwork
-import Api.Proxmox.Models.VMClone
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Except
-import Deploy.Types
-import Servant.Client
-import Data.Models.Config
+import           Api.Proxmox
+import           Api.Proxmox.Models.SDNNetwork
+import           Api.Proxmox.Models.VMClone
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.State
+import           Data.Models.Config
+import           Data.Models.Config.Network
+import           Data.Models.Config.Template
+import           Data.Models.Config.VM
+import           Deploy.Types
+import           Servant.Client
 
-data TransactionStage 
+data TransactionStage
   = NetworkExists ConfigNetwork
   | NetworkNotExists ConfigNetwork
   | VMExists ConfigVM
@@ -33,8 +35,8 @@ data TransactionStage
   | NetworksRemoved String
   deriving (Show, Eq)
 
-data TransactionAction 
-  = DeploySDNNetwork ProxmoxSDNNetworkCreate 
+data TransactionAction
+  = DeploySDNNetwork ProxmoxSDNNetworkCreate
   | DestroySDNNetwork ProxmoxSDNNetworkCreate
   | UnassignVMID String
   | AssignVMID String
@@ -43,14 +45,20 @@ data TransactionAction
   | DestroyVM String
   | StopVM String
   | StartVM String
-  | PauseSeconds Int
   | RemoveNetworks String
   | AttachNetwork String ConfigVMNetwork
+  | TransactionDelayAfter Int TransactionAction
   deriving (Show, Eq)
+
+-- from -100 to 100, used for sorting actions
+transactionActionPriority :: TransactionAction -> Int
+transactionActionPriority (TransactionDelayAfter _ action) = transactionActionPriority action
+transactionActionPriority (StartVM {}) = 50
+transactionActionPriority _ = 0
 
 data DeployTarget = Deploy | Destroy deriving (Show, Eq)
 
-data TransactionException = BridgeNotFound String 
+data TransactionException = BridgeNotFound String
   | SDNZoneNotFound String
   | SDNVnetNotFound String
   | SDNVnetDeleteError String
@@ -67,13 +75,16 @@ data TransactionException = BridgeNotFound String
   | NetworkIsNotDeclared String
   | VMConfigIsNotFound String deriving Show
 
-data TransactionState = TransactionState 
+defaultTransactionDelayAfter :: TransactionAction -> TransactionAction
+defaultTransactionDelayAfter = TransactionDelayAfter 5
+
+data TransactionState = TransactionState
   { transactionAllocateVMIDF :: StatefulTransactionM Int
-  , transactionDataGetF :: StatefulTransactionM TransactionData
-  , transactionDataSetF :: TransactionData -> StatefulTransactionM ()
-  , transactionActions :: ![TransactionAction]
-  , transactionDeployConfig :: !DeployConfig
-  , transactionProxmoxState :: !ProxmoxState
+  , transactionDataGetF      :: StatefulTransactionM TransactionData
+  , transactionDataSetF      :: TransactionData -> StatefulTransactionM ()
+  , transactionActions       :: ![TransactionAction]
+  , transactionDeployConfig  :: !DeployConfig
+  , transactionProxmoxState  :: !ProxmoxState
   }
 
 type StatelessTransactionM a = TransactionM IO a
@@ -83,5 +94,5 @@ type StatefulTransactionM a = TransactionM (StateT TransactionState IO) a
 type TransactionM m a = ExceptT TransactionException m a
 
 defaultClientErrorWrapper :: Either ClientError a -> StatefulTransactionM a
-defaultClientErrorWrapper (Left e) = throwE (ClientError e)
+defaultClientErrorWrapper (Left e)  = throwE (ClientError e)
 defaultClientErrorWrapper (Right v) = pure v
