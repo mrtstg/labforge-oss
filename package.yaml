@@ -34,6 +34,7 @@ dependencies:
 - bytestring == 0.11.5.2
 - filepath == 1.4.2.2
 - scientific == 0.3.7.0
+- attoparsec == 0.14.4
 
 ghc-options:
 - -Wall

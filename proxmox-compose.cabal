@@ -54,6 +54,7 @@ library
       Deploy.Types
       Deploy.VM
       Parsers
+      Parsers.Network
       Utils
   other-modules:
       Paths_proxmox_compose
@@ -64,6 +65,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson ==2.1.2.1
+    , attoparsec ==0.14.4
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , case-insensitive ==1.2.1.0
@@ -94,6 +96,7 @@ executable proxmox-compose-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson ==2.1.2.1
+    , attoparsec ==0.14.4
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , case-insensitive ==1.2.1.0
@@ -119,7 +122,7 @@ test-suite proxmox-compose-test
   main-is: Spec.hs
   other-modules:
       App.Commands.CommonSpec
-      Deploy.TransactionSpec
+      Parsers.NetworkSpec
       Paths_proxmox_compose
   autogen-modules:
       Paths_proxmox_compose
@@ -128,6 +131,7 @@ test-suite proxmox-compose-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson ==2.1.2.1
+    , attoparsec ==0.14.4
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , case-insensitive ==1.2.1.0
