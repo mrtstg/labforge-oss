@@ -5,8 +5,8 @@ import           Data.Attoparsec.Text
 import qualified Data.Map             as M
 import           Data.Text
 
-parseNetworkDevice :: String -> Either String (M.Map String String)
-parseNetworkDevice = fmap M.fromList . parseOnly networkArgsParser . pack
+parseNetworkDevice :: Text -> Either String (M.Map String String)
+parseNetworkDevice = fmap M.fromList . parseOnly networkArgsParser
 
 networkArgsParser :: Parser [(String, String)]
 networkArgsParser = sepBy networkArgParser (char ',')
