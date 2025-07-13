@@ -3,61 +3,9 @@
 {-# LANGUAGE RecordWildCards   #-}
 module Api.Proxmox.Models.NetworkInterface
   ( NetworkInterfaceType(..)
-  , NetworkConnection(..)
   ) where
 
 import           Data.Aeson
-import           Data.Aeson.Key
-import           Data.Aeson.Types                   (Pair)
-import           Data.List                          (intercalate)
-import qualified Data.Map                           as M
-import           Data.Text                          (Text, pack, unpack)
-
-data NetworkConnection = NetworkConnection
-  { getNetworkConnectionDeviceType :: !NetworkInterfaceType
-  , getNetworkConnectionBridge     :: !Text
-  , getNetworkConnectionFirewall   :: !Bool
-  , getNetworkConnectionRate       :: !(Maybe Float)
-  , getNetworkConnectionTag        :: !(Maybe Text)
-  } deriving Show
-
---networkConnectionsToPayload :: NetworkNameReplaceMap -> [NetworkConnection] -> [Pair]
---networkConnectionsToPayload networkNameMap = helper 0 [] where
---  helper :: Int -> [Pair] -> [NetworkConnection] -> [Pair]
---  helper _ pairs' [] = pairs'
---  helper iNum pairs' ((NetworkConnection { .. }):connections) = helper (iNum + 1) ((fromString $ "net" <> show iNum, String networkData):pairs') connections where
---    networkData = (pack . intercalate ",") fields
---    bridge' = case M.lookup getNetworkConnectionBridge networkNameMap of
---      Nothing                -> unpack getNetworkConnectionBridge
---      (Just replacedNetwork) -> replacedNetwork
---    fields =
---      [ "model=" <> show getNetworkConnectionDeviceType
---      , "bridge=" <> bridge'
---      , "firewall=" <> (if getNetworkConnectionFirewall then "1" else "0")
---      ] <> tagField <> rateField
---    tagField = case getNetworkConnectionTag of
---      (Just tag) -> ["tag=" <> unpack tag]
---      Nothing    -> []
---    rateField = case getNetworkConnectionRate of
---      (Just rate) -> ["rate=" <> show rate]
---      Nothing     -> []
-
-instance FromJSON NetworkConnection where
-  parseJSON = withObject "NetworkConnection" $ \v -> NetworkConnection
-    <$> v .: "type"
-    <*> v .: "bridge"
-    <*> v .:? "firewall" .!= True
-    <*> v .:? "rate"
-    <*> v .:? "tag"
-
-instance ToJSON NetworkConnection where
-  toJSON (NetworkConnection {..}) = object
-    [ "type" .= getNetworkConnectionDeviceType
-    , "bridge" .= getNetworkConnectionBridge
-    , "firewall" .= getNetworkConnectionFirewall
-    , "rate" .= getNetworkConnectionRate
-    , "tag" .= getNetworkConnectionTag
-    ]
 
 data NetworkInterfaceType = E1000
   | E1000_82540EM
