@@ -1,6 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
-module App.Commands.Common 
+{-# LANGUAGE RecordWildCards   #-}
+module App.Commands.Common
   ( getActiveNodesVMMap'
   , getBridges'
   , getSDNNetworks'
@@ -9,38 +9,39 @@ module App.Commands.Common
   , defaultStatePathGenerator
   , genericTransactionBuilder
   , getTransactionAgreement
+  , defaultROTransactionState
   ) where
 
-import Api.Proxmox
-import Api.Proxmox.Models.VM
-import Api.Proxmox.Models.Network
-import Data.Map (Map)
-import Data.Text (Text)
-import Api.Proxmox.Models
-import Api.Proxmox.Models.SDNZone
-import Api.Proxmox.Models.SDNNetwork
-import Api.Proxmox.Client
-import qualified Api.Proxmox.Client as C
-import Control.Exception
-import Api.Retry
-import Deploy.Types
-import Control.Monad.Trans.Class (lift)
-import qualified Data.Map as M
-import Control.Monad.IO.Class (liftIO)
-import Data.Models.Config
-import System.Directory
-import Data.Aeson
-import System.Log.Logger
-import Utils
-import Deploy.Transaction
-import Data.Models.Transaction
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
-import System.FilePath
-import System.Exit
-import Deploy.VM
-import Data.Models.Config.Deploy
-import qualified Data.Text as T
+import           Api.Proxmox
+import           Api.Proxmox.Client
+import qualified Api.Proxmox.Client            as C
+import           Api.Proxmox.Models
+import           Api.Proxmox.Models.Network
+import           Api.Proxmox.Models.SDNNetwork
+import           Api.Proxmox.Models.SDNZone
+import           Api.Proxmox.Models.VM
+import           Api.Retry
+import           Control.Exception
+import           Control.Monad.IO.Class        (liftIO)
+import           Control.Monad.Trans.Class     (lift)
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.State
+import           Data.Aeson
+import           Data.Map                      (Map)
+import qualified Data.Map                      as M
+import           Data.Models.Config
+import           Data.Models.Config.Deploy
+import           Data.Models.Transaction
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
+import           Deploy.Transaction
+import           Deploy.Types
+import           Deploy.VM
+import           System.Directory
+import           System.Exit
+import           System.FilePath
+import           System.Log.Logger
+import           Utils
 
 loggerName = "ProxmoxCompose.Main"
 
@@ -55,8 +56,8 @@ getTransactionAgreement = do
       exitSuccess
     _otherInput -> getTransactionAgreement
 
-genericTransactionBuilder :: ProxmoxState -> DeployConfig -> DeployTarget -> IO [TransactionAction]
-genericTransactionBuilder proxmoxState deployConfig@(DeployConfig 
+genericTransactionBuilder :: FilePath -> ProxmoxState -> DeployConfig -> DeployTarget -> IO [TransactionAction]
+genericTransactionBuilder statePath proxmoxState deployConfig@(DeployConfig
     { deployParameters = DeployParams { deployNodeName = nodeName }
     , deployTemplates = templates
     , deployVMs = vms
@@ -72,7 +73,7 @@ genericTransactionBuilder proxmoxState deployConfig@(DeployConfig
   infoM loggerName "Building transaction..."
   let stages = planTransactionStages deployConfig target
   debugM loggerName $ "First stages: " <> show stages
-  let transactionRes = planTransactionActions stages deployConfig bridges sdnZones sdnNetworks vmMap
+  transactionRes <- planTransactionActions stages bridges sdnZones sdnNetworks vmMap (defaultROTransactionState statePath proxmoxState deployConfig)
   case transactionRes of
     (Left e) -> do
       errorM loggerName ("Failed to build transaction: " <> show e)
@@ -96,12 +97,12 @@ getBridges' proxmoxState nodeName = do
 
 getSDNNetworks' :: ProxmoxState -> IO [ProxmoxSDNNetwork]
 getSDNNetworks' proxmoxState = do
-  (ProxmoxResponse networks) <- commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState getSDNNetworks) (\e -> "Failed to get SDN networks: " <> displayException e)
+  (ProxmoxResponse { proxmoxData = networks }) <- commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState getSDNNetworks) (\e -> "Failed to get SDN networks: " <> displayException e)
   return networks
 
 getSDNZones' :: ProxmoxState -> IO [ProxmoxSDNZone]
 getSDNZones' proxmoxState = do
-  (ProxmoxResponse zones) <- commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState getSDNZones) (\e -> "Failed to get SDN zones: " <> displayException e)
+  (ProxmoxResponse { proxmoxData = zones }) <- commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState getSDNZones) (\e -> "Failed to get SDN zones: " <> displayException e)
   return zones
 
 defaultStatePathGenerator :: FilePath -> FilePath
@@ -109,6 +110,28 @@ defaultStatePathGenerator configPath = do
   let (dir, filename) = splitFileName configPath
   let filename' = addExtension ("." <> dropExtensions filename <> "-state") "json"
   dir `combine` filename'
+
+defaultGetTrancactionF :: FilePath -> StatefulTransactionM TransactionData
+defaultGetTrancactionF statePath = do
+  stateFileExists <- liftIO $ doesFileExist statePath
+  if stateFileExists then do
+    decodeRes <- liftIO $ eitherDecodeFileStrict statePath
+    case decodeRes of
+      (Left e)                       -> throwE (FileError e)
+      (Right d@(TransactionData {})) -> pure d
+  else do
+    return (TransactionData M.empty)
+
+defaultROTransactionState :: FilePath -> ProxmoxState -> DeployConfig -> TransactionState
+defaultROTransactionState statePath proxmoxState deployConfig =
+  TransactionState
+    { transactionProxmoxState = proxmoxState
+    , transactionDataSetF = \_ -> pure ()
+    , transactionDataGetF = defaultGetTrancactionF statePath
+    , transactionAllocateVMIDF = pure 0
+    , transactionActions = []
+    , transactionDeployConfig = deployConfig
+    }
 
 defaultTransactionState :: FilePath -> [TransactionAction] -> ProxmoxState -> DeployConfig -> TransactionState
 defaultTransactionState statePath actions proxmoxState deployConfig = let
@@ -125,23 +148,12 @@ defaultTransactionState statePath actions proxmoxState deployConfig = let
         let nodeIds = map (vmID . snd) $ M.toList nodeMap
         (return . head) (getVMIDRange startVMID (vmIds ++ nodeIds))
 
-  getF :: StatefulTransactionM TransactionData
-  getF = do
-    stateFileExists <- liftIO $ doesFileExist statePath
-    if stateFileExists then do
-      decodeRes <- liftIO $ eitherDecodeFileStrict statePath
-      case decodeRes of
-        (Left e) -> throwE (FileError e)
-        (Right d@(TransactionData {})) -> pure d
-    else do
-      return (TransactionData M.empty)
-
   setF :: TransactionData -> StatefulTransactionM ()
   setF d = liftIO $ encodeFile statePath d
-  in TransactionState 
+  in TransactionState
     { transactionProxmoxState = proxmoxState
     , transactionDataSetF = setF
-    , transactionDataGetF = getF
+    , transactionDataGetF = defaultGetTrancactionF statePath
     , transactionAllocateVMIDF = allocateF
     , transactionActions = actions
     , transactionDeployConfig = deployConfig

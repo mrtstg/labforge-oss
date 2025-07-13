@@ -42,16 +42,16 @@ import           System.Log.Logger
 loggerName = "ProxmoxCompose.Transaction"
 
 vmDevicePresent :: String ->ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
-vmDevicePresent _ (ProxmoxResponse Nothing) = False
-vmDevicePresent deviceName (ProxmoxResponse (Just cfg)) = ((deviceName `elem`) . M.keys . vmConfigMap) cfg
+vmDevicePresent _ (ProxmoxResponse { proxmoxData = Nothing }) = False
+vmDevicePresent deviceName (ProxmoxResponse { proxmoxData = Just cfg }) = ((deviceName `elem`) . M.keys . vmConfigMap) cfg
 
 vmNetworksEmpty :: ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
-vmNetworksEmpty (ProxmoxResponse Nothing) = False
-vmNetworksEmpty (ProxmoxResponse (Just cfg)) = (null . vmConfigNetworkNumbers) cfg
+vmNetworksEmpty (ProxmoxResponse { proxmoxData = Nothing }) = False
+vmNetworksEmpty (ProxmoxResponse { proxmoxData = Just cfg }) = (null . vmConfigNetworkNumbers) cfg
 
 -- function for waitForClient, checks vm by id and its power
 vmStateIs :: ProxmoxResponse ProxmoxVMStatusWrapper -> ProxmoxVMStatus -> Bool
-vmStateIs (ProxmoxResponse (ProxmoxVMStatusWrapper status)) = (==status)
+vmStateIs (ProxmoxResponse { proxmoxData = ProxmoxVMStatusWrapper status }) = (==status)
 
 vmExists :: Int -> M.Map Int ProxmoxVM -> Bool
 vmExists vmid vmMap = isJust $ M.lookup vmid vmMap
@@ -60,11 +60,11 @@ vmNotExists :: Int -> M.Map Int ProxmoxVM -> Bool
 vmNotExists vmid vmMap = not $ vmExists vmid vmMap
 
 vmUnlocked :: ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
-vmUnlocked (ProxmoxResponse Nothing) = False
-vmUnlocked (ProxmoxResponse (Just ProxmoxVMConfig { vmLock = vmLock })) = isNothing vmLock
+vmUnlocked (ProxmoxResponse Nothing _) = False
+vmUnlocked (ProxmoxResponse { proxmoxData = Just ProxmoxVMConfig { vmLock = vmLock }}) = isNothing vmLock
 
 sdnNetworkExists :: String -> ProxmoxResponse [ProxmoxNetwork] -> Bool
-sdnNetworkExists vnetName (ProxmoxResponse networks) = any (\x -> proxmoxNetworkType x == Vnet && proxmoxNetworkInterface x == vnetName) networks
+sdnNetworkExists vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\x -> proxmoxNetworkType x == Vnet && proxmoxNetworkInterface x == vnetName) networks
 
 -- looks up for transaction data and deploy config for vmid
 getVMID :: String -> TransactionData -> DeployConfig -> Maybe Int
@@ -194,7 +194,7 @@ executeTransactionAction (RemoveNetworks vmName) = do
       case M.lookup vmid vmMap of
         Nothing -> (liftIO . warningM loggerName) $ "VM with VMID " <> show vmid <> " not found."
         _ -> do
-          (ProxmoxResponse vmCfg') <- (liftIO . defaultRetryClient' transactionProxmoxState) (getVMConfig nodeName vmid) >>= defaultClientErrorWrapper
+          (ProxmoxResponse { proxmoxData = vmCfg'}) <- (liftIO . defaultRetryClient' transactionProxmoxState) (getVMConfig nodeName vmid) >>= defaultClientErrorWrapper
           case vmCfg' of
             Nothing -> throwE (VMConfigIsNotFound vmName)
             (Just vmCfg) -> do
@@ -341,11 +341,12 @@ planTransactionStages (DeployConfig { deployVMs=vms, deployTemplates=templates, 
         map (NetworkConnected vmName) enumNets
   generateNetworks (RawVM {}) = [] -- TODO: add support
   in (snd . runIdentity . runWriterT) (if target == Deploy then f else f')
-
-planTransactionActions :: [TransactionStage] -> DeployConfig -> [ProxmoxNetwork] -> [ProxmoxSDNZone] -> [ProxmoxSDNNetwork] -> Map Int ProxmoxVM -> Either TransactionException [TransactionAction]
-planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName } }) bridges sdnZones sdnNetworks vmMap =
-  (fmap (sortOn transactionActionPriority) . runIdentity . runExceptT) $ helper stages [] where
-  helper :: [TransactionStage] -> [TransactionAction] -> TransactionM Identity [TransactionAction]
+--(DeployConfig { deployNetworks = configNetworks, deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName } })
+planTransactionActions :: [TransactionStage] -> [ProxmoxNetwork] -> [ProxmoxSDNZone] -> [ProxmoxSDNNetwork] -> Map Int ProxmoxVM -> TransactionState -> IO (Either TransactionException [TransactionAction])
+planTransactionActions stages bridges sdnZones sdnNetworks vmMap state' = do
+  (result, _) <- runStateT (runExceptT $ helper stages []) state'
+  (return . fmap (sortOn transactionActionPriority)) result where
+  helper :: [TransactionStage] -> [TransactionAction] -> StatefulTransactionM [TransactionAction]
   helper [] acc = (pure . reverse) acc
   helper ((NetworkExists (ExistingNetwork networkName)):ts) acc = if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts acc else
     throwE (BridgeNotFound networkName)
@@ -392,22 +393,40 @@ planTransactionActions stages (DeployConfig { deployNetworks = configNetworks, d
           Nothing -> do
             helper ts (TransactionDelayAfter delay (StartVM vmName):CreateVM vm:acc)
   helper ((VMExists (TemplatedConfigVM { configVMParentTemplate = parentTemplateName, configVMName = vmName, configVMID = vmID, configVMDelay = delay })):ts) acc = do
+    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName } }), .. }) <- lift get
+    data' <- transactionDataGetF
     case filter ((==) parentTemplateName . configTemplateName) vmTemplates of
       [] -> throwE (TemplateNotFound (ConfigTemplate {configTemplateName = parentTemplateName, configTemplateID = 0 }))
       (ConfigTemplate { configTemplateID = templateID }:_) -> do
         let cloneStage = CloneVM (ProxmoxVMCloneParams {proxmoxVMCloneVMID = templateID, proxmoxVMCloneStorage = Nothing, proxmoxVMCloneSnapname = Nothing, proxmoxVMCloneTarget = Just deployNodeName, proxmoxVMCloneNewID = fromMaybe (-1) vmID, proxmoxVMCloneName = (Just . T.pack) vmName, proxmoxVMCloneDescription=Nothing})
-        case vmID of
+        case getVMID vmName data' deployConfig of
           Nothing -> helper ts (TransactionDelayAfter delay (StartVM vmName):cloneStage:AssignVMID vmName:acc)
           (Just vmID') -> do
             case M.lookup vmID' vmMap of
               (Just _) -> helper ts acc -- TODO: reconfig VM (and unify vm check, wtf)
               Nothing -> helper ts (TransactionDelayAfter delay (StartVM vmName):cloneStage:acc)
   helper ((NetworksRemoved vmName):ts) acc = helper ts (RemoveNetworks vmName:acc)
-  helper ((NetworkConnected vmName networkConfig):ts) acc = do
+  helper ((NetworkConnected vmName networkConfig@(ConfigVMNetwork { .. })):ts) acc = do
+    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployNetworks = configNetworks, deployParameters = DeployParams { deployNodeName = deployNodeName }}),  ..}) <- lift get
     let networkNames = map configNetworkName configNetworks
-    let networkName = configVMNetworkName networkConfig
-    if networkName `notElem` networkNames then throwE (NetworkIsNotDeclared $ configVMNetworkName networkConfig) else
-      helper ts (AttachNetwork vmName networkConfig:acc)
+    if configVMNetworkName `notElem` networkNames then throwE (NetworkIsNotDeclared $ configVMNetworkName) else do
+      data' <- transactionDataGetF
+      case getVMID vmName data' deployConfig of
+        Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
+        (Just vmID) -> do
+          (ProxmoxResponse { proxmoxData = vmConfig'}) <- (liftIO . defaultRetryClient' transactionProxmoxState) (getVMConfig deployNodeName vmID) >>= defaultClientErrorWrapper
+          case vmConfig' of
+            Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
+            (Just vmConfig) -> do
+              let bridges = vmNetworkBridges vmConfig
+              case configVMNetworkNumber of
+                Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
+                (Just vmNumber) -> do
+                  case M.lookup vmNumber bridges of
+                    Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
+                    (Just bridgeName) -> if bridgeName == configVMNetworkName then
+                      helper ts acc
+                    else helper ts (AttachNetwork vmName networkConfig:acc)
   helper ((VMNotExists vm):ts) acc = do
     let vmName = configVMName vm
     helper ts (UnassignVMID vmName:DestroyVM vmName:StopVM vmName:acc)

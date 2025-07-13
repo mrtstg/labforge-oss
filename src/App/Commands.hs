@@ -1,31 +1,33 @@
 {-# LANGUAGE RecordWildCards #-}
-module App.Commands 
+module App.Commands
   ( runCommand
   ) where
 
-import qualified Data.Text as T
-import Api.Proxmox
-import Api.Proxmox.Models.Version
-import Api.Proxmox.Models
-import qualified Api.Proxmox.Client as C
-import Servant.Client
-import Utils
-import App.Types
-import Control.Exception
-import System.Exit
-import Data.List (intercalate)
-import Data.Models.Config.Deploy
-import Data.Models.Config
-import Api.Ssl (createProxmoxManager)
-import App.Commands.Down
-import System.Log.Handler (LogHandler(setFormatter))
-import System.Log.Handler.Simple
-import System.Log.Formatter
-import System.IO
-import System.Log
-import System.Log.Logger (infoM, updateGlobalLogger, setLevel, rootLoggerName, setHandlers, errorM)
-import App.Commands.Up
-import Api.Retry
+import           Api.Proxmox
+import qualified Api.Proxmox.Client         as C
+import           Api.Proxmox.Models
+import           Api.Proxmox.Models.Version
+import           Api.Retry
+import           Api.Ssl                    (createProxmoxManager)
+import           App.Commands.Down
+import           App.Commands.Up
+import           App.Types
+import           Control.Exception
+import           Data.List                  (intercalate)
+import           Data.Models.Config
+import           Data.Models.Config.Deploy
+import qualified Data.Text                  as T
+import           Servant.Client
+import           System.Exit
+import           System.IO
+import           System.Log
+import           System.Log.Formatter
+import           System.Log.Handler         (LogHandler (setFormatter))
+import           System.Log.Handler.Simple
+import           System.Log.Logger          (errorM, infoM, rootLoggerName,
+                                             setHandlers, setLevel,
+                                             updateGlobalLogger)
+import           Utils
 
 loggerName = "ProxmoxCompose.Main"
 
@@ -44,7 +46,7 @@ setupLogging opts = do
 parseDeployConfig :: AppOpts -> IO (FilePath, DeployConfig)
 parseDeployConfig AppOpts { .. } = let
  configFiles' = case configFile of
-  Nothing -> defaultConfigFiles
+  Nothing     -> defaultConfigFiles
   (Just path) -> path:defaultConfigFiles
  in do
   (configPath', checkedPaths) <- findExistingFile configFiles'
@@ -84,8 +86,8 @@ runCommand opts@(AppOpts { .. }) = do
         (Left e) -> do
           errorM loggerName $ "Proxmox version API request error: " <> displayException e
           exitWith (ExitFailure 1)
-        (Right (ProxmoxResponse (ProxmoxVersion { proxmoxVersion = proxmoxVersion }))) -> do
+        (Right (ProxmoxResponse { proxmoxData = ProxmoxVersion { proxmoxVersion = proxmoxVersion }})) -> do
           infoM loggerName $ "Found proxmox v" <> T.unpack proxmoxVersion
           case appCommand of
-            Deploy -> runUpCommand proxmoxState deployConfig deployConfigPath
+            Deploy  -> runUpCommand proxmoxState deployConfig deployConfigPath
             Destroy -> runDownCommand proxmoxState deployConfig deployConfigPath
