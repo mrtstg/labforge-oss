@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Parsers.NetworkSpec (spec) where
 
 import           Data.Either
