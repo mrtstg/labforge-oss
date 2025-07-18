@@ -73,7 +73,7 @@ genericTransactionBuilder statePath proxmoxState deployConfig@(DeployConfig
   infoM loggerName "Building transaction..."
   let stages = planTransactionStages deployConfig target
   debugM loggerName $ "First stages: " <> show stages
-  transactionRes <- planTransactionActions stages bridges sdnZones sdnNetworks vmMap (defaultROTransactionState statePath proxmoxState deployConfig)
+  transactionRes <- planTransactionActions stages bridges sdnZones sdnNetworks vmMap (defaultROTransactionState target statePath proxmoxState deployConfig)
   case transactionRes of
     (Left e) -> do
       errorM loggerName ("Failed to build transaction: " <> show e)
@@ -122,8 +122,8 @@ defaultGetTrancactionF statePath = do
   else do
     return (TransactionData M.empty)
 
-defaultROTransactionState :: FilePath -> ProxmoxState -> DeployConfig -> TransactionState
-defaultROTransactionState statePath proxmoxState deployConfig =
+defaultROTransactionState :: DeployTarget -> FilePath -> ProxmoxState -> DeployConfig -> TransactionState
+defaultROTransactionState target statePath proxmoxState deployConfig =
   TransactionState
     { transactionProxmoxState = proxmoxState
     , transactionDataSetF = \_ -> pure ()
@@ -131,10 +131,11 @@ defaultROTransactionState statePath proxmoxState deployConfig =
     , transactionAllocateVMIDF = pure 0
     , transactionActions = []
     , transactionDeployConfig = deployConfig
+    , transactionTarget = target
     }
 
-defaultTransactionState :: FilePath -> [TransactionAction] -> ProxmoxState -> DeployConfig -> TransactionState
-defaultTransactionState statePath actions proxmoxState deployConfig = let
+defaultTransactionState :: DeployTarget -> FilePath -> [TransactionAction] -> ProxmoxState -> DeployConfig -> TransactionState
+defaultTransactionState target statePath actions proxmoxState deployConfig = let
 
   allocateF :: StatefulTransactionM Int
   allocateF = do
@@ -157,4 +158,5 @@ defaultTransactionState statePath actions proxmoxState deployConfig = let
     , transactionAllocateVMIDF = allocateF
     , transactionActions = actions
     , transactionDeployConfig = deployConfig
+    , transactionTarget = target
     }
