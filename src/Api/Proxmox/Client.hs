@@ -29,6 +29,7 @@ module Api.Proxmox.Client
   , deleteVMConfig
   ) where
 
+
 import           Api.Proxmox
 import           Api.Proxmox.Models
 import           Api.Proxmox.Models.Network
@@ -44,7 +45,7 @@ import           Data.Aeson
 import           Data.List                     (intercalate)
 import qualified Data.Map                      as M
 import           Data.Proxy
-import           Data.Text                     (Text, pack)
+import           Data.Text                     (Text, isInfixOf, pack)
 import           GHC.Generics
 import           Network.HTTP.Client           (defaultManagerSettings,
                                                 newManager, responseStatus)
@@ -67,11 +68,28 @@ getVersion
   :<|> getNodes
   :<|> startVM
   :<|> stopVM
-  :<|> getVMPower
+  :<|> getVMPower'
   :<|> deleteVM
   :<|> cloneVM
   :<|> deleteSDNNetwork
   :<|> putVMConfig = client api
+
+getVMPower :: Text -> Int -> ClientM (ProxmoxResponse (Maybe ProxmoxVMStatusWrapper))
+getVMPower nodeName vmid = do
+  state <- ask
+  res <- (liftIO . flip runClientM state) $ getVMPower' nodeName vmid
+  case res of
+    (Right (ProxmoxResponse { proxmoxData = resp }))                    -> pure (ProxmoxResponse { proxmoxData = Just resp, proxmoxMessage = Nothing })
+    (Left exception@(FailureResponse _ (Response { responseStatusCode = status, responseBody = body }))) -> do
+      case statusCode status of
+        500          -> do
+          case decode body of
+            (Just (ProxmoxResponse { proxmoxData = (), proxmoxMessage = (Just (String msg)) })) ->
+              if "Configuration file" `isInfixOf` msg && "does not exist" `isInfixOf` msg then
+                pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing }) else throwError exception
+            _anyOther -> throwError exception
+        _otherStatus -> throwError exception
+    (Left otherError)               -> throwError otherError
 
 getVMConfig :: Text -> Int -> ClientM (ProxmoxResponse (Maybe ProxmoxVMConfig))
 getVMConfig nodeName vmid = do
@@ -79,9 +97,14 @@ getVMConfig nodeName vmid = do
   res <- (liftIO . flip runClientM state) $ getVMConfig' nodeName vmid
   case res of
     (Right resp)                    -> pure resp
-    (Left exception@(FailureResponse _ (Response { responseStatusCode = status }))) -> do
+    (Left exception@(FailureResponse _ (Response { responseStatusCode = status, responseBody = body }))) -> do
       case statusCode status of
-        404          -> pure (ProxmoxResponse Nothing Nothing)
+        500          -> do
+          case decode body of
+            (Just (ProxmoxResponse { proxmoxData = (), proxmoxMessage = (Just (String msg)) })) ->
+              if "Configuration file" `isInfixOf` msg && "does not exist" `isInfixOf` msg then
+                pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing }) else throwError exception
+            _anyOther -> throwError exception
         _otherStatus -> throwError exception
     (Left otherError)               -> throwError otherError
 
