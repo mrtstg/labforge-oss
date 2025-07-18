@@ -1,41 +1,41 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-module Data.Models.Config.VM 
+{-# LANGUAGE RecordWildCards   #-}
+module Data.Models.Config.VM
   ( ConfigVM(..)
   , ConfigVMNetwork(..)
   , isTemplateVM
   , formatConfigVMNetwork
   ) where
 
-import Api.Proxmox.Models.NetworkInterface
-import Data.Aeson
-import qualified Data.Aeson.KeyMap as KM
-import qualified Data.Text as T
-import Data.List (intercalate)
-import Parsers
-import Data.Maybe
+import           Api.Proxmox.Models.NetworkInterface
+import           Data.Aeson
+import qualified Data.Aeson.KeyMap                   as KM
+import           Data.List                           (intercalate)
+import           Data.Maybe
+import qualified Data.Text                           as T
+import           Parsers
 
 data ConfigVMNetwork = ConfigVMNetwork
-  { configVMNetworkName :: !String
+  { configVMNetworkName     :: !String
   , configVMNetworkFirewall :: !Bool
-  , configVMDeviceType :: !NetworkInterfaceType
-  , configVMNetworkTag :: !(Maybe Int)
-  , configVMNetworkNumber :: !(Maybe Int)
+  , configVMDeviceType      :: !NetworkInterfaceType
+  , configVMNetworkTag      :: !(Maybe Int)
+  , configVMNetworkNumber   :: !(Maybe Int)
   } deriving (Show, Eq)
 
 formatConfigVMNetwork :: ConfigVMNetwork -> Maybe (String, String)
 formatConfigVMNetwork ConfigVMNetwork { .. } = case configVMNetworkNumber of
   Nothing -> Nothing
-  (Just netNum) -> Just ("net" <> show netNum, intercalate "," $ 
+  (Just netNum) -> Just ("net" <> show netNum, intercalate "," $
     [ "model=" <> show configVMDeviceType
     , "firewall=" <> if configVMNetworkFirewall then "1" else "0"
     , "bridge=" <> configVMNetworkName
-    ] 
+    ]
     ++ ["tag=" <> (show . fromJust) configVMNetworkTag | isJust configVMNetworkTag])
 
 instance FromJSON ConfigVMNetwork where
   parseJSON (String networkName) = pure $ ConfigVMNetwork (T.unpack networkName) True VIRTIO Nothing Nothing
-  parseJSON (Object v) = ConfigVMNetwork 
+  parseJSON (Object v) = ConfigVMNetwork
     <$> v .: "name"
     <*> v .:? "firewall" .!= True
     <*> v .:? "type" .!= VIRTIO
@@ -43,25 +43,28 @@ instance FromJSON ConfigVMNetwork where
     <*> nullMaybeWrapper (KM.lookup "number" v) (limitedNumberParser (`elem` [0..31]) "Network number must be in range 0..32")
   parseJSON _ = error "ConfigVMNetwork has invalid type"
 
-data ConfigVM = TemplatedConfigVM 
+data ConfigVM = TemplatedConfigVM
   { configVMParentTemplate :: !String
-  , configVMName :: !String
-  , configVMID :: !(Maybe Int)
-  , configVMDelay :: !Int
-  , configVMNetworks :: !(Maybe [ConfigVMNetwork])
-  , configVMCleanNetworks :: !Bool
-  } | RawVM 
-  { configVMName :: !String
-  , configVMID :: !(Maybe Int)
-  , configVMDelay :: !Int
+  , configVMName           :: !String
+  , configVMID             :: !(Maybe Int)
+  , configVMDelay          :: !Int
+  , configVMNetworks       :: !(Maybe [ConfigVMNetwork])
+  , configVMCleanNetworks  :: !Bool
+  , configVMRunning        :: !Bool
+  } | RawVM
+  { configVMName    :: !String
+  , configVMID      :: !(Maybe Int)
+  , configVMDelay   :: !Int
+  , configVMRunning :: !Bool
   } deriving (Show, Eq)
 
 instance FromJSON ConfigVM where
   parseJSON = withObject "ConfigVM" $ \v -> case KM.lookup "clone_from" v of
-    Nothing -> RawVM 
+    Nothing -> RawVM
       <$> v .: "name"
       <*> v .:? "vmid"
       <*> v .:? "delay" .!= 0
+      <*> nullDefaultWrapper (KM.lookup "running" v) True variableBooleanParser
     (Just (String _)) -> TemplatedConfigVM
       <$> v .: "clone_from"
       <*> v .: "name"
@@ -69,8 +72,9 @@ instance FromJSON ConfigVM where
       <*> v .:? "delay" .!= 0
       <*> v .:? "networks" .!= Nothing
       <*> nullDefaultWrapper (KM.lookup "clean_networks" v) False variableBooleanParser
+      <*> nullDefaultWrapper (KM.lookup "running" v) True variableBooleanParser
     _anyOtherType -> fail "clone_from field has incorrect value type!"
 
 isTemplateVM :: ConfigVM -> Bool
 isTemplateVM (TemplatedConfigVM {}) = True
-isTemplateVM _ = False
+isTemplateVM _                      = False
