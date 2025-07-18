@@ -17,7 +17,7 @@ runUpCommand :: ProxmoxState -> DeployConfig -> FilePath -> IO ()
 runUpCommand proxmoxState deployConfig configPath = do
   actions <- genericTransactionBuilder (defaultStatePathGenerator configPath) proxmoxState deployConfig Deploy
   () <- getTransactionAgreement
-  let state' = defaultTransactionState (defaultStatePathGenerator configPath) actions proxmoxState deployConfig
+  let state' = defaultTransactionState Deploy (defaultStatePathGenerator configPath) actions proxmoxState deployConfig
   (res, _) <- runStateT (runExceptT executeTransaction) state'
   print res
   exitSuccess
