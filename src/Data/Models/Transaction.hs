@@ -10,7 +10,6 @@ module Data.Models.Transaction
   , DeployTarget(..)
   , defaultClientErrorWrapper
   , defaultTransactionDelayAfter
-  , transactionActionPriority
   ) where
 
 import           Api.Proxmox
@@ -33,6 +32,8 @@ data TransactionStage
   | TemplateExists ConfigTemplate
   | NetworkConnected String ConfigVMNetwork
   | NetworksRemoved String
+  | VMStopped ConfigVM
+  | VMRunning ConfigVM
   deriving (Show, Eq)
 
 data TransactionAction
@@ -48,13 +49,8 @@ data TransactionAction
   | RemoveNetworks String
   | AttachNetwork String ConfigVMNetwork
   | TransactionDelayAfter Int TransactionAction
+  | DetachNetwork String Int
   deriving (Show, Eq)
-
--- from -100 to 100, used for sorting actions
-transactionActionPriority :: TransactionAction -> Int
-transactionActionPriority (TransactionDelayAfter _ action) = transactionActionPriority action
-transactionActionPriority (StartVM {}) = 50
-transactionActionPriority _ = 0
 
 data DeployTarget = Deploy | Destroy deriving (Show, Eq)
 
@@ -85,6 +81,7 @@ data TransactionState = TransactionState
   , transactionActions       :: ![TransactionAction]
   , transactionDeployConfig  :: !DeployConfig
   , transactionProxmoxState  :: !ProxmoxState
+  , transactionTarget        :: !DeployTarget
   }
 
 type StatelessTransactionM a = TransactionM IO a
