@@ -1,5 +1,5 @@
 name:                proxmox-fs-agent
-version:             0.1.0.0
+version:             0.1.0.1
 github:              "learnew2/proxmox-fs-agent"
 license:             BSD-3-Clause
 author:              "Ilya Zamaratskikh"

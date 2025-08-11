@@ -15,21 +15,21 @@ import           System.FilePath
 import           Utils
 import           Yesod.Core
 
-newtype VMArgsRequest = VMArgsRequest Int deriving Show
+data VMArgsRequest = VMArgsRequest Int String deriving Show
 
 instance FromJSON VMArgsRequest where
-  parseJSON = withObject "VMArgsRequest" $ \v -> VMArgsRequest <$> v .: "display"
+  parseJSON = withObject "VMArgsRequest" $ \v -> VMArgsRequest <$> v .: "display" <*> v .: "network"
 
 postVMArgsR :: Int -> Handler Value
 postVMArgsR vmid = do
   () <- checkToken
-  (VMArgsRequest displayNumber) <- requireCheckJsonBody
+  (VMArgsRequest displayNumber displayNetwork) <- requireCheckJsonBody
   App { .. } <- getYesod
   let configPath = combine configsPath (addExtension (show vmid) "conf")
   configExists <- liftIO $ doesFileExist configPath
   if not configExists then sendStatusJSON status404 $ object ["error" .= String "Not found"] else do
     opts' <- liftIO $ getVMOptionsFromFile configPath
-    let newOpts = setVNCSettings (VNCArgs $ "0.0.0.0:" <> show displayNumber) opts'
+    let newOpts = setVNCSettings (VNCArgs $ displayNetwork <> ":" <> show displayNumber) opts'
     case newOpts of
       (Left e) -> sendStatusJSON status500 $ object ["error" .= ("Parse error: " <> e)]
       (Right opts) -> do
