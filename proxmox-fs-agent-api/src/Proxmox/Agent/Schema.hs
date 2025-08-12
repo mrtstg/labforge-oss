@@ -4,6 +4,8 @@
 {-# LANGUAGE TypeOperators     #-}
 module Proxmox.Agent.Schema
   ( AgentAPI
+  , VNCRequest(..)
+  , AgentToken(..)
   ) where
 
 import           Data.Aeson
@@ -30,4 +32,4 @@ instance ToJSON VNCRequest  where
 instance FromJSON VNCRequest where
   parseJSON = withObject "VNCRequest" $ \v -> VNCRequest <$> v .: "display" <*> v .:? "network" .!= "0.0.0.0"
 
-type AgentAPI = "args" :> "vnc" :> Capture "vmid" Int :> ReqBody '[JSON] VNCRequest :> Post '[JSON] ()
+type AgentAPI = "args" :> "vnc" :> Capture "vmid" Int :> Header "Authorization" AgentToken :> ReqBody '[JSON] VNCRequest :> Post '[JSON] ()

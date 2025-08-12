@@ -1,5 +1,7 @@
 module Proxmox.Agent.Client
   ( setVNCPort
+  , VNCRequest(..)
+  , AgentToken(..)
   ) where
 
 import           Control.Monad.Except
@@ -14,7 +16,7 @@ api = Proxy
 
 setVNCPort' = client api
 
-setVNCPort vmid req = noContentStatusWrapper $ setVNCPort' vmid req
+setVNCPort vmid token req = noContentStatusWrapper $ setVNCPort' vmid token req
 
 noContentStatusWrapper :: ClientM a -> ClientM ()
 noContentStatusWrapper req = do
