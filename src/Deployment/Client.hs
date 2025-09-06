@@ -24,6 +24,7 @@ module Deployment.Client
   , getDeploymentInstancesStats
   , callInstanceDestroy
   , callGroupSnapshot
+  , callInstanceSnapshot
   ) where
 
 import           Data.Proxy
@@ -57,4 +58,5 @@ getPagedTemplates
   :<|> getVMPortNetworks
   :<|> checkVMPortAccess
   :<|> getDeploymentInstancesStats
-  :<|> callInstanceDestroy = client api
+  :<|> callInstanceDestroy
+  :<|> callInstanceSnapshot = client api

@@ -42,3 +42,4 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "vmport" :> "access" :> Header' '[Required] "X-VM-PORT" Text :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> "stats" :> AuthHeader :> Get '[JSON] DeploymentStats
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "destroy" :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "snapshot" :> QueryParam "snapname" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
