@@ -77,6 +77,7 @@ setVNCSettings vncArg = helper M.empty . M.toList where
 
   helper :: M.Map (Maybe String) [String] -> [(Maybe String, [String])] -> Either String (M.Map (Maybe String) [String])
   helper acc [] = Right acc
+  helper acc ((Just "[special:cloudinit]", _):snaps) = helper acc snaps
   helper acc ((snapName, params):snaps) = case filter ("args:" `isPrefixOf`) params of
     [] -> helper (M.insert snapName (("args: " ++ constructVMArgs [vncArg]):params) acc) snaps
     (oldArgs:_) -> case parseVNCArgs oldArgs of
