@@ -40,6 +40,6 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "power" :> "switch" :> AuthHeader :> Get '[JSON] PowerState
   :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "networks" :> AuthHeader :> Get '[JSON] (M.Map String String)
   :<|> "api" :> "deployment" :> "vmport" :> "access" :> Header' '[Required] "X-VM-PORT" Text :> AuthHeader :> Get '[JSON] ()
-  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> "stats" :> AuthHeader :> Get '[JSON] DeploymentStats
+  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> "stats" :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] DeploymentStats
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "destroy" :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "snapshot" :> QueryParam "snapname" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
