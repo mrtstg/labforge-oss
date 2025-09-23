@@ -32,7 +32,7 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "power" :> "group" :> QueryParam "group" Text :> QueryFlag "on" :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "vmid" :> NodeNameCapture :> Capture "DeploymentInstanceID" Text :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [Int]
   :<|> "api" :> "deployment" :> "display" :> NodeNameCapture :> Capture "DeploymentInstanceID" Text :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [Int]
-  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> QueryParam "page" Int :> AuthHeader :> Get '[JSON] (PagedResponse [DeploymentInstanceBrief])
+  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> QueryParam "page" Int :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] (PagedResponse [DeploymentInstanceBrief])
   :<|> "api" :> "deployment" :> "instances" :> "my" :> QueryParam "page" Int :> AuthHeader :> Get '[JSON] (PagedResponse [DeploymentInstanceBrief])
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> AuthHeader :> Get '[JSON] DeploymentInstance
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "power" :> QueryFlag "on" :> AuthHeader :> Get '[JSON] ()
