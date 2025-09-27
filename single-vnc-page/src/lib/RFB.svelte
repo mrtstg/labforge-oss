@@ -60,18 +60,31 @@
       }
       var needs_shift = character.match(/[A-Z!@#$%^&*()_+{}:\"<>?~|]/);
       if (needs_shift) {
-          rfb.sendKey(XK_Shift_L, null ,true);
-      }
-      rfb.sendKey(code, null);
-      if (needs_shift) {
-          rfb.sendKey(XK_Shift_L, null, false);
+        rfb.sendKey(XK_Shift_L, null ,true);
+        delay(50).then(_ => {
+          if (rfb != null) {
+            rfb.sendKey(code, null);
+            delay(50).then(_ => {
+              rfb!.sendKey(XK_Shift_L, null, false);
+            })
+          }
+        })
+      } else {
+        rfb.sendKey(code, null);
       }
       delay(50).then(_ => { sendString(str) })
     }
   }
 
-  // currently not works
   const sendBuffer = () => {
+    if (clipboard.length > 0 && clipboard.length < 1001) {
+        if (rfb != null) {
+          sendString(clipboard.split(''))
+        }
+    }
+  }
+
+  const sendFromClipboard = () => {
     navigator.clipboard.readText()
       .then(text => {
         if (rfb != null) {
@@ -82,12 +95,16 @@
         console.error('Failed to read clipboard contents: ', err);
       });
   }
+
+  let clipboard = ''
 </script>
 
 <div>
   <div class="flex flex-row items-center w-full">
     <button class="button" on:click={sendCAD}> Ctrl + Alt + Del </button>
-    <button class="button" on:click={sendBuffer}> Ctrl-V </button>
+    <input class="input" maxlength="1000" type="text" bind:value={clipboard}>
+    <button class="button" on:click={sendBuffer}> Вставить </button>
+    <button class="button" on:click={sendFromClipboard}> Вставить из буфера </button>
   </div>
   <div class="vnc-screen-container" bind:this={parent}></div>
 </div>
