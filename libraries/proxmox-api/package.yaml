@@ -1,0 +1,62 @@
+name:                proxmox-api
+version:             0.1.0.5
+github:              "learnew2/proxmox-api"
+license:             BSD-3-Clause
+author:              "Ilya Zamaratskikh"
+maintainer:          "mrtstg@yandex.ru"
+copyright:           "2025 Ilya Zamaratskikh"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+description:         Please see the README on GitHub at <https://github.com/learnew2/proxmox-api#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- servant == 0.19.1
+- text == 2.0.2
+- aeson == 2.1.2.1
+- http-client == 0.7.14
+- servant-client == 0.19
+- http-conduit == 2.3.8.1
+- connection == 0.3.1
+- case-insensitive == 1.2.1.0
+- bytestring == 0.11.5.2
+- scientific == 0.3.7.0
+- containers == 0.6.7
+- transformers == 0.5.6.2
+- attoparsec == 0.14.4
+- mtl == 2.2.2
+- http-types == 0.12.3
+- monad-logger == 0.3.40
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Proxmox.Client
+    - Proxmox.Models
+    - Proxmox.Models.Network
+    - Proxmox.Models.NetworkInterface
+    - Proxmox.Models.Node
+    - Proxmox.Models.SDNNetwork
+    - Proxmox.Models.SDNZone
+    - Proxmox.Models.Storage
+    - Proxmox.Models.Version
+    - Proxmox.Models.VMClone
+    - Proxmox.Models.VMConfig
+    - Proxmox.Models.VM
+    - Proxmox.Models.Snapshot
+    - Proxmox.Schema
+    - Proxmox.Retry
