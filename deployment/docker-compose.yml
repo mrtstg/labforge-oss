@@ -78,7 +78,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./websockify/tokens.cfg:/tokens.cfg:ro
-      - ./websockify/entrypoint.sh:/entrypoint.sh:ro
   dev-kroki:
     image: yuzutech/kroki
     container_name: labforge-kroki
