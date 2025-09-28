@@ -1,0 +1,37 @@
+name:                proxmox-fs-agent-api
+version:             0.1.1.0
+github:              "learnew2/proxmox-fs-agent-api"
+license:             BSD-3-Clause
+author:              "Ilya Zamaratskikh"
+maintainer:          "mrtstg@yandex.ru"
+copyright:           "2025 Ilya Zamaratskikh"
+
+extra-source-files:
+- README.md
+
+description:         Please see the README on GitHub at <https://github.com/learnew2/proxmox-fs-agent-api#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- aeson == 2.1.2.1
+- text ^>= 2
+- http-types == 0.12.3
+- bytestring == 0.11.5.2
+- servant == 0.19.1
+- servant-client == 0.19
+- http-conduit == 2.3.8.1
+- mtl == 2.2.2
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
