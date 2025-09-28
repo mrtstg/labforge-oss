@@ -202,13 +202,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
     o && o(u.root);
     let l = false;
-    if (u.ctx = n ? n(e, t.props || {}, (k, X, ...g) => {
+    if (u.ctx = n ? n(e, t.props || {}, (S, X, ...g) => {
       const b = g.length ? g[0] : X;
-      return u.ctx && i(u.ctx[k], u.ctx[k] = b) && (!u.skip_bound && u.bound[k] && u.bound[k](b), l && As(e, k)), X;
+      return u.ctx && i(u.ctx[S], u.ctx[S] = b) && (!u.skip_bound && u.bound[S] && u.bound[S](b), l && As(e, S)), X;
     }) : [], u.update(), l = true, xr(u.before_update), u.fragment = r ? r(u.ctx) : false, t.target) {
       if (t.hydrate) {
-        const k = Ss(t.target);
-        u.fragment && u.fragment.l(k), k.forEach(gr);
+        const S = Ss(t.target);
+        u.fragment && u.fragment.l(S), S.forEach(gr);
       } else u.fragment && u.fragment.c();
       t.intro && Nt(e.$$.fragment), ai(e, t.target, t.anchor), Va();
     }
@@ -340,8 +340,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         __proto__: null
       }, u = Object.defineProperty && Object.getOwnPropertyDescriptor;
       for (var l in a) if (l !== "default" && {}.hasOwnProperty.call(a, l)) {
-        var k = u ? Object.getOwnPropertyDescriptor(a, l) : null;
-        k && (k.get || k.set) ? Object.defineProperty(y, l, k) : y[l] = a[l];
+        var S = u ? Object.getOwnPropertyDescriptor(a, l) : null;
+        S && (S.get || S.set) ? Object.defineProperty(y, l, S) : y[l] = a[l];
       }
       return y.default = a, s && s.set(a, y), y;
     }
@@ -350,8 +350,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       base64Pad: "=",
       encode: function(o) {
         for (var s = "", y = o.length, u = y % 3, l = 0; l < y - 2; l += 3) s += this.toBase64Table[o[l] >> 2], s += this.toBase64Table[((o[l] & 3) << 4) + (o[l + 1] >> 4)], s += this.toBase64Table[((o[l + 1] & 15) << 2) + (o[l + 2] >> 6)], s += this.toBase64Table[o[l + 2] & 63];
-        var k = y - u;
-        return u === 2 ? (s += this.toBase64Table[o[k] >> 2], s += this.toBase64Table[((o[k] & 3) << 4) + (o[k + 1] >> 4)], s += this.toBase64Table[(o[k + 1] & 15) << 2], s += this.toBase64Table[64]) : u === 1 && (s += this.toBase64Table[o[k] >> 2], s += this.toBase64Table[(o[k] & 3) << 4], s += this.toBase64Table[64], s += this.toBase64Table[64]), s;
+        var S = y - u;
+        return u === 2 ? (s += this.toBase64Table[o[S] >> 2], s += this.toBase64Table[((o[S] & 3) << 4) + (o[S + 1] >> 4)], s += this.toBase64Table[(o[S + 1] & 15) << 2], s += this.toBase64Table[64]) : u === 1 && (s += this.toBase64Table[o[S] >> 2], s += this.toBase64Table[(o[S] & 3) << 4], s += this.toBase64Table[64], s += this.toBase64Table[64]), s;
       },
       toBinaryTable: [
         -1,
@@ -486,15 +486,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       decode: function(o) {
         var s = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 0, y = o.indexOf("=") - s;
         y < 0 && (y = o.length - s);
-        for (var u = (y >> 2) * 3 + Math.floor(y % 4 / 1.5), l = new Array(u), k = 0, X = 0, g = 0, b = s; b < o.length; b++) {
+        for (var u = (y >> 2) * 3 + Math.floor(y % 4 / 1.5), l = new Array(u), S = 0, X = 0, g = 0, b = s; b < o.length; b++) {
           var d = this.toBinaryTable[o.charCodeAt(b) & 127], f = o.charAt(b) === this.base64Pad;
           if (d === -1) {
             n.Error("Illegal character code " + o.charCodeAt(b) + " at position " + b);
             continue;
           }
-          X = X << 6 | d, k += 6, k >= 8 && (k -= 8, f || (l[g++] = X >> k & 255), X &= (1 << k) - 1);
+          X = X << 6 | d, S += 6, S >= 8 && (S -= 8, f || (l[g++] = X >> S & 255), X &= (1 << S) - 1);
         }
-        if (k) {
+        if (S) {
           var c = new Error("Corrupted base64 string");
           throw c.name = "Base64-Error", c;
         }
@@ -587,7 +587,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         value: O(E, m, V)
       }), M;
     }
-    function k(E, p, m) {
+    function S(E, p, m) {
       try {
         return {
           type: "normal",
@@ -612,8 +612,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     u(x, o, function() {
       return this;
     });
-    var F = Object.getPrototypeOf, S = F && F(F(ne([])));
-    S && S !== n && r.call(S, o) && (x = S);
+    var F = Object.getPrototypeOf, k = F && F(F(ne([])));
+    k && k !== n && r.call(k, o) && (x = k);
     var w = K.prototype = c.prototype = Object.create(x);
     function C(E) {
       [
@@ -628,7 +628,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     function A(E, p) {
       function m(B, M, V, re) {
-        var oe = k(E[B], E, M);
+        var oe = S(E[B], E, M);
         if (oe.type !== "throw") {
           var ce = oe.arg, pe = ce.value;
           return pe && Rr(pe) == "object" && r.call(pe, "__await") ? p.resolve(pe.__await).then(function(ye) {
@@ -681,7 +681,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             m.dispatchException(m.arg);
           } else m.method === "return" && m.abrupt("return", m.arg);
           L = b;
-          var oe = k(E, p, m);
+          var oe = S(E, p, m);
           if (oe.type === "normal") {
             if (L = m.done ? d : g, oe.arg === f) continue;
             return {
@@ -696,7 +696,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     function I(E, p) {
       var m = p.method, L = E.iterator[m];
       if (L === e) return p.delegate = null, m === "throw" && E.iterator.return && (p.method = "return", p.arg = e, I(E, p), p.method === "throw") || m !== "return" && (p.method = "throw", p.arg = new TypeError("The iterator does not provide a '" + m + "' method")), f;
-      var B = k(L, E.iterator, p.arg);
+      var B = S(L, E.iterator, p.arg);
       if (B.type === "throw") return p.method = "throw", p.arg = B.arg, p.delegate = null, f;
       var M = B.arg;
       return M ? M.done ? (p[E.resultName] = M.value, p.next = E.nextLoc, p.method !== "return" && (p.method = "next", p.arg = e), p.delegate = null, f) : M : (p.method = "throw", p.arg = new TypeError("iterator result is not an object"), p.delegate = null, f);
@@ -927,11 +927,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             return u.abrupt("return", false);
           case 8:
             return r = new Uint8Array(Bs.default.decode("AAAAAWdCwBTZnpuAgICgAAADACAAAAZB4oVNAAAAAWjJYyyAAAABBgX//4HcRem95tlIt5Ys2CDZI+7veDI2NCAtIGNvcmUgMTY0IHIzMTA4IDMxZTE5ZjkgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxlZnQgMjAwMy0yMDIzIC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0aW9uczogY2FiYWM9MCByZWY9NSBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1lPWhleCBzdWJtZT04IHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTEgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0yIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PS0yIHRocmVhZHM9MSBsb29rYWhlYWRfdGhyZWFkcz0xIHNsaWNlZF90aHJlYWRzPTAgbnI9MCBkZWNpbWF0ZT0xIGludGVybGFjZWQ9MCBibHVyYXlfY29tcGF0PTAgY29uc3RyYWluZWRfaW50cmE9MCBiZnJhbWVzPTAgd2VpZ2h0cD0wIGtleWludD1pbmZpbml0ZSBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NTAgcmM9YWJyIG1idHJlZT0xIGJpdHJhdGU9NDAwIHJhdGV0b2w9MS4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAABZYiEBrxmKAAPVccAAS044AA5DRJMnkycJk4TPw==")), i = false, a = null, o = new VideoDecoder({
-              output: function(k) {
+              output: function(S) {
                 i = true;
               },
-              error: function(k) {
-                a = k;
+              error: function(S) {
+                a = S;
               }
             }), s = new EncodedVideoChunk({
               timestamp: 0,
@@ -1132,8 +1132,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           key: "dispatchEvent",
           value: function(u) {
             var l = this;
-            return this._listeners.has(u.type) ? (this._listeners.get(u.type).forEach(function(k) {
-              return k.call(l, u);
+            return this._listeners.has(u.type) ? (this._listeners.get(u.type).forEach(function(S) {
+              return S.call(l, u);
             }), !u.defaultPrevented) : true;
           }
         }
@@ -1188,7 +1188,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     function u(g, b) {
       for (var d = 0; d < b.length; d++) {
         var f = b[d];
-        f.enumerable = f.enumerable || false, f.configurable = true, "value" in f && (f.writable = true), Object.defineProperty(g, k(f.key), f);
+        f.enumerable = f.enumerable || false, f.configurable = true, "value" in f && (f.writable = true), Object.defineProperty(g, S(f.key), f);
       }
     }
     function l(g, b, d) {
@@ -1196,7 +1196,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         writable: false
       }), g;
     }
-    function k(g) {
+    function S(g) {
       var b = X(g, "string");
       return s(b) == "symbol" ? b : b + "";
     }
@@ -1417,10 +1417,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           key: "blitImage",
           value: function(d, f, c, h, K, x, F) {
             if (this._renderQ.length !== 0 && !F) {
-              var S = new Uint8Array(c * h * 4);
-              S.set(new Uint8Array(K.buffer, 0, S.length)), this._renderQPush({
+              var k = new Uint8Array(c * h * 4);
+              k.set(new Uint8Array(K.buffer, 0, k.length)), this._renderQPush({
                 type: "blit",
-                data: S,
+                data: k,
                 x: d,
                 y: f,
                 width: c,
@@ -1442,8 +1442,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
               var x = h[0], F = h[1];
               this._damage(x, F, d.width, d.height);
             } else {
-              var S = h[2], w = h[3], C = h[4], A = h[5];
-              this._damage(C, A, S, w);
+              var k = h[2], w = h[3], C = h[4], A = h[5];
+              this._damage(C, A, k, w);
             }
           }
         },
@@ -1516,8 +1516,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
                   if (x.frame.ready) {
                     var F = x.frame.frame;
                     (F.codedWidth < x.width || F.codedHeight < x.height) && t.Warn("Decoded video frame does not cover its full rectangle area. Expecting at least " + x.width + "x" + x.height + " but got " + F.codedWidth + "x" + F.codedHeight);
-                    var S = 0, w = 0, C = x.width, A = x.height, O = x.x, I = x.y, Z = C, q = A;
-                    d.drawImage(F, S, w, C, A, O, I, Z, q), F.close();
+                    var k = 0, w = 0, C = x.width, A = x.height, O = x.x, I = x.y, Z = C, q = A;
+                    d.drawImage(F, k, w, C, A, O, I, Z, q), F.close();
                   } else {
                     var $ = d;
                     x.frame.promise.then(function() {
@@ -1599,14 +1599,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }), e.default = r;
     var t = 30, n = 12;
     function r(i, a) {
-      var o, s, y, u, l, k, X, g, b, d, f, c, h, K, x, F, S, w, C, A, O, I, Z, q, $;
-      o = i.state, s = i.next_in, q = i.input, y = s + (i.avail_in - 5), u = i.next_out, $ = i.output, l = u - (a - i.avail_out), k = u + (i.avail_out - 257), X = o.dmax, g = o.wsize, b = o.whave, d = o.wnext, f = o.window, c = o.hold, h = o.bits, K = o.lencode, x = o.distcode, F = (1 << o.lenbits) - 1, S = (1 << o.distbits) - 1;
+      var o, s, y, u, l, S, X, g, b, d, f, c, h, K, x, F, k, w, C, A, O, I, Z, q, $;
+      o = i.state, s = i.next_in, q = i.input, y = s + (i.avail_in - 5), u = i.next_out, $ = i.output, l = u - (a - i.avail_out), S = u + (i.avail_out - 257), X = o.dmax, g = o.wsize, b = o.whave, d = o.wnext, f = o.window, c = o.hold, h = o.bits, K = o.lencode, x = o.distcode, F = (1 << o.lenbits) - 1, k = (1 << o.distbits) - 1;
       e: do {
         h < 15 && (c += q[s++] << h, h += 8, c += q[s++] << h, h += 8), w = K[c & F];
         t: for (; ; ) {
           if (C = w >>> 24, c >>>= C, h -= C, C = w >>> 16 & 255, C === 0) $[u++] = w & 65535;
           else if (C & 16) {
-            A = w & 65535, C &= 15, C && (h < C && (c += q[s++] << h, h += 8), A += c & (1 << C) - 1, c >>>= C, h -= C), h < 15 && (c += q[s++] << h, h += 8, c += q[s++] << h, h += 8), w = x[c & S];
+            A = w & 65535, C &= 15, C && (h < C && (c += q[s++] << h, h += 8), A += c & (1 << C) - 1, c >>>= C, h -= C), h < 15 && (c += q[s++] << h, h += 8, c += q[s++] << h, h += 8), w = x[c & k];
             r: for (; ; ) {
               if (C = w >>> 24, c >>>= C, h -= C, C = w >>> 16 & 255, C & 16) {
                 if (O = w & 65535, C &= 15, h < C && (c += q[s++] << h, h += 8, h < C && (c += q[s++] << h, h += 8)), O += c & (1 << C) - 1, O > X) {
@@ -1678,8 +1678,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           }
           break;
         }
-      } while (s < y && u < k);
-      A = h >> 3, s -= A, h -= A << 3, c &= (1 << h) - 1, i.next_in = s, i.next_out = u, i.avail_in = s < y ? 5 + (y - s) : 5 - (s - y), i.avail_out = u < k ? 257 + (k - u) : 257 - (u - k), o.hold = c, o.bits = h;
+      } while (s < y && u < S);
+      A = h >> 3, s -= A, h -= A << 3, c &= (1 << h) - 1, i.next_in = s, i.next_out = u, i.avail_in = s < y ? 5 + (y - s) : 5 - (s - y), i.avail_out = u < S ? 257 + (S - u) : 257 - (u - S), o.hold = c, o.bits = h;
     }
   })(so);
   var uo = {};
@@ -1714,12 +1714,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         __proto__: null
       }, x = Object.defineProperty && Object.getOwnPropertyDescriptor;
       for (var F in f) if (F !== "default" && {}.hasOwnProperty.call(f, F)) {
-        var S = x ? Object.getOwnPropertyDescriptor(f, F) : null;
-        S && (S.get || S.set) ? Object.defineProperty(K, F, S) : K[F] = f[F];
+        var k = x ? Object.getOwnPropertyDescriptor(f, F) : null;
+        k && (k.get || k.set) ? Object.defineProperty(K, F, k) : K[F] = f[F];
       }
       return K.default = f, h && h.set(f, K), K;
     }
-    var a = 15, o = 852, s = 592, y = 0, u = 1, l = 2, k = [
+    var a = 15, o = 852, s = 592, y = 0, u = 1, l = 2, S = [
       3,
       4,
       5,
@@ -1850,7 +1850,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       64,
       64
     ];
-    function d(f, c, h, K, x, F, S, w) {
+    function d(f, c, h, K, x, F, k, w) {
       var C = w.bits, A = 0, O = 0, I = 0, Z = 0, q = 0, $ = 0, ne = 0, E = 0, p = 0, m = 0, L, B, M, V, re, oe = null, ce = 0, pe, ye = new n.Buf16(a + 1), Ne = new n.Buf16(a + 1), je = null, ut = 0, Ue, He, nt;
       for (A = 0; A <= a; A++) ye[A] = 0;
       for (O = 0; O < K; O++) ye[c[h + O]]++;
@@ -1860,17 +1860,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       for (q < I && (q = I), E = 1, A = 1; A <= a; A++) if (E <<= 1, E -= ye[A], E < 0) return -1;
       if (E > 0 && (f === y || Z !== 1)) return -1;
       for (Ne[1] = 0, A = 1; A < a; A++) Ne[A + 1] = Ne[A] + ye[A];
-      for (O = 0; O < K; O++) c[h + O] !== 0 && (S[Ne[c[h + O]]++] = O);
-      if (f === y ? (oe = je = S, pe = 19) : f === u ? (oe = k, ce -= 257, je = X, ut -= 257, pe = 256) : (oe = g, je = b, pe = -1), m = 0, O = 0, A = I, re = F, $ = q, ne = 0, M = -1, p = 1 << q, V = p - 1, f === u && p > o || f === l && p > s) return 1;
+      for (O = 0; O < K; O++) c[h + O] !== 0 && (k[Ne[c[h + O]]++] = O);
+      if (f === y ? (oe = je = k, pe = 19) : f === u ? (oe = S, ce -= 257, je = X, ut -= 257, pe = 256) : (oe = g, je = b, pe = -1), m = 0, O = 0, A = I, re = F, $ = q, ne = 0, M = -1, p = 1 << q, V = p - 1, f === u && p > o || f === l && p > s) return 1;
       for (; ; ) {
-        Ue = A - ne, S[O] < pe ? (He = 0, nt = S[O]) : S[O] > pe ? (He = je[ut + S[O]], nt = oe[ce + S[O]]) : (He = 96, nt = 0), L = 1 << A - ne, B = 1 << $, I = B;
+        Ue = A - ne, k[O] < pe ? (He = 0, nt = k[O]) : k[O] > pe ? (He = je[ut + k[O]], nt = oe[ce + k[O]]) : (He = 96, nt = 0), L = 1 << A - ne, B = 1 << $, I = B;
         do
           B -= L, x[re + (m >> ne) + B] = Ue << 24 | He << 16 | nt | 0;
         while (B !== 0);
         for (L = 1 << A - 1; m & L; ) L >>= 1;
         if (L !== 0 ? (m &= L - 1, m += L) : m = 0, O++, --ye[A] === 0) {
           if (A === Z) break;
-          A = c[h + S[O]];
+          A = c[h + k[O]];
         }
         if (A > q && (m & V) !== M) {
           for (ne === 0 && (ne = q), re += I, $ = A - ne, E = 1 << $; $ + ne < Z && (E -= ye[$ + ne], !(E <= 0)); ) $++, E <<= 1;
@@ -1980,7 +1980,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     return a.window === null && (a.wsize = 1 << a.wbits, a.wnext = 0, a.whave = 0, a.window = new ct.Buf8(a.wsize)), r >= a.wsize ? (ct.arraySet(a.window, t, n - a.wsize, a.wsize, 0), a.wnext = 0, a.whave = a.wsize) : (i = a.wsize - a.wnext, i > r && (i = r), ct.arraySet(a.window, t, n - r, i, a.wnext), r -= i, r ? (ct.arraySet(a.window, t, n - r, r, 0), a.wnext = r, a.whave = a.wsize) : (a.wnext += i, a.wnext === a.wsize && (a.wnext = 0), a.whave < a.wsize && (a.whave += i))), 0;
   }
   function Ku(e, t) {
-    var n, r, i, a, o, s, y, u, l, k, X, g, b, d, f = 0, c, h, K, x, F, S, w, C, A = new ct.Buf8(4), O, I, Z = [
+    var n, r, i, a, o, s, y, u, l, S, X, g, b, d, f = 0, c, h, K, x, F, k, w, C, A = new ct.Buf8(4), O, I, Z = [
       16,
       17,
       18,
@@ -2002,7 +2002,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       15
     ];
     if (!e || !e.state || !e.output || !e.input && e.avail_in !== 0) return yt;
-    n = e.state, n.mode === Pt && (n.mode = An), o = e.next_out, i = e.output, y = e.avail_out, a = e.next_in, r = e.input, s = e.avail_in, u = n.hold, l = n.bits, k = s, X = y, C = er;
+    n = e.state, n.mode === Pt && (n.mode = An), o = e.next_out, i = e.output, y = e.avail_out, a = e.next_in, r = e.input, s = e.avail_in, u = n.hold, l = n.bits, S = s, X = y, C = er;
     e: for (; ; ) switch (n.mode) {
       case po:
         if (n.wrap === 0) {
@@ -2256,7 +2256,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           s--, u += r[a++] << l, l += 8;
         }
         if (h && !(h & 240)) {
-          for (x = c, F = h, S = K; f = n.lencode[S + ((u & (1 << x + F) - 1) >> x)], c = f >>> 24, h = f >>> 16 & 255, K = f & 65535, !(x + c <= l); ) {
+          for (x = c, F = h, k = K; f = n.lencode[k + ((u & (1 << x + F) - 1) >> x)], c = f >>> 24, h = f >>> 16 & 255, K = f & 65535, !(x + c <= l); ) {
             if (s === 0) break e;
             s--, u += r[a++] << l, l += 8;
           }
@@ -2290,7 +2290,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           s--, u += r[a++] << l, l += 8;
         }
         if (!(h & 240)) {
-          for (x = c, F = h, S = K; f = n.distcode[S + ((u & (1 << x + F) - 1) >> x)], c = f >>> 24, h = f >>> 16 & 255, K = f & 65535, !(x + c <= l); ) {
+          for (x = c, F = h, k = K; f = n.distcode[k + ((u & (1 << x + F) - 1) >> x)], c = f >>> 24, h = f >>> 16 & 255, K = f & 65535, !(x + c <= l); ) {
             if (s === 0) break e;
             s--, u += r[a++] << l, l += 8;
           }
@@ -2371,7 +2371,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       default:
         return yt;
     }
-    return e.next_out = o, e.avail_out = y, e.next_in = a, e.avail_in = s, n.hold = u, n.bits = l, (n.wsize || X !== e.avail_out && n.mode < Be && (n.mode < Tn || t !== Ni)) && mo(e, e.output, e.next_out, X - e.avail_out), k -= e.avail_in, X -= e.avail_out, e.total_in += k, e.total_out += X, n.total += X, n.wrap && X && (e.adler = n.check = n.flags ? (0, Kt.default)(n.check, i, X, e.next_out - X) : (0, Zn.default)(n.check, i, X, e.next_out - X)), e.data_type = n.bits + (n.last ? 64 : 0) + (n.mode === Pt ? 128 : 0) + (n.mode === nn || n.mode === Pn ? 256 : 0), (k === 0 && X === 0 || t === Ni) && C === er && (C = yu), C;
+    return e.next_out = o, e.avail_out = y, e.next_in = a, e.avail_in = s, n.hold = u, n.bits = l, (n.wsize || X !== e.avail_out && n.mode < Be && (n.mode < Tn || t !== Ni)) && mo(e, e.output, e.next_out, X - e.avail_out), S -= e.avail_in, X -= e.avail_out, e.total_in += S, e.total_out += X, n.total += X, n.wrap && X && (e.adler = n.check = n.flags ? (0, Kt.default)(n.check, i, X, e.next_out - X) : (0, Zn.default)(n.check, i, X, e.next_out - X)), e.data_type = n.bits + (n.last ? 64 : 0) + (n.mode === Pt ? 128 : 0) + (n.mode === nn || n.mode === Pn ? 256 : 0), (S === 0 && X === 0 || t === Ni) && C === er && (C = yu), C;
   }
   function Xu(e) {
     if (!e || !e.state) return yt;
@@ -2408,35 +2408,35 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     function i(l) {
       "@babel/helpers - typeof";
-      return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(k) {
-        return typeof k;
-      } : function(k) {
-        return k && typeof Symbol == "function" && k.constructor === Symbol && k !== Symbol.prototype ? "symbol" : typeof k;
+      return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(S) {
+        return typeof S;
+      } : function(S) {
+        return S && typeof Symbol == "function" && S.constructor === Symbol && S !== Symbol.prototype ? "symbol" : typeof S;
       }, i(l);
     }
-    function a(l, k) {
-      if (!(l instanceof k)) throw new TypeError("Cannot call a class as a function");
+    function a(l, S) {
+      if (!(l instanceof S)) throw new TypeError("Cannot call a class as a function");
     }
-    function o(l, k) {
-      for (var X = 0; X < k.length; X++) {
-        var g = k[X];
+    function o(l, S) {
+      for (var X = 0; X < S.length; X++) {
+        var g = S[X];
         g.enumerable = g.enumerable || false, g.configurable = true, "value" in g && (g.writable = true), Object.defineProperty(l, y(g.key), g);
       }
     }
-    function s(l, k, X) {
-      return k && o(l.prototype, k), Object.defineProperty(l, "prototype", {
+    function s(l, S, X) {
+      return S && o(l.prototype, S), Object.defineProperty(l, "prototype", {
         writable: false
       }), l;
     }
     function y(l) {
-      var k = u(l, "string");
-      return i(k) == "symbol" ? k : k + "";
+      var S = u(l, "string");
+      return i(S) == "symbol" ? S : S + "";
     }
-    function u(l, k) {
+    function u(l, S) {
       if (i(l) != "object" || !l) return l;
       var X = l[Symbol.toPrimitive];
       if (X !== void 0) {
-        var g = X.call(l, k);
+        var g = X.call(l, S);
         if (i(g) != "object") return g;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
@@ -2660,7 +2660,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     e.bi_valid === 16 ? (Br(e, e.bi_buf), e.bi_buf = 0, e.bi_valid = 0) : e.bi_valid >= 8 && (e.pending_buf[e.pending++] = e.bi_buf & 255, e.bi_buf >>= 8, e.bi_valid -= 8);
   }
   function Nu(e, t) {
-    var n = t.dyn_tree, r = t.max_code, i = t.stat_desc.static_tree, a = t.stat_desc.has_stree, o = t.stat_desc.extra_bits, s = t.stat_desc.extra_base, y = t.stat_desc.max_length, u, l, k, X, g, b, d = 0;
+    var n = t.dyn_tree, r = t.max_code, i = t.stat_desc.static_tree, a = t.stat_desc.has_stree, o = t.stat_desc.extra_bits, s = t.stat_desc.extra_base, y = t.stat_desc.max_length, u, l, S, X, g, b, d = 0;
     for (X = 0; X <= Yt; X++) e.bl_count[X] = 0;
     for (n[e.heap[e.heap_max] * 2 + 1] = 0, u = e.heap_max + 1; u < Eo; u++) l = e.heap[u], X = n[n[l * 2 + 1] * 2 + 1] + 1, X > y && (X = y, d++), n[l * 2 + 1] = X, !(l > r) && (e.bl_count[X]++, g = 0, l >= s && (g = o[l - s]), b = n[l * 2], e.opt_len += b * (X + g), a && (e.static_len += b * (i[l * 2 + 1] + g)));
     if (d !== 0) {
@@ -2668,7 +2668,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         for (X = y - 1; e.bl_count[X] === 0; ) X--;
         e.bl_count[X]--, e.bl_count[X + 1] += 2, e.bl_count[y]--, d -= 2;
       } while (d > 0);
-      for (X = y; X !== 0; X--) for (l = e.bl_count[X]; l !== 0; ) k = e.heap[--u], !(k > r) && (n[k * 2 + 1] !== X && (e.opt_len += (X - n[k * 2 + 1]) * n[k * 2], n[k * 2 + 1] = X), l--);
+      for (X = y; X !== 0; X--) for (l = e.bl_count[X]; l !== 0; ) S = e.heap[--u], !(S > r) && (n[S * 2 + 1] !== X && (e.opt_len += (X - n[S * 2 + 1]) * n[S * 2], n[S * 2 + 1] = X), l--);
     }
   }
   function Mo(e, t, n) {
@@ -2873,7 +2873,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     return i > r && (i = r), i === 0 ? 0 : (e.avail_in -= i, rt.arraySet(t, e.input, e.next_in, i, n), e.state.wrap === 1 ? e.adler = (0, Qo.default)(e.adler, t, i, n) : e.state.wrap === 2 && (e.adler = (0, Dt.default)(e.adler, t, i, n)), e.next_in += i, e.total_in += i, i);
   }
   function jo(e, t) {
-    var n = e.max_chain_length, r = e.strstart, i, a, o = e.prev_length, s = e.nice_match, y = e.strstart > e.w_size - gt ? e.strstart - (e.w_size - gt) : 0, u = e.window, l = e.w_mask, k = e.prev, X = e.strstart + It, g = u[r + o - 1], b = u[r + o];
+    var n = e.max_chain_length, r = e.strstart, i, a, o = e.prev_length, s = e.nice_match, y = e.strstart > e.w_size - gt ? e.strstart - (e.w_size - gt) : 0, u = e.window, l = e.w_mask, S = e.prev, X = e.strstart + It, g = u[r + o - 1], b = u[r + o];
     e.prev_length >= e.good_match && (n >>= 2), s > e.lookahead && (s = e.lookahead);
     do
       if (i = t, !(u[i + o] !== b || u[i + o - 1] !== g || u[i] !== u[r] || u[++i] !== u[r + 1])) {
@@ -2886,7 +2886,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           g = u[r + o - 1], b = u[r + o];
         }
       }
-    while ((t = k[t & l]) > y && --n !== 0);
+    while ((t = S[t & l]) > y && --n !== 0);
     return o <= e.lookahead ? o : e.lookahead;
   }
   function rr(e) {
@@ -3102,35 +3102,35 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     function i(l) {
       "@babel/helpers - typeof";
-      return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(k) {
-        return typeof k;
-      } : function(k) {
-        return k && typeof Symbol == "function" && k.constructor === Symbol && k !== Symbol.prototype ? "symbol" : typeof k;
+      return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(S) {
+        return typeof S;
+      } : function(S) {
+        return S && typeof Symbol == "function" && S.constructor === Symbol && S !== Symbol.prototype ? "symbol" : typeof S;
       }, i(l);
     }
-    function a(l, k) {
-      if (!(l instanceof k)) throw new TypeError("Cannot call a class as a function");
+    function a(l, S) {
+      if (!(l instanceof S)) throw new TypeError("Cannot call a class as a function");
     }
-    function o(l, k) {
-      for (var X = 0; X < k.length; X++) {
-        var g = k[X];
+    function o(l, S) {
+      for (var X = 0; X < S.length; X++) {
+        var g = S[X];
         g.enumerable = g.enumerable || false, g.configurable = true, "value" in g && (g.writable = true), Object.defineProperty(l, y(g.key), g);
       }
     }
-    function s(l, k, X) {
-      return k && o(l.prototype, k), Object.defineProperty(l, "prototype", {
+    function s(l, S, X) {
+      return S && o(l.prototype, S), Object.defineProperty(l, "prototype", {
         writable: false
       }), l;
     }
     function y(l) {
-      var k = u(l, "string");
-      return i(k) == "symbol" ? k : k + "";
+      var S = u(l, "string");
+      return i(S) == "symbol" ? S : S + "";
     }
-    function u(l, k) {
+    function u(l, S) {
       if (i(l) != "object" || !l) return l;
       var X = l[Symbol.toPrimitive];
       if (X !== void 0) {
-        var g = X.call(l, k);
+        var g = X.call(l, S);
         if (i(g) != "object") return g;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
@@ -4844,14 +4844,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     function l(d, f) {
       if (!(d instanceof f)) throw new TypeError("Cannot call a class as a function");
     }
-    function k(d, f) {
+    function S(d, f) {
       for (var c = 0; c < f.length; c++) {
         var h = f[c];
         h.enumerable = h.enumerable || false, h.configurable = true, "value" in h && (h.writable = true), Object.defineProperty(d, g(h.key), h);
       }
     }
     function X(d, f, c) {
-      return f && k(d.prototype, f), Object.defineProperty(d, "prototype", {
+      return f && S(d.prototype, f), Object.defineProperty(d, "prototype", {
         writable: false
       }), d;
     }
@@ -4935,14 +4935,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
               this._sendKeyEvent(i.default.XK_Caps_Lock, "CapsLock", true, x, F), this._sendKeyEvent(i.default.XK_Caps_Lock, "CapsLock", false, x, F), (0, n.stopEvent)(c);
               return;
             }
-            var S = [
+            var k = [
               i.default.XK_Zenkaku_Hankaku,
               i.default.XK_Eisu_toggle,
               i.default.XK_Katakana,
               i.default.XK_Hiragana,
               i.default.XK_Romaji
             ];
-            if (a.isWindows() && S.includes(K)) {
+            if (a.isWindows() && k.includes(K)) {
               this._sendKeyEvent(K, h, true, x, F), this._sendKeyEvent(K, h, false, x, F), (0, n.stopEvent)(c);
               return;
             }
@@ -4999,48 +4999,48 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     Object.defineProperty(e, "__esModule", {
       value: true
     }), e.default = void 0;
-    function t(S) {
+    function t(k) {
       "@babel/helpers - typeof";
       return t = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(w) {
         return typeof w;
       } : function(w) {
         return w && typeof Symbol == "function" && w.constructor === Symbol && w !== Symbol.prototype ? "symbol" : typeof w;
-      }, t(S);
+      }, t(k);
     }
-    function n(S, w) {
-      if (!(S instanceof w)) throw new TypeError("Cannot call a class as a function");
+    function n(k, w) {
+      if (!(k instanceof w)) throw new TypeError("Cannot call a class as a function");
     }
-    function r(S, w) {
+    function r(k, w) {
       for (var C = 0; C < w.length; C++) {
         var A = w[C];
-        A.enumerable = A.enumerable || false, A.configurable = true, "value" in A && (A.writable = true), Object.defineProperty(S, a(A.key), A);
+        A.enumerable = A.enumerable || false, A.configurable = true, "value" in A && (A.writable = true), Object.defineProperty(k, a(A.key), A);
       }
     }
-    function i(S, w, C) {
-      return w && r(S.prototype, w), Object.defineProperty(S, "prototype", {
+    function i(k, w, C) {
+      return w && r(k.prototype, w), Object.defineProperty(k, "prototype", {
         writable: false
-      }), S;
+      }), k;
     }
-    function a(S) {
-      var w = o(S, "string");
+    function a(k) {
+      var w = o(k, "string");
       return t(w) == "symbol" ? w : w + "";
     }
-    function o(S, w) {
-      if (t(S) != "object" || !S) return S;
-      var C = S[Symbol.toPrimitive];
+    function o(k, w) {
+      if (t(k) != "object" || !k) return k;
+      var C = k[Symbol.toPrimitive];
       if (C !== void 0) {
-        var A = C.call(S, w);
+        var A = C.call(k, w);
         if (t(A) != "object") return A;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
-      return String(S);
+      return String(k);
     }
-    var s = 0, y = 1, u = 2, l = 4, k = 8, X = 16, g = 32, b = 64, d = 127, f = 50, c = 90, h = 250, K = 1e3, x = 1e3, F = 50;
+    var s = 0, y = 1, u = 2, l = 4, S = 8, X = 16, g = 32, b = 64, d = 127, f = 50, c = 90, h = 250, K = 1e3, x = 1e3, F = 50;
     e.default = function() {
-      function S() {
-        n(this, S), this._target = null, this._state = d, this._tracked = [], this._ignored = [], this._waitingRelease = false, this._releaseStart = 0, this._longpressTimeoutId = null, this._twoTouchTimeoutId = null, this._boundEventHandler = this._eventHandler.bind(this);
+      function k() {
+        n(this, k), this._target = null, this._state = d, this._tracked = [], this._ignored = [], this._waitingRelease = false, this._releaseStart = 0, this._longpressTimeoutId = null, this._twoTouchTimeoutId = null, this._boundEventHandler = this._eventHandler.bind(this);
       }
-      return i(S, [
+      return i(k, [
         {
           key: "attach",
           value: function(C) {
@@ -5125,7 +5125,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
               var Z = A - I.firstX, q = O - I.firstY;
               if ((I.firstX !== I.lastX || I.firstY !== I.lastY) && (I.angle = Math.atan2(q, Z) * 180 / Math.PI), !this._hasDetectedGesture()) {
                 if (Math.hypot(Z, q) < f) return;
-                if (this._state &= -24, this._stopLongpressTimeout(), this._tracked.length !== 1 && (this._state &= ~k), this._tracked.length !== 2 && (this._state &= -97), this._tracked.length === 2) {
+                if (this._state &= -24, this._stopLongpressTimeout(), this._tracked.length !== 1 && (this._state &= ~S), this._tracked.length !== 2 && (this._state &= -97), this._tracked.length === 2) {
                   var $ = this._tracked.find(function(p) {
                     return p.id !== C;
                   }), ne = Math.hypot($.firstX - $.lastX, $.firstY - $.lastY);
@@ -5266,7 +5266,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
                 return "twotap";
               case l:
                 return "threetap";
-              case k:
+              case S:
                 return "drag";
               case X:
                 return "longpress";
@@ -5346,12 +5346,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (!(u instanceof l)) throw new TypeError("Cannot call a class as a function");
     }
     function i(u, l) {
-      for (var k = 0; k < l.length; k++) {
-        var X = l[k];
+      for (var S = 0; S < l.length; S++) {
+        var X = l[S];
         X.enumerable = X.enumerable || false, X.configurable = true, "value" in X && (X.writable = true), Object.defineProperty(u, o(X.key), X);
       }
     }
-    function a(u, l, k) {
+    function a(u, l, S) {
       return l && i(u.prototype, l), Object.defineProperty(u, "prototype", {
         writable: false
       }), u;
@@ -5362,9 +5362,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     function s(u, l) {
       if (n(u) != "object" || !u) return u;
-      var k = u[Symbol.toPrimitive];
-      if (k !== void 0) {
-        var X = k.call(u, l);
+      var S = u[Symbol.toPrimitive];
+      if (S !== void 0) {
+        var X = S.call(u, l);
         if (n(X) != "object") return X;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
@@ -5389,8 +5389,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       return a(u, [
         {
           key: "attach",
-          value: function(k) {
-            if (this._target && this.detach(), this._target = k, y) {
+          value: function(S) {
+            if (this._target && this.detach(), this._target = S, y) {
               document.body.appendChild(this._canvas);
               var X = {
                 capture: true,
@@ -5406,11 +5406,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           value: function() {
             if (this._target) {
               if (y) {
-                var k = {
+                var S = {
                   capture: true,
                   passive: true
                 };
-                this._target.removeEventListener("mouseover", this._eventHandlers.mouseover, k), this._target.removeEventListener("mouseleave", this._eventHandlers.mouseleave, k), this._target.removeEventListener("mousemove", this._eventHandlers.mousemove, k), this._target.removeEventListener("mouseup", this._eventHandlers.mouseup, k), document.contains(this._canvas) && document.body.removeChild(this._canvas);
+                this._target.removeEventListener("mouseover", this._eventHandlers.mouseover, S), this._target.removeEventListener("mouseleave", this._eventHandlers.mouseleave, S), this._target.removeEventListener("mousemove", this._eventHandlers.mousemove, S), this._target.removeEventListener("mouseup", this._eventHandlers.mouseup, S), document.contains(this._canvas) && document.body.removeChild(this._canvas);
               }
               this._target = null;
             }
@@ -5418,7 +5418,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         },
         {
           key: "change",
-          value: function(k, X, g, b, d) {
+          value: function(S, X, g, b, d) {
             if (b === 0 || d === 0) {
               this.clear();
               return;
@@ -5426,7 +5426,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             this._position.x = this._position.x + this._hotSpot.x - X, this._position.y = this._position.y + this._hotSpot.y - g, this._hotSpot.x = X, this._hotSpot.y = g;
             var f = this._canvas.getContext("2d");
             this._canvas.width = b, this._canvas.height = d;
-            var c = new ImageData(new Uint8ClampedArray(k), b, d);
+            var c = new ImageData(new Uint8ClampedArray(S), b, d);
             if (f.clearRect(0, 0, b, d), f.putImageData(c, 0, 0), y) this._updatePosition();
             else {
               var h = this._canvas.toDataURL();
@@ -5442,38 +5442,38 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         },
         {
           key: "move",
-          value: function(k, X) {
+          value: function(S, X) {
             if (y) {
-              window.visualViewport ? (this._position.x = k + window.visualViewport.offsetLeft, this._position.y = X + window.visualViewport.offsetTop) : (this._position.x = k, this._position.y = X), this._updatePosition();
-              var g = document.elementFromPoint(k, X);
+              window.visualViewport ? (this._position.x = S + window.visualViewport.offsetLeft, this._position.y = X + window.visualViewport.offsetTop) : (this._position.x = S, this._position.y = X), this._updatePosition();
+              var g = document.elementFromPoint(S, X);
               this._updateVisibility(g);
             }
           }
         },
         {
           key: "_handleMouseOver",
-          value: function(k) {
-            this._handleMouseMove(k);
+          value: function(S) {
+            this._handleMouseMove(S);
           }
         },
         {
           key: "_handleMouseLeave",
-          value: function(k) {
-            this._updateVisibility(k.relatedTarget);
+          value: function(S) {
+            this._updateVisibility(S.relatedTarget);
           }
         },
         {
           key: "_handleMouseMove",
-          value: function(k) {
-            this._updateVisibility(k.target), this._position.x = k.clientX - this._hotSpot.x, this._position.y = k.clientY - this._hotSpot.y, this._updatePosition();
+          value: function(S) {
+            this._updateVisibility(S.target), this._position.x = S.clientX - this._hotSpot.x, this._position.y = S.clientY - this._hotSpot.y, this._updatePosition();
           }
         },
         {
           key: "_handleMouseUp",
-          value: function(k) {
-            var X = this, g = document.elementFromPoint(k.clientX, k.clientY);
+          value: function(S) {
+            var X = this, g = document.elementFromPoint(S.clientX, S.clientY);
             this._updateVisibility(g), this._captureIsActive() && window.setTimeout(function() {
-              X._target && (g = document.elementFromPoint(k.clientX, k.clientY), X._updateVisibility(g));
+              X._target && (g = document.elementFromPoint(S.clientX, S.clientY), X._updateVisibility(g));
             }, 0);
           }
         },
@@ -5491,14 +5491,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         },
         {
           key: "_shouldShowCursor",
-          value: function(k) {
-            return k ? k === this._target ? true : !(!this._target.contains(k) || window.getComputedStyle(k).cursor !== "none") : false;
+          value: function(S) {
+            return S ? S === this._target ? true : !(!this._target.contains(S) || window.getComputedStyle(S).cursor !== "none") : false;
           }
         },
         {
           key: "_updateVisibility",
-          value: function(k) {
-            this._captureIsActive() && (k = document.captureElement), this._shouldShowCursor(k) ? this._showCursor() : this._hideCursor();
+          value: function(S) {
+            this._captureIsActive() && (S = document.captureElement), this._shouldShowCursor(S) ? this._showCursor() : this._hideCursor();
           }
         },
         {
@@ -5524,9 +5524,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     var t = r(Re);
     function n(x) {
       if (typeof WeakMap != "function") return null;
-      var F = /* @__PURE__ */ new WeakMap(), S = /* @__PURE__ */ new WeakMap();
+      var F = /* @__PURE__ */ new WeakMap(), k = /* @__PURE__ */ new WeakMap();
       return (n = function(C) {
-        return C ? S : F;
+        return C ? k : F;
       })(x);
     }
     function r(x, F) {
@@ -5534,8 +5534,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (x === null || i(x) != "object" && typeof x != "function") return {
         default: x
       };
-      var S = n(F);
-      if (S && S.has(x)) return S.get(x);
+      var k = n(F);
+      if (k && k.has(x)) return k.get(x);
       var w = {
         __proto__: null
       }, C = Object.defineProperty && Object.getOwnPropertyDescriptor;
@@ -5543,7 +5543,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         var O = C ? Object.getOwnPropertyDescriptor(x, A) : null;
         O && (O.get || O.set) ? Object.defineProperty(w, A, O) : w[A] = x[A];
       }
-      return w.default = x, S && S.set(x, w), w;
+      return w.default = x, k && k.set(x, w), w;
     }
     function i(x) {
       "@babel/helpers - typeof";
@@ -5563,8 +5563,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function s(x, F) {
       if (x) {
         if (typeof x == "string") return l(x, F);
-        var S = {}.toString.call(x).slice(8, -1);
-        return S === "Object" && x.constructor && (S = x.constructor.name), S === "Map" || S === "Set" ? Array.from(x) : S === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(S) ? l(x, F) : void 0;
+        var k = {}.toString.call(x).slice(8, -1);
+        return k === "Object" && x.constructor && (k = x.constructor.name), k === "Map" || k === "Set" ? Array.from(x) : k === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(k) ? l(x, F) : void 0;
       }
     }
     function y(x) {
@@ -5575,19 +5575,19 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function l(x, F) {
       (F == null || F > x.length) && (F = x.length);
-      for (var S = 0, w = Array(F); S < F; S++) w[S] = x[S];
+      for (var k = 0, w = Array(F); k < F; k++) w[k] = x[k];
       return w;
     }
-    function k(x, F) {
+    function S(x, F) {
       if (!(x instanceof F)) throw new TypeError("Cannot call a class as a function");
     }
     function X(x, F) {
-      for (var S = 0; S < F.length; S++) {
-        var w = F[S];
+      for (var k = 0; k < F.length; k++) {
+        var w = F[k];
         w.enumerable = w.enumerable || false, w.configurable = true, "value" in w && (w.writable = true), Object.defineProperty(x, b(w.key), w);
       }
     }
-    function g(x, F, S) {
+    function g(x, F, k) {
       return F && X(x.prototype, F), Object.defineProperty(x, "prototype", {
         writable: false
       }), x;
@@ -5598,9 +5598,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function d(x, F) {
       if (i(x) != "object" || !x) return x;
-      var S = x[Symbol.toPrimitive];
-      if (S !== void 0) {
-        var w = S.call(x, F);
+      var k = x[Symbol.toPrimitive];
+      if (k !== void 0) {
+        var w = k.call(x, F);
         if (i(w) != "object") return w;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
@@ -5640,7 +5640,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     ];
     e.default = function() {
       function x() {
-        k(this, x), this._websocket = null, this._rQi = 0, this._rQlen = 0, this._rQbufferSize = 1024 * 1024 * 4, this._rQ = null, this._sQbufferSize = 1024 * 10, this._sQlen = 0, this._sQ = null, this._eventHandlers = {
+        S(this, x), this._websocket = null, this._rQi = 0, this._rQlen = 0, this._rQbufferSize = 1024 * 1024 * 4, this._rQ = null, this._sQbufferSize = 1024 * 10, this._sQlen = 0, this._sQ = null, this._eventHandlers = {
           message: function() {
           },
           open: function() {
@@ -5655,8 +5655,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "readyState",
           get: function() {
-            var S;
-            return this._websocket === null ? "unused" : (S = this._websocket.readyState, h.CONNECTING.includes(S) ? "connecting" : h.OPEN.includes(S) ? "open" : h.CLOSING.includes(S) ? "closing" : h.CLOSED.includes(S) ? "closed" : "unknown");
+            var k;
+            return this._websocket === null ? "unused" : (k = this._websocket.readyState, h.CONNECTING.includes(k) ? "connecting" : h.OPEN.includes(k) ? "open" : h.CLOSING.includes(k) ? "closing" : h.CLOSED.includes(k) ? "closed" : "unknown");
           }
         },
         {
@@ -5667,8 +5667,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "rQskipBytes",
-          value: function(S) {
-            this._rQi += S;
+          value: function(k) {
+            this._rQi += k;
           }
         },
         {
@@ -5691,16 +5691,16 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "_rQshift",
-          value: function(S) {
-            for (var w = 0, C = S - 1; C >= 0; C--) w += this._rQ[this._rQi++] << C * 8;
+          value: function(k) {
+            for (var w = 0, C = k - 1; C >= 0; C--) w += this._rQ[this._rQi++] << C * 8;
             return w >>> 0;
           }
         },
         {
           key: "rQshiftStr",
-          value: function(S) {
-            for (var w = "", C = 0; C < S; C += 4096) {
-              var A = this.rQshiftBytes(Math.min(4096, S - C), false);
+          value: function(k) {
+            for (var w = "", C = 0; C < k; C += 4096) {
+              var A = this.rQshiftBytes(Math.min(4096, k - C), false);
               w += String.fromCharCode.apply(null, A);
             }
             return w;
@@ -5708,27 +5708,27 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "rQshiftBytes",
-          value: function(S) {
+          value: function(k) {
             var w = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : true;
-            return this._rQi += S, w ? this._rQ.slice(this._rQi - S, this._rQi) : this._rQ.subarray(this._rQi - S, this._rQi);
+            return this._rQi += k, w ? this._rQ.slice(this._rQi - k, this._rQi) : this._rQ.subarray(this._rQi - k, this._rQi);
           }
         },
         {
           key: "rQshiftTo",
-          value: function(S, w) {
-            S.set(new Uint8Array(this._rQ.buffer, this._rQi, w)), this._rQi += w;
+          value: function(k, w) {
+            k.set(new Uint8Array(this._rQ.buffer, this._rQi, w)), this._rQi += w;
           }
         },
         {
           key: "rQpeekBytes",
-          value: function(S) {
+          value: function(k) {
             var w = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : true;
-            return w ? this._rQ.slice(this._rQi, this._rQi + S) : this._rQ.subarray(this._rQi, this._rQi + S);
+            return w ? this._rQ.slice(this._rQi, this._rQi + k) : this._rQ.subarray(this._rQi, this._rQi + k);
           }
         },
         {
           key: "rQwait",
-          value: function(S, w, C) {
+          value: function(k, w, C) {
             if (this._rQlen - this._rQi < w) {
               if (C) {
                 if (this._rQi < C) throw new Error("rQwait cannot backup " + C + " bytes");
@@ -5741,26 +5741,26 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "sQpush8",
-          value: function(S) {
-            this._sQensureSpace(1), this._sQ[this._sQlen++] = S;
+          value: function(k) {
+            this._sQensureSpace(1), this._sQ[this._sQlen++] = k;
           }
         },
         {
           key: "sQpush16",
-          value: function(S) {
-            this._sQensureSpace(2), this._sQ[this._sQlen++] = S >> 8 & 255, this._sQ[this._sQlen++] = S >> 0 & 255;
+          value: function(k) {
+            this._sQensureSpace(2), this._sQ[this._sQlen++] = k >> 8 & 255, this._sQ[this._sQlen++] = k >> 0 & 255;
           }
         },
         {
           key: "sQpush32",
-          value: function(S) {
-            this._sQensureSpace(4), this._sQ[this._sQlen++] = S >> 24 & 255, this._sQ[this._sQlen++] = S >> 16 & 255, this._sQ[this._sQlen++] = S >> 8 & 255, this._sQ[this._sQlen++] = S >> 0 & 255;
+          value: function(k) {
+            this._sQensureSpace(4), this._sQ[this._sQlen++] = k >> 24 & 255, this._sQ[this._sQlen++] = k >> 16 & 255, this._sQ[this._sQlen++] = k >> 8 & 255, this._sQ[this._sQlen++] = k >> 0 & 255;
           }
         },
         {
           key: "sQpushString",
-          value: function(S) {
-            var w = S.split("").map(function(C) {
+          value: function(k) {
+            var w = k.split("").map(function(C) {
               return C.charCodeAt(0);
             });
             this.sQpushBytes(new Uint8Array(w));
@@ -5768,11 +5768,11 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "sQpushBytes",
-          value: function(S) {
-            for (var w = 0; w < S.length; ) {
+          value: function(k) {
+            for (var w = 0; w < k.length; ) {
               this._sQensureSpace(1);
               var C = this._sQbufferSize - this._sQlen;
-              C > S.length - w && (C = S.length - w), this._sQ.set(S.subarray(w, w + C), this._sQlen), this._sQlen += C, w += C;
+              C > k.length - w && (C = k.length - w), this._sQ.set(k.subarray(w, w + C), this._sQlen), this._sQlen += C, w += C;
             }
           }
         },
@@ -5784,21 +5784,21 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "_sQensureSpace",
-          value: function(S) {
-            this._sQbufferSize - this._sQlen < S && this.flush();
+          value: function(k) {
+            this._sQbufferSize - this._sQlen < k && this.flush();
           }
         },
         {
           key: "off",
-          value: function(S) {
-            this._eventHandlers[S] = function() {
+          value: function(k) {
+            this._eventHandlers[k] = function() {
             };
           }
         },
         {
           key: "on",
-          value: function(S, w) {
-            this._eventHandlers[S] = w;
+          value: function(k, w) {
+            this._eventHandlers[k] = w;
           }
         },
         {
@@ -5815,20 +5815,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "open",
-          value: function(S, w) {
-            this.attach(new WebSocket(S, w));
+          value: function(k, w) {
+            this.attach(new WebSocket(k, w));
           }
         },
         {
           key: "attach",
-          value: function(S) {
+          value: function(k) {
             var w = this;
             this.init();
-            for (var C = [].concat(a(Object.keys(S)), a(Object.getOwnPropertyNames(Object.getPrototypeOf(S)))), A = 0; A < K.length; A++) {
+            for (var C = [].concat(a(Object.keys(k)), a(Object.getOwnPropertyNames(Object.getPrototypeOf(k)))), A = 0; A < K.length; A++) {
               var O = K[A];
               if (C.indexOf(O) < 0) throw new Error("Raw channel missing property: " + O);
             }
-            this._websocket = S, this._websocket.binaryType = "arraybuffer", this._websocket.onmessage = this._recvMessage.bind(this), this._websocket.onopen = function() {
+            this._websocket = k, this._websocket.binaryType = "arraybuffer", this._websocket.onmessage = this._recvMessage.bind(this), this._websocket.onopen = function() {
               t.Debug(">> WebSock.onopen"), w._websocket.protocol && t.Info("Server choose sub-protocol: " + w._websocket.protocol), w._eventHandlers.open(), t.Debug("<< WebSock.onopen");
             }, this._websocket.onclose = function(I) {
               t.Debug(">> WebSock.onclose"), w._eventHandlers.close(I), t.Debug("<< WebSock.onclose");
@@ -5846,9 +5846,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "_expandCompactRQ",
-          value: function(S) {
-            var w = (this._rQlen - this._rQi + S) * 8, C = this._rQbufferSize < w;
-            if (C && (this._rQbufferSize = Math.max(this._rQbufferSize * 2, w)), this._rQbufferSize > f && (this._rQbufferSize = f, this._rQbufferSize - (this._rQlen - this._rQi) < S)) throw new Error("Receive queue buffer exceeded " + f + " bytes, and the new message could not fit");
+          value: function(k) {
+            var w = (this._rQlen - this._rQi + k) * 8, C = this._rQbufferSize < w;
+            if (C && (this._rQbufferSize = Math.max(this._rQbufferSize * 2, w)), this._rQbufferSize > f && (this._rQbufferSize = f, this._rQbufferSize - (this._rQlen - this._rQi) < k)) throw new Error("Receive queue buffer exceeded " + f + " bytes, and the new message could not fit");
             if (C) {
               var A = this._rQ.buffer;
               this._rQ = new Uint8Array(this._rQbufferSize), this._rQ.set(new Uint8Array(A, this._rQi, this._rQlen - this._rQi));
@@ -5858,9 +5858,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "_recvMessage",
-          value: function(S) {
+          value: function(k) {
             this._rQlen == this._rQi && (this._rQlen = 0, this._rQi = 0);
-            var w = new Uint8Array(S.data);
+            var w = new Uint8Array(k.data);
             w.length > this._rQbufferSize - this._rQlen && this._expandCompactRQ(w.length), this._rQ.set(w, this._rQlen), this._rQlen += w.length, this._rQlen - this._rQi > 0 ? this._eventHandlers.message() : t.Debug("Ignoring empty message");
           }
         }
@@ -6141,7 +6141,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         value: O(E, m, V)
       }), M;
     }
-    function k(E, p, m) {
+    function S(E, p, m) {
       try {
         return {
           type: "normal",
@@ -6166,8 +6166,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     u(x, o, function() {
       return this;
     });
-    var F = Object.getPrototypeOf, S = F && F(F(ne([])));
-    S && S !== n && r.call(S, o) && (x = S);
+    var F = Object.getPrototypeOf, k = F && F(F(ne([])));
+    k && k !== n && r.call(k, o) && (x = k);
     var w = K.prototype = c.prototype = Object.create(x);
     function C(E) {
       [
@@ -6182,7 +6182,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function A(E, p) {
       function m(B, M, V, re) {
-        var oe = k(E[B], E, M);
+        var oe = S(E[B], E, M);
         if (oe.type !== "throw") {
           var ce = oe.arg, pe = ce.value;
           return pe && nr(pe) == "object" && r.call(pe, "__await") ? p.resolve(pe.__await).then(function(ye) {
@@ -6235,7 +6235,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             m.dispatchException(m.arg);
           } else m.method === "return" && m.abrupt("return", m.arg);
           L = b;
-          var oe = k(E, p, m);
+          var oe = S(E, p, m);
           if (oe.type === "normal") {
             if (L = m.done ? d : g, oe.arg === f) continue;
             return {
@@ -6250,7 +6250,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function I(E, p) {
       var m = p.method, L = E.iterator[m];
       if (L === e) return p.delegate = null, m === "throw" && E.iterator.return && (p.method = "return", p.arg = e, I(E, p), p.method === "throw") || m !== "return" && (p.method = "throw", p.arg = new TypeError("The iterator does not provide a '" + m + "' method")), f;
-      var B = k(L, E.iterator, p.arg);
+      var B = S(L, E.iterator, p.arg);
       if (B.type === "throw") return p.method = "throw", p.arg = B.arg, p.delegate = null, f;
       var M = B.arg;
       return M ? M.done ? (p[E.resultName] = M.value, p.next = E.nextLoc, p.method !== "return" && (p.method = "next", p.arg = e), p.delegate = null, f) : M : (p.method = "throw", p.arg = new TypeError("iterator result is not an object"), p.delegate = null, f);
@@ -6496,35 +6496,35 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         value: function() {
           var t = dt(De().mark(function r(i, a) {
             var o, s, y, u;
-            return De().wrap(function(k) {
-              for (; ; ) switch (k.prev = k.next) {
+            return De().wrap(function(S) {
+              for (; ; ) switch (S.prev = S.next) {
                 case 0:
                   if (o = new Uint8Array(a), !(o.length % 16 !== 0 || this._key === null)) {
-                    k.next = 3;
+                    S.next = 3;
                     break;
                   }
-                  return k.abrupt("return", null);
+                  return S.abrupt("return", null);
                 case 3:
                   s = o.length / 16, y = 0;
                 case 5:
                   if (!(y < s)) {
-                    k.next = 15;
+                    S.next = 15;
                     break;
                   }
-                  return k.t0 = Uint8Array, k.next = 9, window.crypto.subtle.encrypt({
+                  return S.t0 = Uint8Array, S.next = 9, window.crypto.subtle.encrypt({
                     name: "AES-CBC",
                     iv: new Uint8Array(16)
                   }, this._key, o.slice(y * 16, y * 16 + 16));
                 case 9:
-                  k.t1 = k.sent, u = new k.t0(k.t1).slice(0, 16), o.set(u, y * 16);
+                  S.t1 = S.sent, u = new S.t0(S.t1).slice(0, 16), o.set(u, y * 16);
                 case 12:
-                  y++, k.next = 5;
+                  y++, S.next = 5;
                   break;
                 case 15:
-                  return k.abrupt("return", o);
+                  return S.abrupt("return", o);
                 case 16:
                 case "end":
-                  return k.stop();
+                  return S.stop();
               }
             }, r, this);
           }));
@@ -6720,7 +6720,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         key: "_computeCMAC",
         value: function() {
           var t = dt(De().mark(function r(i, a) {
-            var o, s, y, u, l, k, X, g;
+            var o, s, y, u, l, S, X, g;
             return De().wrap(function(d) {
               for (; ; ) switch (d.prev = d.next) {
                 case 0:
@@ -6731,7 +6731,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                   return d.abrupt("return", null);
                 case 2:
                   if (o = Math.floor(i.length / 16), s = Math.ceil(i.length / 16), y = i.length - o * 16, u = new Uint8Array((s + 1) * 16), u.set(a), u.set(i, 16), y === 0) for (l = 0; l < 16; l++) u[o * 16 + l] ^= this._k1[l];
-                  else for (u[(o + 1) * 16 + y] = 128, k = 0; k < 16; k++) u[(o + 1) * 16 + k] ^= this._k2[k];
+                  else for (u[(o + 1) * 16 + y] = 128, S = 0; S < 16; S++) u[(o + 1) * 16 + S] ^= this._k2[S];
                   return d.next = 11, window.crypto.subtle.encrypt({
                     name: "AES-CBC",
                     iv: this._zeroBlock
@@ -6787,7 +6787,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         key: "encrypt",
         value: function() {
           var t = dt(De().mark(function r(i, a) {
-            var o, s, y, u, l, k, X, g;
+            var o, s, y, u, l, S, X, g;
             return De().wrap(function(d) {
               for (; ; ) switch (d.prev = d.next) {
                 case 0:
@@ -6799,8 +6799,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                 case 10:
                   return l = d.sent, d.next = 13, this._computeCMAC(u, this._prefixBlock2);
                 case 13:
-                  for (k = d.sent, X = 0; X < 16; X++) k[X] ^= y[X] ^ l[X];
-                  return g = new Uint8Array(16 + u.length), g.set(u), g.set(k, u.length), d.abrupt("return", g);
+                  for (S = d.sent, X = 0; X < 16; X++) S[X] ^= y[X] ^ l[X];
+                  return g = new Uint8Array(16 + u.length), g.set(u), g.set(S, u.length), d.abrupt("return", g);
                 case 19:
                 case "end":
                   return d.stop();
@@ -6817,7 +6817,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         key: "decrypt",
         value: function() {
           var t = dt(De().mark(function r(i, a) {
-            var o, s, y, u, l, k, X, g, b, d;
+            var o, s, y, u, l, S, X, g, b, d;
             return De().wrap(function(c) {
               for (; ; ) switch (c.prev = c.next) {
                 case 0:
@@ -6825,9 +6825,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                 case 6:
                   return l = c.sent, c.next = 9, this._computeCMAC(s, this._prefixBlock1);
                 case 9:
-                  return k = c.sent, c.next = 12, this._computeCMAC(o, this._prefixBlock2);
+                  return S = c.sent, c.next = 12, this._computeCMAC(o, this._prefixBlock2);
                 case 12:
-                  for (X = c.sent, g = 0; g < 16; g++) X[g] ^= l[g] ^ k[g];
+                  for (X = c.sent, g = 0; g < 16; g++) X[g] ^= l[g] ^ S[g];
                   if (X.length === u.length) {
                     c.next = 16;
                     break;
@@ -7584,9 +7584,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       for (var y = 0; y < 16; ++y) {
         var u = y << 1, l = u + 1;
         i[u] = i[l] = 0;
-        for (var k = 28; k < 59; k += 28) for (var X = k - 28; X < k; ++X) {
+        for (var S = 28; S < 59; S += 28) for (var X = S - 28; X < S; ++X) {
           var g = X + Bl[y];
-          r[X] = g < k ? n[g] : n[g - 28];
+          r[X] = g < S ? n[g] : n[g - 28];
         }
         for (var b = 0; b < 24; ++b) r[Ca[b]] !== 0 && (i[u] |= 1 << 23 - b), r[Ca[b + 24]] !== 0 && (i[l] |= 1 << 23 - b);
       }
@@ -7762,7 +7762,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         value: O(E, m, V)
       }), M;
     }
-    function k(E, p, m) {
+    function S(E, p, m) {
       try {
         return {
           type: "normal",
@@ -7787,8 +7787,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     u(x, o, function() {
       return this;
     });
-    var F = Object.getPrototypeOf, S = F && F(F(ne([])));
-    S && S !== n && r.call(S, o) && (x = S);
+    var F = Object.getPrototypeOf, k = F && F(F(ne([])));
+    k && k !== n && r.call(k, o) && (x = k);
     var w = K.prototype = c.prototype = Object.create(x);
     function C(E) {
       [
@@ -7803,7 +7803,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function A(E, p) {
       function m(B, M, V, re) {
-        var oe = k(E[B], E, M);
+        var oe = S(E[B], E, M);
         if (oe.type !== "throw") {
           var ce = oe.arg, pe = ce.value;
           return pe && ir(pe) == "object" && r.call(pe, "__await") ? p.resolve(pe.__await).then(function(ye) {
@@ -7856,7 +7856,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             m.dispatchException(m.arg);
           } else m.method === "return" && m.abrupt("return", m.arg);
           L = b;
-          var oe = k(E, p, m);
+          var oe = S(E, p, m);
           if (oe.type === "normal") {
             if (L = m.done ? d : g, oe.arg === f) continue;
             return {
@@ -7871,7 +7871,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function I(E, p) {
       var m = p.method, L = E.iterator[m];
       if (L === e) return p.delegate = null, m === "throw" && E.iterator.return && (p.method = "return", p.arg = e, I(E, p), p.method === "throw") || m !== "return" && (p.method = "throw", p.arg = new TypeError("The iterator does not provide a '" + m + "' method")), f;
-      var B = k(L, E.iterator, p.arg);
+      var B = S(L, E.iterator, p.arg);
       if (B.type === "throw") return p.method = "throw", p.arg = B.arg, p.delegate = null, f;
       var M = B.arg;
       return M ? M.done ? (p[E.resultName] = M.value, p.next = E.nextLoc, p.method !== "return" && (p.method = "next", p.arg = e), p.delegate = null, f) : M : (p.method = "throw", p.arg = new TypeError("iterator result is not an object"), p.delegate = null, f);
@@ -8196,46 +8196,46 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         value: function() {
           var t = Vt(tt().mark(function r(i, a) {
             var o, s, y, u;
-            return tt().wrap(function(k) {
-              for (; ; ) switch (k.prev = k.next) {
+            return tt().wrap(function(S) {
+              for (; ; ) switch (S.prev = S.next) {
                 case 0:
                   if (a.length === this._keyBytes) {
-                    k.next = 2;
+                    S.next = 2;
                     break;
                   }
-                  return k.abrupt("return", null);
+                  return S.abrupt("return", null);
                 case 2:
                   if (o = (0, xt.u8ArrayToBigInt)(a), s = (0, xt.modPow)(o, this._dBigInt, this._nBigInt), y = (0, xt.bigIntToU8Array)(s, this._keyBytes), !(y[0] !== 0 || y[1] !== 2)) {
-                    k.next = 7;
+                    S.next = 7;
                     break;
                   }
-                  return k.abrupt("return", null);
+                  return S.abrupt("return", null);
                 case 7:
                   u = 2;
                 case 8:
                   if (!(u < y.length)) {
-                    k.next = 14;
+                    S.next = 14;
                     break;
                   }
                   if (y[u] !== 0) {
-                    k.next = 11;
+                    S.next = 11;
                     break;
                   }
-                  return k.abrupt("break", 14);
+                  return S.abrupt("break", 14);
                 case 11:
-                  u++, k.next = 8;
+                  u++, S.next = 8;
                   break;
                 case 14:
                   if (u !== y.length) {
-                    k.next = 16;
+                    S.next = 16;
                     break;
                   }
-                  return k.abrupt("return", null);
+                  return S.abrupt("return", null);
                 case 16:
-                  return k.abrupt("return", y.slice(u + 1, y.length));
+                  return S.abrupt("return", y.slice(u + 1, y.length));
                 case 17:
                 case "end":
-                  return k.stop();
+                  return S.stop();
               }
             }, r, this);
           }));
@@ -8476,7 +8476,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         value: O(E, m, V)
       }), M;
     }
-    function k(E, p, m) {
+    function S(E, p, m) {
       try {
         return {
           type: "normal",
@@ -8501,8 +8501,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     u(x, o, function() {
       return this;
     });
-    var F = Object.getPrototypeOf, S = F && F(F(ne([])));
-    S && S !== n && r.call(S, o) && (x = S);
+    var F = Object.getPrototypeOf, k = F && F(F(ne([])));
+    k && k !== n && r.call(k, o) && (x = k);
     var w = K.prototype = c.prototype = Object.create(x);
     function C(E) {
       [
@@ -8517,7 +8517,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function A(E, p) {
       function m(B, M, V, re) {
-        var oe = k(E[B], E, M);
+        var oe = S(E[B], E, M);
         if (oe.type !== "throw") {
           var ce = oe.arg, pe = ce.value;
           return pe && pn(pe) == "object" && r.call(pe, "__await") ? p.resolve(pe.__await).then(function(ye) {
@@ -8570,7 +8570,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             m.dispatchException(m.arg);
           } else m.method === "return" && m.abrupt("return", m.arg);
           L = b;
-          var oe = k(E, p, m);
+          var oe = S(E, p, m);
           if (oe.type === "normal") {
             if (L = m.done ? d : g, oe.arg === f) continue;
             return {
@@ -8585,7 +8585,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function I(E, p) {
       var m = p.method, L = E.iterator[m];
       if (L === e) return p.delegate = null, m === "throw" && E.iterator.return && (p.method = "return", p.arg = e, I(E, p), p.method === "throw") || m !== "return" && (p.method = "throw", p.arg = new TypeError("The iterator does not provide a '" + m + "' method")), f;
-      var B = k(L, E.iterator, p.arg);
+      var B = S(L, E.iterator, p.arg);
       if (B.type === "throw") return p.method = "throw", p.arg = B.arg, p.delegate = null, f;
       var M = B.arg;
       return M ? M.done ? (p[E.resultName] = M.value, p.next = E.nextLoc, p.method !== "return" && (p.method = "next", p.arg = e), p.delegate = null, f) : M : (p.method = "throw", p.arg = new TypeError("iterator result is not an object"), p.delegate = null, f);
@@ -8850,10 +8850,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }), g;
     }
     function l(g) {
-      var b = k(g, "string");
+      var b = S(g, "string");
       return o(b) == "symbol" ? b : b + "";
     }
-    function k(g, b) {
+    function S(g, b) {
       if (o(g) != "object" || !g) return g;
       var d = g[Symbol.toPrimitive];
       if (d !== void 0) {
@@ -8942,68 +8942,68 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       value: true
     }), e.default = void 0;
     var t = jr, n = i(ci), r = i(bi);
-    function i(S) {
-      return S && S.__esModule ? S : {
-        default: S
+    function i(k) {
+      return k && k.__esModule ? k : {
+        default: k
       };
     }
-    function a(S, w, C) {
-      return w = u(w), o(S, y() ? Reflect.construct(w, [], u(S).constructor) : w.apply(S, C));
+    function a(k, w, C) {
+      return w = u(w), o(k, y() ? Reflect.construct(w, [], u(k).constructor) : w.apply(k, C));
     }
-    function o(S, w) {
+    function o(k, w) {
       if (w && (X(w) == "object" || typeof w == "function")) return w;
       if (w !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-      return s(S);
+      return s(k);
     }
-    function s(S) {
-      if (S === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-      return S;
+    function s(k) {
+      if (k === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+      return k;
     }
     function y() {
       try {
-        var S = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {
+        var k = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {
         }));
       } catch {
       }
       return (y = function() {
-        return !!S;
+        return !!k;
       })();
     }
-    function u(S) {
+    function u(k) {
       return u = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(w) {
         return w.__proto__ || Object.getPrototypeOf(w);
-      }, u(S);
+      }, u(k);
     }
-    function l(S, w) {
+    function l(k, w) {
       if (typeof w != "function" && w !== null) throw new TypeError("Super expression must either be null or a function");
-      S.prototype = Object.create(w && w.prototype, {
+      k.prototype = Object.create(w && w.prototype, {
         constructor: {
-          value: S,
+          value: k,
           writable: true,
           configurable: true
         }
-      }), Object.defineProperty(S, "prototype", {
+      }), Object.defineProperty(k, "prototype", {
         writable: false
-      }), w && k(S, w);
+      }), w && S(k, w);
     }
-    function k(S, w) {
-      return k = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(C, A) {
+    function S(k, w) {
+      return S = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(C, A) {
         return C.__proto__ = A, C;
-      }, k(S, w);
+      }, S(k, w);
     }
-    function X(S) {
+    function X(k) {
       "@babel/helpers - typeof";
       return X = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(w) {
         return typeof w;
       } : function(w) {
         return w && typeof Symbol == "function" && w.constructor === Symbol && w !== Symbol.prototype ? "symbol" : typeof w;
-      }, X(S);
+      }, X(k);
     }
     function g() {
       g = function() {
         return w;
       };
-      var S, w = {}, C = Object.prototype, A = C.hasOwnProperty, O = Object.defineProperty || function(se, Y, ie) {
+      var k, w = {}, C = Object.prototype, A = C.hasOwnProperty, O = Object.defineProperty || function(se, Y, ie) {
         se[Y] = ie.value;
       }, I = typeof Symbol == "function" ? Symbol : {}, Z = I.iterator || "@@iterator", q = I.asyncIterator || "@@asyncIterator", $ = I.toStringTag || "@@toStringTag";
       function ne(se, Y, ie) {
@@ -9102,7 +9102,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (he === M) {
             if (ve === "throw") throw de;
             return {
-              value: S,
+              value: k,
               done: true
             };
           }
@@ -9135,11 +9135,11 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function nt(se, Y) {
         var ie = Y.method, he = se.iterator[ie];
-        if (he === S) return Y.delegate = null, ie === "throw" && se.iterator.return && (Y.method = "return", Y.arg = S, nt(se, Y), Y.method === "throw") || ie !== "return" && (Y.method = "throw", Y.arg = new TypeError("The iterator does not provide a '" + ie + "' method")), V;
+        if (he === k) return Y.delegate = null, ie === "throw" && se.iterator.return && (Y.method = "return", Y.arg = k, nt(se, Y), Y.method === "throw") || ie !== "return" && (Y.method = "throw", Y.arg = new TypeError("The iterator does not provide a '" + ie + "' method")), V;
         var ve = p(he, se.iterator, Y.arg);
         if (ve.type === "throw") return Y.method = "throw", Y.arg = ve.arg, Y.delegate = null, V;
         var de = ve.arg;
-        return de ? de.done ? (Y[se.resultName] = de.value, Y.next = se.nextLoc, Y.method !== "return" && (Y.method = "next", Y.arg = S), Y.delegate = null, V) : de : (Y.method = "throw", Y.arg = new TypeError("iterator result is not an object"), Y.delegate = null, V);
+        return de ? de.done ? (Y[se.resultName] = de.value, Y.next = se.nextLoc, Y.method !== "return" && (Y.method = "next", Y.arg = k), Y.delegate = null, V) : de : (Y.method = "throw", Y.arg = new TypeError("iterator result is not an object"), Y.delegate = null, V);
       }
       function Lt(se) {
         var Y = {
@@ -9166,7 +9166,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (!isNaN(se.length)) {
             var ie = -1, he = function ve() {
               for (; ++ie < se.length; ) if (A.call(se, ie)) return ve.value = se[ie], ve.done = false, ve;
-              return ve.value = S, ve.done = true, ve;
+              return ve.value = k, ve.done = true, ve;
             };
             return he.next = he;
           }
@@ -9213,7 +9213,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }, w.values = ht, Je.prototype = {
         constructor: Je,
         reset: function(Y) {
-          if (this.prev = 0, this.next = 0, this.sent = this._sent = S, this.done = false, this.delegate = null, this.method = "next", this.arg = S, this.tryEntries.forEach(it), !Y) for (var ie in this) ie.charAt(0) === "t" && A.call(this, ie) && !isNaN(+ie.slice(1)) && (this[ie] = S);
+          if (this.prev = 0, this.next = 0, this.sent = this._sent = k, this.done = false, this.delegate = null, this.method = "next", this.arg = k, this.tryEntries.forEach(it), !Y) for (var ie in this) ie.charAt(0) === "t" && A.call(this, ie) && !isNaN(+ie.slice(1)) && (this[ie] = k);
         },
         stop: function() {
           this.done = true;
@@ -9225,7 +9225,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (this.done) throw Y;
           var ie = this;
           function he(le, bt) {
-            return Pe.type = "throw", Pe.arg = Y, ie.next = le, bt && (ie.method = "next", ie.arg = S), !!bt;
+            return Pe.type = "throw", Pe.arg = Y, ie.next = le, bt && (ie.method = "next", ie.arg = k), !!bt;
           }
           for (var ve = this.tryEntries.length - 1; ve >= 0; --ve) {
             var de = this.tryEntries[ve], Pe = de.completion;
@@ -9285,23 +9285,23 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             iterator: ht(Y),
             resultName: ie,
             nextLoc: he
-          }, this.method === "next" && (this.arg = S), V;
+          }, this.method === "next" && (this.arg = k), V;
         }
       }, w;
     }
-    function b(S, w, C, A, O, I, Z) {
+    function b(k, w, C, A, O, I, Z) {
       try {
-        var q = S[I](Z), $ = q.value;
+        var q = k[I](Z), $ = q.value;
       } catch (ne) {
         return void C(ne);
       }
       q.done ? w($) : Promise.resolve($).then(A, O);
     }
-    function d(S) {
+    function d(k) {
       return function() {
         var w = this, C = arguments;
         return new Promise(function(A, O) {
-          var I = S.apply(w, C);
+          var I = k.apply(w, C);
           function Z($) {
             b(I, A, O, Z, q, "next", $);
           }
@@ -9312,39 +9312,39 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         });
       };
     }
-    function f(S, w) {
-      if (!(S instanceof w)) throw new TypeError("Cannot call a class as a function");
+    function f(k, w) {
+      if (!(k instanceof w)) throw new TypeError("Cannot call a class as a function");
     }
-    function c(S, w) {
+    function c(k, w) {
       for (var C = 0; C < w.length; C++) {
         var A = w[C];
-        A.enumerable = A.enumerable || false, A.configurable = true, "value" in A && (A.writable = true), Object.defineProperty(S, K(A.key), A);
+        A.enumerable = A.enumerable || false, A.configurable = true, "value" in A && (A.writable = true), Object.defineProperty(k, K(A.key), A);
       }
     }
-    function h(S, w, C) {
-      return w && c(S.prototype, w), Object.defineProperty(S, "prototype", {
+    function h(k, w, C) {
+      return w && c(k.prototype, w), Object.defineProperty(k, "prototype", {
         writable: false
-      }), S;
+      }), k;
     }
-    function K(S) {
-      var w = x(S, "string");
+    function K(k) {
+      var w = x(k, "string");
       return X(w) == "symbol" ? w : w + "";
     }
-    function x(S, w) {
-      if (X(S) != "object" || !S) return S;
-      var C = S[Symbol.toPrimitive];
+    function x(k, w) {
+      if (X(k) != "object" || !k) return k;
+      var C = k[Symbol.toPrimitive];
       if (C !== void 0) {
-        var A = C.call(S, w);
+        var A = C.call(k, w);
         if (X(A) != "object") return A;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
-      return String(S);
+      return String(k);
     }
     var F = function() {
-      function S() {
-        f(this, S), this._cipher = null, this._counter = new Uint8Array(16);
+      function k() {
+        f(this, k), this._cipher = null, this._counter = new Uint8Array(16);
       }
-      return h(S, [
+      return h(k, [
         {
           key: "setKey",
           value: function() {
@@ -9435,12 +9435,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         }
       ]);
     }();
-    e.default = function(S) {
+    e.default = function(k) {
       function w(C, A) {
         var O;
         return f(this, w), O = a(this, w), O._hasStarted = false, O._checkSock = null, O._checkCredentials = null, O._approveServerResolve = null, O._sockReject = null, O._credentialsReject = null, O._approveServerReject = null, O._sock = C, O._getCredentials = A, O;
       }
-      return l(w, S), h(w, [
+      return l(w, k), h(w, [
         {
           key: "_waitSockAsync",
           value: function(A) {
@@ -9740,18 +9740,18 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       return i(s, [
         {
           key: "decodeRect",
-          value: function(u, l, k, X, g, b, d) {
-            if (k === 0 || X === 0) return true;
+          value: function(u, l, S, X, g, b, d) {
+            if (S === 0 || X === 0) return true;
             this._lines === 0 && (this._lines = X);
-            for (var f = d == 8 ? 1 : 4, c = k * f; this._lines > 0; ) {
+            for (var f = d == 8 ? 1 : 4, c = S * f; this._lines > 0; ) {
               if (g.rQwait("RAW", c)) return false;
               var h = l + (X - this._lines), K = g.rQshiftBytes(c, false);
               if (d == 8) {
-                for (var x = new Uint8Array(k * 4), F = 0; F < k; F++) x[F * 4 + 0] = (K[F] >> 0 & 3) * 255 / 3, x[F * 4 + 1] = (K[F] >> 2 & 3) * 255 / 3, x[F * 4 + 2] = (K[F] >> 4 & 3) * 255 / 3, x[F * 4 + 3] = 255;
+                for (var x = new Uint8Array(S * 4), F = 0; F < S; F++) x[F * 4 + 0] = (K[F] >> 0 & 3) * 255 / 3, x[F * 4 + 1] = (K[F] >> 2 & 3) * 255 / 3, x[F * 4 + 2] = (K[F] >> 4 & 3) * 255 / 3, x[F * 4 + 3] = 255;
                 K = x;
               }
-              for (var S = 0; S < k; S++) K[S * 4 + 3] = 255;
-              b.blitImage(u, h, k, 1, K, 0), this._lines--;
+              for (var k = 0; k < S; k++) K[k * 4 + 3] = 255;
+              b.blitImage(u, h, S, 1, K, 0), this._lines--;
             }
             return true;
           }
@@ -9807,10 +9807,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       return i(s, [
         {
           key: "decodeRect",
-          value: function(u, l, k, X, g, b, d) {
+          value: function(u, l, S, X, g, b, d) {
             if (g.rQwait("COPYRECT", 4)) return false;
             var f = g.rQshift16(), c = g.rQshift16();
-            return k === 0 || X === 0 || b.copyImage(f, c, u, l, k, X), true;
+            return S === 0 || X === 0 || b.copyImage(f, c, u, l, S, X), true;
           }
         }
       ]);
@@ -9864,12 +9864,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       return i(s, [
         {
           key: "decodeRect",
-          value: function(u, l, k, X, g, b, d) {
+          value: function(u, l, S, X, g, b, d) {
             if (this._subrects === 0) {
               if (g.rQwait("RRE", 8)) return false;
               this._subrects = g.rQshift32();
               var f = g.rQshiftBytes(4);
-              b.fillRect(u, l, k, X, f);
+              b.fillRect(u, l, S, X, f);
             }
             for (; this._subrects > 0; ) {
               if (g.rQwait("RRE", 12)) return false;
@@ -9890,17 +9890,17 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     var t = r(Re);
     function n(l) {
       if (typeof WeakMap != "function") return null;
-      var k = /* @__PURE__ */ new WeakMap(), X = /* @__PURE__ */ new WeakMap();
+      var S = /* @__PURE__ */ new WeakMap(), X = /* @__PURE__ */ new WeakMap();
       return (n = function(b) {
-        return b ? X : k;
+        return b ? X : S;
       })(l);
     }
-    function r(l, k) {
+    function r(l, S) {
       if (l && l.__esModule) return l;
       if (l === null || i(l) != "object" && typeof l != "function") return {
         default: l
       };
-      var X = n(k);
+      var X = n(S);
       if (X && X.has(l)) return X.get(l);
       var g = {
         __proto__: null
@@ -9913,35 +9913,35 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function i(l) {
       "@babel/helpers - typeof";
-      return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(k) {
-        return typeof k;
-      } : function(k) {
-        return k && typeof Symbol == "function" && k.constructor === Symbol && k !== Symbol.prototype ? "symbol" : typeof k;
+      return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(S) {
+        return typeof S;
+      } : function(S) {
+        return S && typeof Symbol == "function" && S.constructor === Symbol && S !== Symbol.prototype ? "symbol" : typeof S;
       }, i(l);
     }
-    function a(l, k) {
-      if (!(l instanceof k)) throw new TypeError("Cannot call a class as a function");
+    function a(l, S) {
+      if (!(l instanceof S)) throw new TypeError("Cannot call a class as a function");
     }
-    function o(l, k) {
-      for (var X = 0; X < k.length; X++) {
-        var g = k[X];
+    function o(l, S) {
+      for (var X = 0; X < S.length; X++) {
+        var g = S[X];
         g.enumerable = g.enumerable || false, g.configurable = true, "value" in g && (g.writable = true), Object.defineProperty(l, y(g.key), g);
       }
     }
-    function s(l, k, X) {
-      return k && o(l.prototype, k), Object.defineProperty(l, "prototype", {
+    function s(l, S, X) {
+      return S && o(l.prototype, S), Object.defineProperty(l, "prototype", {
         writable: false
       }), l;
     }
     function y(l) {
-      var k = u(l, "string");
-      return i(k) == "symbol" ? k : k + "";
+      var S = u(l, "string");
+      return i(S) == "symbol" ? S : S + "";
     }
-    function u(l, k) {
+    function u(l, S) {
       if (i(l) != "object" || !l) return l;
       var X = l[Symbol.toPrimitive];
       if (X !== void 0) {
-        var g = X.call(l, k);
+        var g = X.call(l, S);
         if (i(g) != "object") return g;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
@@ -9960,7 +9960,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
               if (f.rQwait("HEXTILE", K)) return false;
               var x = f.rQpeek8();
               if (x > 30) throw new Error("Illegal hextile subencoding (subencoding: " + x + ")");
-              var F = this._totalTiles - this._tiles, S = F % this._tilesX, w = Math.floor(F / this._tilesX), C = X + S * 16, A = g + w * 16, O = Math.min(16, X + b - C), I = Math.min(16, g + d - A);
+              var F = this._totalTiles - this._tiles, k = F % this._tilesX, w = Math.floor(F / this._tilesX), C = X + k * 16, A = g + w * 16, O = Math.min(16, X + b - C), I = Math.min(16, g + d - A);
               if (x & 1) K += O * I * 4;
               else if (x & 2 && (K += 4), x & 4 && (K += 4), x & 8) {
                 if (K++, f.rQwait("HEXTILE", K)) return false;
@@ -9996,9 +9996,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_subTile",
           value: function(X, g, b, d, f) {
-            for (var c = f[0], h = f[1], K = f[2], x = X + b, F = g + d, S = this._tileBuffer, w = this._tileW, C = g; C < F; C++) for (var A = X; A < x; A++) {
+            for (var c = f[0], h = f[1], K = f[2], x = X + b, F = g + d, k = this._tileBuffer, w = this._tileW, C = g; C < F; C++) for (var A = X; A < x; A++) {
               var O = (A + C * w) * 4;
-              S[O] = c, S[O + 1] = h, S[O + 2] = K, S[O + 3] = 255;
+              k[O] = c, k[O + 1] = h, k[O + 2] = K, k[O + 3] = 255;
             }
           }
         },
@@ -10034,12 +10034,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       if (!(u instanceof l)) throw new TypeError("Cannot call a class as a function");
     }
     function a(u, l) {
-      for (var k = 0; k < l.length; k++) {
-        var X = l[k];
+      for (var S = 0; S < l.length; S++) {
+        var X = l[S];
         X.enumerable = X.enumerable || false, X.configurable = true, "value" in X && (X.writable = true), Object.defineProperty(u, s(X.key), X);
       }
     }
-    function o(u, l, k) {
+    function o(u, l, S) {
       return l && a(u.prototype, l), Object.defineProperty(u, "prototype", {
         writable: false
       }), u;
@@ -10050,9 +10050,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     function y(u, l) {
       if (r(u) != "object" || !u) return u;
-      var k = u[Symbol.toPrimitive];
-      if (k !== void 0) {
-        var X = k.call(u, l);
+      var S = u[Symbol.toPrimitive];
+      if (S !== void 0) {
+        var X = S.call(u, l);
         if (r(X) != "object") return X;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
@@ -10065,7 +10065,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       return o(u, [
         {
           key: "decodeRect",
-          value: function(k, X, g, b, d, f, c) {
+          value: function(S, X, g, b, d, f, c) {
             if (g === 0 || b === 0) return true;
             if (this._length === 0) {
               if (d.rQwait("ZLIB", 4)) return false;
@@ -10075,7 +10075,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             var h = new Uint8Array(d.rQshiftBytes(this._length, false));
             this._length = 0, this._zlib.setInput(h), h = this._zlib.inflate(g * b * 4), this._zlib.setInput(null);
             for (var K = 0; K < g * b; K++) h[K * 4 + 3] = 255;
-            return f.blitImage(k, X, g, b, h, 0), true;
+            return f.blitImage(S, X, g, b, h, 0), true;
           }
         }
       ]);
@@ -10138,10 +10138,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }), X;
     }
     function l(X) {
-      var g = k(X, "string");
+      var g = S(X, "string");
       return o(g) == "symbol" ? g : g + "";
     }
-    function k(X, g) {
+    function S(X, g) {
       if (o(X) != "object" || !X) return X;
       var b = X[Symbol.toPrimitive];
       if (b !== void 0) {
@@ -10166,13 +10166,13 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
               for (var F = 0; F < 4; F++) this._ctl >> F & 1 && (this._zlibs[F].reset(), t.Info("Reset zlib stream " + F));
               this._ctl = this._ctl >> 4;
             }
-            var S;
-            if (this._ctl === 8) S = this._fillRect(b, d, f, c, h, K, x);
-            else if (this._ctl === 9) S = this._jpegRect(b, d, f, c, h, K, x);
-            else if (this._ctl === 10) S = this._pngRect(b, d, f, c, h, K, x);
-            else if (!(this._ctl & 8)) S = this._basicRect(this._ctl, b, d, f, c, h, K, x);
+            var k;
+            if (this._ctl === 8) k = this._fillRect(b, d, f, c, h, K, x);
+            else if (this._ctl === 9) k = this._jpegRect(b, d, f, c, h, K, x);
+            else if (this._ctl === 10) k = this._pngRect(b, d, f, c, h, K, x);
+            else if (!(this._ctl & 8)) k = this._basicRect(this._ctl, b, d, f, c, h, K, x);
             else throw new Error("Illegal tight compression received (ctl: " + this._ctl + ")");
-            return S && (this._ctl = null), S;
+            return k && (this._ctl = null), k;
           }
         },
         {
@@ -10203,16 +10203,16 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
               if (K.rQwait("TIGHT", 1)) return false;
               this._filter = K.rQshift8();
             } else this._filter = 0;
-            var S = b & 3, w;
+            var k = b & 3, w;
             switch (this._filter) {
               case 0:
-                w = this._copyFilter(S, d, f, c, h, K, x, F);
+                w = this._copyFilter(k, d, f, c, h, K, x, F);
                 break;
               case 1:
-                w = this._paletteFilter(S, d, f, c, h, K, x, F);
+                w = this._paletteFilter(k, d, f, c, h, K, x, F);
                 break;
               case 2:
-                w = this._gradientFilter(S, d, f, c, h, K, x, F);
+                w = this._gradientFilter(k, d, f, c, h, K, x, F);
                 break;
               default:
                 throw new Error("Illegal tight filter received (ctl: " + this._filter + ")");
@@ -10223,14 +10223,14 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_copyFilter",
           value: function(b, d, f, c, h, K, x, F) {
-            var S = c * h * 3, w;
-            if (S === 0) return true;
-            if (S < 12) {
-              if (K.rQwait("TIGHT", S)) return false;
-              w = K.rQshiftBytes(S);
+            var k = c * h * 3, w;
+            if (k === 0) return true;
+            if (k < 12) {
+              if (K.rQwait("TIGHT", k)) return false;
+              w = K.rQshiftBytes(k);
             } else {
               if (w = this._readData(K), w === null) return false;
-              this._zlibs[b].setInput(w), w = this._zlibs[b].inflate(S), this._zlibs[b].setInput(null);
+              this._zlibs[b].setInput(w), w = this._zlibs[b].inflate(k), this._zlibs[b].setInput(null);
             }
             for (var C = new Uint8Array(c * h * 4), A = 0, O = 0; A < c * h * 4; A += 4, O += 3) C[A] = w[O], C[A + 1] = w[O + 1], C[A + 2] = w[O + 2], C[A + 3] = 255;
             return x.blitImage(d, f, c, h, C, 0, false), true;
@@ -10241,9 +10241,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           value: function(b, d, f, c, h, K, x, F) {
             if (this._numColors === 0) {
               if (K.rQwait("TIGHT palette", 1)) return false;
-              var S = K.rQpeek8() + 1, w = S * 3;
+              var k = K.rQpeek8() + 1, w = k * 3;
               if (K.rQwait("TIGHT palette", 1 + w)) return false;
-              this._numColors = S, K.rQskipBytes(1), K.rQshiftTo(this._palette, w);
+              this._numColors = k, K.rQskipBytes(1), K.rQshiftTo(this._palette, w);
             }
             var C = this._numColors <= 2 ? 1 : 8, A = Math.floor((c * C + 7) / 8), O = A * h, I;
             if (O === 0) return true;
@@ -10260,10 +10260,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_monoRect",
           value: function(b, d, f, c, h, K, x) {
-            for (var F = this._getScratchBuffer(f * c * 4), S = Math.floor((f + 7) / 8), w = Math.floor(f / 8), C = 0; C < c; C++) {
+            for (var F = this._getScratchBuffer(f * c * 4), k = Math.floor((f + 7) / 8), w = Math.floor(f / 8), C = 0; C < c; C++) {
               var A = void 0, O = void 0, I = void 0;
-              for (I = 0; I < w; I++) for (var Z = 7; Z >= 0; Z--) A = (C * f + I * 8 + 7 - Z) * 4, O = (h[C * S + I] >> Z & 1) * 3, F[A] = K[O], F[A + 1] = K[O + 1], F[A + 2] = K[O + 2], F[A + 3] = 255;
-              for (var q = 7; q >= 8 - f % 8; q--) A = (C * f + I * 8 + 7 - q) * 4, O = (h[C * S + I] >> q & 1) * 3, F[A] = K[O], F[A + 1] = K[O + 1], F[A + 2] = K[O + 2], F[A + 3] = 255;
+              for (I = 0; I < w; I++) for (var Z = 7; Z >= 0; Z--) A = (C * f + I * 8 + 7 - Z) * 4, O = (h[C * k + I] >> Z & 1) * 3, F[A] = K[O], F[A + 1] = K[O + 1], F[A + 2] = K[O + 2], F[A + 3] = 255;
+              for (var q = 7; q >= 8 - f % 8; q--) A = (C * f + I * 8 + 7 - q) * 4, O = (h[C * k + I] >> q & 1) * 3, F[A] = K[O], F[A + 1] = K[O + 1], F[A + 2] = K[O + 2], F[A + 3] = 255;
             }
             x.blitImage(b, d, f, c, F, 0, false);
           }
@@ -10271,7 +10271,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_paletteRect",
           value: function(b, d, f, c, h, K, x) {
-            for (var F = this._getScratchBuffer(f * c * 4), S = f * c * 4, w = 0, C = 0; w < S; w += 4, C++) {
+            for (var F = this._getScratchBuffer(f * c * 4), k = f * c * 4, w = 0, C = 0; w < k; w += 4, C++) {
               var A = h[C] * 3;
               F[w] = K[A], F[w + 1] = K[A + 1], F[w + 2] = K[A + 2], F[w + 3] = 255;
             }
@@ -10281,14 +10281,14 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_gradientFilter",
           value: function(b, d, f, c, h, K, x, F) {
-            var S = c * h * 3, w;
-            if (S === 0) return true;
-            if (S < 12) {
-              if (K.rQwait("TIGHT", S)) return false;
-              w = K.rQshiftBytes(S);
+            var k = c * h * 3, w;
+            if (k === 0) return true;
+            if (k < 12) {
+              if (K.rQwait("TIGHT", k)) return false;
+              w = K.rQshiftBytes(k);
             } else {
               if (w = this._readData(K), w === null) return false;
-              this._zlibs[b].setInput(w), w = this._zlibs[b].inflate(S), this._zlibs[b].setInput(null);
+              this._zlibs[b].setInput(w), w = this._zlibs[b].inflate(k), this._zlibs[b].setInput(null);
             }
             for (var C = new Uint8Array(4 * c * h), A = 0, O = 0, I = new Uint8Array(3), Z = 0; Z < c; Z++) {
               for (var q = 0; q < 3; q++) {
@@ -10388,9 +10388,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function l(f, c) {
       if (c && (t(c) == "object" || typeof c == "function")) return c;
       if (c !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-      return k(f);
+      return S(f);
     }
-    function k(f) {
+    function S(f) {
       if (f === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
       return f;
     }
@@ -10433,14 +10433,14 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       return b(c, f), o(c, [
         {
           key: "_pngRect",
-          value: function(K, x, F, S, w, C, A) {
+          value: function(K, x, F, k, w, C, A) {
             var O = this._readData(w);
-            return O === null ? false : (C.imageRect(K, x, F, S, "image/png", O), true);
+            return O === null ? false : (C.imageRect(K, x, F, k, "image/png", O), true);
           }
         },
         {
           key: "_basicRect",
-          value: function(K, x, F, S, w, C, A, O) {
+          value: function(K, x, F, k, w, C, A, O) {
             throw new Error("BasicCompression received in TightPNG rect");
           }
         }
@@ -10453,53 +10453,53 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       value: true
     }), e.default = void 0;
     var t = n(Hr);
-    function n(k) {
-      return k && k.__esModule ? k : {
-        default: k
+    function n(S) {
+      return S && S.__esModule ? S : {
+        default: S
       };
     }
-    function r(k) {
+    function r(S) {
       "@babel/helpers - typeof";
       return r = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(X) {
         return typeof X;
       } : function(X) {
         return X && typeof Symbol == "function" && X.constructor === Symbol && X !== Symbol.prototype ? "symbol" : typeof X;
-      }, r(k);
+      }, r(S);
     }
-    function i(k, X) {
-      if (!(k instanceof X)) throw new TypeError("Cannot call a class as a function");
+    function i(S, X) {
+      if (!(S instanceof X)) throw new TypeError("Cannot call a class as a function");
     }
-    function a(k, X) {
+    function a(S, X) {
       for (var g = 0; g < X.length; g++) {
         var b = X[g];
-        b.enumerable = b.enumerable || false, b.configurable = true, "value" in b && (b.writable = true), Object.defineProperty(k, s(b.key), b);
+        b.enumerable = b.enumerable || false, b.configurable = true, "value" in b && (b.writable = true), Object.defineProperty(S, s(b.key), b);
       }
     }
-    function o(k, X, g) {
-      return X && a(k.prototype, X), Object.defineProperty(k, "prototype", {
+    function o(S, X, g) {
+      return X && a(S.prototype, X), Object.defineProperty(S, "prototype", {
         writable: false
-      }), k;
+      }), S;
     }
-    function s(k) {
-      var X = y(k, "string");
+    function s(S) {
+      var X = y(S, "string");
       return r(X) == "symbol" ? X : X + "";
     }
-    function y(k, X) {
-      if (r(k) != "object" || !k) return k;
-      var g = k[Symbol.toPrimitive];
+    function y(S, X) {
+      if (r(S) != "object" || !S) return S;
+      var g = S[Symbol.toPrimitive];
       if (g !== void 0) {
-        var b = g.call(k, X);
+        var b = g.call(S, X);
         if (r(b) != "object") return b;
         throw new TypeError("@@toPrimitive must return a primitive value.");
       }
-      return String(k);
+      return String(S);
     }
     var u = 64, l = 64;
     e.default = function() {
-      function k() {
-        i(this, k), this._length = 0, this._inflator = new t.default(), this._pixelBuffer = new Uint8Array(u * l * 4), this._tileBuffer = new Uint8Array(u * l * 4);
+      function S() {
+        i(this, S), this._length = 0, this._inflator = new t.default(), this._pixelBuffer = new Uint8Array(u * l * 4), this._tileBuffer = new Uint8Array(u * l * 4);
       }
-      return o(k, [
+      return o(S, [
         {
           key: "decodeRect",
           value: function(g, b, d, f, c, h, K) {
@@ -10510,27 +10510,27 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             if (c.rQwait("Zlib data", this._length)) return false;
             var x = c.rQshiftBytes(this._length, false);
             this._inflator.setInput(x);
-            for (var F = b; F < b + f; F += l) for (var S = Math.min(l, b + f - F), w = g; w < g + d; w += u) {
-              var C = Math.min(u, g + d - w), A = C * S, O = this._inflator.inflate(1)[0];
+            for (var F = b; F < b + f; F += l) for (var k = Math.min(l, b + f - F), w = g; w < g + d; w += u) {
+              var C = Math.min(u, g + d - w), A = C * k, O = this._inflator.inflate(1)[0];
               if (O === 0) {
                 var I = this._readPixels(A);
-                h.blitImage(w, F, C, S, I, 0, false);
+                h.blitImage(w, F, C, k, I, 0, false);
               } else if (O === 1) {
                 var Z = this._readPixels(1);
-                h.fillRect(w, F, C, S, [
+                h.fillRect(w, F, C, k, [
                   Z[0],
                   Z[1],
                   Z[2]
                 ]);
               } else if (O >= 2 && O <= 16) {
-                var q = this._decodePaletteTile(O, A, C, S);
-                h.blitImage(w, F, C, S, q, 0, false);
+                var q = this._decodePaletteTile(O, A, C, k);
+                h.blitImage(w, F, C, k, q, 0, false);
               } else if (O === 128) {
                 var $ = this._decodeRLETile(A);
-                h.blitImage(w, F, C, S, $, 0, false);
+                h.blitImage(w, F, C, k, $, 0, false);
               } else if (O >= 130 && O <= 255) {
                 var ne = this._decodeRLEPaletteTile(O - 128, A);
-                h.blitImage(w, F, C, S, ne, 0, false);
+                h.blitImage(w, F, C, k, ne, 0, false);
               } else throw new Error("Unknown subencoding: " + O);
             }
             return this._length = 0, true;
@@ -10554,13 +10554,13 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_decodePaletteTile",
           value: function(g, b, d, f) {
-            for (var c = this._tileBuffer, h = this._readPixels(g), K = this._getBitsPerPixelInPalette(g), x = (1 << K) - 1, F = 0, S = this._inflator.inflate(1)[0], w = 0; w < f; w++) {
+            for (var c = this._tileBuffer, h = this._readPixels(g), K = this._getBitsPerPixelInPalette(g), x = (1 << K) - 1, F = 0, k = this._inflator.inflate(1)[0], w = 0; w < f; w++) {
               for (var C = 8 - K, A = 0; A < d; A++) {
-                C < 0 && (C = 8 - K, S = this._inflator.inflate(1)[0]);
-                var O = S >> C & x;
+                C < 0 && (C = 8 - K, k = this._inflator.inflate(1)[0]);
+                var O = k >> C & x;
                 c[F] = h[O * 4], c[F + 1] = h[O * 4 + 1], c[F + 2] = h[O * 4 + 2], c[F + 3] = h[O * 4 + 3], F += 4, C -= K;
               }
-              C < 8 - K && w < f - 1 && (S = this._inflator.inflate(1)[0]);
+              C < 8 - K && w < f - 1 && (k = this._inflator.inflate(1)[0]);
             }
             return c;
           }
@@ -10691,7 +10691,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         c.enumerable = c.enumerable || false, c.configurable = true, "value" in c && (c.writable = true), Object.defineProperty(b, X(c.key), c);
       }
     }
-    function k(b, d, f) {
+    function S(b, d, f) {
       return d && l(b.prototype, d), Object.defineProperty(b, "prototype", {
         writable: false
       }), b;
@@ -10714,10 +10714,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       function b() {
         u(this, b), this._cachedQuantTables = [], this._cachedHuffmanTables = [], this._segments = [];
       }
-      return k(b, [
+      return S(b, [
         {
           key: "decodeRect",
-          value: function(f, c, h, K, x, F, S) {
+          value: function(f, c, h, K, x, F, k) {
             for (; ; ) {
               var w = this._readSegment(x);
               if (w === null) return false;
@@ -10804,8 +10804,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
               }
               x++;
             }
-            var S = new Uint8Array(2 + K + x);
-            return S[0] = c, S[1] = h, S[2] = K >> 8, S[3] = K, S.set(f.rQshiftBytes(K - 2 + x, false), 4), S;
+            var k = new Uint8Array(2 + K + x);
+            return k[0] = c, k[1] = h, k[2] = K >> 8, k[3] = K, k.set(f.rQshiftBytes(K - 2 + x, false), 4), k;
           }
         }
       ]);
@@ -10820,8 +10820,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function n(h) {
       if (typeof WeakMap != "function") return null;
       var K = /* @__PURE__ */ new WeakMap(), x = /* @__PURE__ */ new WeakMap();
-      return (n = function(S) {
-        return S ? x : K;
+      return (n = function(k) {
+        return k ? x : K;
       })(h);
     }
     function r(h, K) {
@@ -10833,9 +10833,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       if (x && x.has(h)) return x.get(h);
       var F = {
         __proto__: null
-      }, S = Object.defineProperty && Object.getOwnPropertyDescriptor;
+      }, k = Object.defineProperty && Object.getOwnPropertyDescriptor;
       for (var w in h) if (w !== "default" && {}.hasOwnProperty.call(h, w)) {
-        var C = S ? Object.getOwnPropertyDescriptor(h, w) : null;
+        var C = k ? Object.getOwnPropertyDescriptor(h, w) : null;
         C && (C.get || C.set) ? Object.defineProperty(F, w, C) : F[w] = h[w];
       }
       return F.default = h, x && x.set(h, F), F;
@@ -10870,16 +10870,16 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function u(h, K) {
       var x = h == null ? null : typeof Symbol < "u" && h[Symbol.iterator] || h["@@iterator"];
       if (x != null) {
-        var F, S, w, C, A = [], O = true, I = false;
+        var F, k, w, C, A = [], O = true, I = false;
         try {
           if (w = (x = x.call(h)).next, K !== 0) for (; !(O = (F = w.call(x)).done) && (A.push(F.value), A.length !== K); O = true) ;
         } catch (Z) {
-          I = true, S = Z;
+          I = true, k = Z;
         } finally {
           try {
             if (!O && x.return != null && (C = x.return(), Object(C) !== C)) return;
           } finally {
-            if (I) throw S;
+            if (I) throw k;
           }
         }
         return A;
@@ -10888,7 +10888,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     function l(h) {
       if (Array.isArray(h)) return h;
     }
-    function k(h, K) {
+    function S(h, K) {
       if (!(h instanceof K)) throw new TypeError("Cannot call a class as a function");
     }
     function X(h, K) {
@@ -10918,7 +10918,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }
     var f = e.H264Parser = function() {
       function h(K) {
-        k(this, h), this._data = K, this._index = 0, this.profileIdc = null, this.constraintSet = null, this.levelIdc = null;
+        S(this, h), this._data = K, this._index = 0, this.profileIdc = null, this.constraintSet = null, this.levelIdc = null;
       }
       return g(h, [
         {
@@ -10931,7 +10931,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_indexOfNextNalUnit",
           value: function(x) {
-            for (var F = this._data, S = x; S < F.length; ++S) if (this._getStartSequenceLen(S) != 0) return S;
+            for (var F = this._data, k = x; k < F.length; ++k) if (this._getStartSequenceLen(k) != 0) return k;
             return -1;
           }
         },
@@ -10946,8 +10946,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           value: function(x) {
             var F = this._data[x];
             if (F & 128) throw new Error("H264 parsing sanity check failed, forbidden zero bit is set");
-            var S = F & 31;
-            switch (S) {
+            var k = F & 31;
+            switch (k) {
               case 1:
                 return {
                   slice: true
@@ -10964,7 +10964,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
               case 8:
                 return {};
               default:
-                t.Warn("Unhandled unit type: ", S);
+                t.Warn("Unhandled unit type: ", k);
                 break;
             }
             return {};
@@ -10974,9 +10974,9 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           key: "parse",
           value: function() {
             for (var x = this._index, F = false; this._index < this._data.length; ) {
-              var S = this._getStartSequenceLen(this._index);
-              if (S == 0) throw new Error("Invalid start sequence in bit stream");
-              var w = this._parseNalUnit(this._index + S), C = w.slice, A = w.key, O = this._indexOfNextNalUnit(this._index + S);
+              var k = this._getStartSequenceLen(this._index);
+              if (k == 0) throw new Error("Invalid start sequence in bit stream");
+              var w = this._parseNalUnit(this._index + k), C = w.slice, A = w.key, O = this._indexOfNextNalUnit(this._index + k);
               if (O == -1 ? this._index = this._data.length : this._index = O, A && (F = true), C) break;
             }
             return x === this._index ? null : {
@@ -10988,7 +10988,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       ]);
     }(), c = e.H264Context = function() {
       function h(K, x) {
-        k(this, h), this.lastUsed = 0, this._width = K, this._height = x, this._profileIdc = null, this._constraintSet = null, this._levelIdc = null, this._decoder = null, this._pendingFrames = [];
+        S(this, h), this.lastUsed = 0, this._width = K, this._height = x, this._profileIdc = null, this._constraintSet = null, this._levelIdc = null, this._decoder = null, this._pendingFrames = [];
       }
       return g(h, [
         {
@@ -11008,7 +11008,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "_configureDecoder",
-          value: function(x, F, S) {
+          value: function(x, F, k) {
             var w = this;
             (this._decoder === null || this._decoder.state === "closed") && (this._decoder = new VideoDecoder({
               output: function(O) {
@@ -11018,7 +11018,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                 return w._handleError(O);
               }
             }));
-            var C = "avc1." + x.toString(16).padStart(2, "0") + F.toString(16).padStart(2, "0") + S.toString(16).padStart(2, "0");
+            var C = "avc1." + x.toString(16).padStart(2, "0") + F.toString(16).padStart(2, "0") + k.toString(16).padStart(2, "0");
             this._decoder.configure({
               codec: C,
               codedWidth: this._width,
@@ -11038,15 +11038,15 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
               ready: false,
               keep: false
             };
-            return F.promise = new Promise(function(S) {
-              F.resolve = S;
+            return F.promise = new Promise(function(k) {
+              F.resolve = k;
             }), this._pendingFrames.push(F), F;
           }
         },
         {
           key: "decode",
           value: function(x) {
-            for (var F = new f(x), S = null, w = Math.round(window.performance.now() * 1e3); ; ) {
+            for (var F = new f(x), k = null, w = Math.round(window.performance.now() * 1e3); ; ) {
               var C = F.parse();
               if (C === null) break;
               if (F.profileIdc !== null && (self._profileIdc = F.profileIdc, self._constraintSet = F.constraintSet, self._levelIdc = F.levelIdc), this._decoder === null || this._decoder.state !== "configured") {
@@ -11060,7 +11060,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                 }
                 this._configureDecoder(self._profileIdc, self._constraintSet, self._levelIdc);
               }
-              S = this._preparePendingFrame(w);
+              k = this._preparePendingFrame(w);
               var A = new EncodedVideoChunk({
                 timestamp: w,
                 type: C.key ? "key" : "delta",
@@ -11072,23 +11072,23 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                 t.Warn("Failed to decode:", O);
               }
             }
-            return S !== null && (S.keep = true), S;
+            return k !== null && (k.keep = true), k;
           }
         }
       ]);
     }();
     e.default = function() {
       function h() {
-        k(this, h), this._tick = 0, this._contexts = {};
+        S(this, h), this._tick = 0, this._contexts = {};
       }
       return g(h, [
         {
           key: "_contextId",
-          value: function(x, F, S, w) {
+          value: function(x, F, k, w) {
             return [
               x,
               F,
-              S,
+              k,
               w
             ].join(",");
           }
@@ -11096,8 +11096,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         {
           key: "_findOldestContextId",
           value: function() {
-            for (var x = Number.MAX_VALUE, F = void 0, S = 0, w = Object.entries(this._contexts); S < w.length; S++) {
-              var C = a(w[S], 2), A = C[0], O = C[1];
+            for (var x = Number.MAX_VALUE, F = void 0, k = 0, w = Object.entries(this._contexts); k < w.length; k++) {
+              var C = a(w[k], 2), A = C[0], O = C[1];
               O.lastUsed < x && (x = O.lastUsed, F = A);
             }
             return F;
@@ -11105,27 +11105,27 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "_createContext",
-          value: function(x, F, S, w) {
+          value: function(x, F, k, w) {
             var C = 64;
             if (Object.keys(this._contexts).length >= C) {
               var A = this._findOldestContextId();
               delete this._contexts[A];
             }
-            var O = new c(S, w);
-            return this._contexts[this._contextId(x, F, S, w)] = O, O;
+            var O = new c(k, w);
+            return this._contexts[this._contextId(x, F, k, w)] = O, O;
           }
         },
         {
           key: "_getContext",
-          value: function(x, F, S, w) {
-            var C = this._contexts[this._contextId(x, F, S, w)];
-            return C !== void 0 ? C : this._createContext(x, F, S, w);
+          value: function(x, F, k, w) {
+            var C = this._contexts[this._contextId(x, F, k, w)];
+            return C !== void 0 ? C : this._createContext(x, F, k, w);
           }
         },
         {
           key: "_resetContext",
-          value: function(x, F, S, w) {
-            delete this._contexts[this._contextId(x, F, S, w)];
+          value: function(x, F, k, w) {
+            delete this._contexts[this._contextId(x, F, k, w)];
           }
         },
         {
@@ -11136,16 +11136,16 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         },
         {
           key: "decodeRect",
-          value: function(x, F, S, w, C, A, O) {
+          value: function(x, F, k, w, C, A, O) {
             var I = 1, Z = 2;
             if (C.rQwait("h264 header", 8)) return false;
             var q = C.rQshift32(), $ = C.rQshift32();
             if (C.rQwait("h264 payload", q, 8)) return false;
-            $ & Z ? this._resetAllContexts() : $ & I && this._resetContext(x, F, S, w);
-            var ne = this._getContext(x, F, S, w);
+            $ & Z ? this._resetAllContexts() : $ & I && this._resetContext(x, F, k, w);
+            var ne = this._getContext(x, F, k, w);
             if (ne.lastUsed = this._tick++, q !== 0) {
               var E = C.rQshiftBytes(q, false), p = ne.decode(E);
-              p !== null && A.videoFrame(x, F, S, w, p);
+              p !== null && A.videoFrame(x, F, k, w, p);
             }
             return true;
           }
@@ -11165,7 +11165,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     Object.defineProperty(e, "__esModule", {
       value: true
     }), e.default = void 0;
-    var n = Nr, r = p(Re), i = jr, a = Ae, o = li, s = ar, y = ne(ci), u = ne(oo), l = ne(Hr), k = ne(wo), X = ne(Go), g = ne(ts), b = ne(rs), d = ne(ns), f = ne(Vr), c = ne(is), h = qr, K = ne(as), x = ne(bi), F = ne(cs), S = ne(hs), w = ne(ds), C = ne(_s), A = ne(ps), O = ne(Si), I = ne(vs), Z = ne(ys), q = ne(xs), $ = ne(gs);
+    var n = Nr, r = p(Re), i = jr, a = Ae, o = li, s = ar, y = ne(ci), u = ne(oo), l = ne(Hr), S = ne(wo), X = ne(Go), g = ne(ts), b = ne(rs), d = ne(ns), f = ne(Vr), c = ne(is), h = qr, K = ne(as), x = ne(bi), F = ne(cs), k = ne(hs), w = ne(ds), C = ne(_s), A = ne(ps), O = ne(Si), I = ne(vs), Z = ne(ys), q = ne(xs), $ = ne(gs);
     function ne(G) {
       return G && G.__esModule ? G : {
         default: G
@@ -11688,7 +11688,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           handleGesture: v._handleGesture.bind(v),
           handleRSAAESCredentialsRequired: v._handleRSAAESCredentialsRequired.bind(v),
           handleRSAAESServerVerification: v._handleRSAAESServerVerification.bind(v)
-        }, r.Debug(">> RFB.constructor"), v._screen = document.createElement("div"), v._screen.style.display = "flex", v._screen.style.width = "100%", v._screen.style.height = "100%", v._screen.style.overflow = "auto", v._screen.style.background = he, v._canvas = document.createElement("canvas"), v._canvas.style.margin = "auto", v._canvas.style.outline = "none", v._canvas.width = 0, v._canvas.height = 0, v._canvas.tabIndex = -1, v._screen.appendChild(v._canvas), v._cursor = new b.default(), v._cursorImage = R.cursors.none, v._decoders[h.encodings.encodingRaw] = new F.default(), v._decoders[h.encodings.encodingCopyRect] = new S.default(), v._decoders[h.encodings.encodingRRE] = new w.default(), v._decoders[h.encodings.encodingHextile] = new C.default(), v._decoders[h.encodings.encodingZlib] = new A.default(), v._decoders[h.encodings.encodingTight] = new O.default(), v._decoders[h.encodings.encodingTightPNG] = new I.default(), v._decoders[h.encodings.encodingZRLE] = new Z.default(), v._decoders[h.encodings.encodingJPEG] = new q.default(), v._decoders[h.encodings.encodingH264] = new $.default();
+        }, r.Debug(">> RFB.constructor"), v._screen = document.createElement("div"), v._screen.style.display = "flex", v._screen.style.width = "100%", v._screen.style.height = "100%", v._screen.style.overflow = "auto", v._screen.style.background = he, v._canvas = document.createElement("canvas"), v._canvas.style.margin = "auto", v._canvas.style.outline = "none", v._canvas.width = 0, v._canvas.height = 0, v._canvas.tabIndex = -1, v._screen.appendChild(v._canvas), v._cursor = new b.default(), v._cursorImage = R.cursors.none, v._decoders[h.encodings.encodingRaw] = new F.default(), v._decoders[h.encodings.encodingCopyRect] = new k.default(), v._decoders[h.encodings.encodingRRE] = new w.default(), v._decoders[h.encodings.encodingHextile] = new C.default(), v._decoders[h.encodings.encodingZlib] = new A.default(), v._decoders[h.encodings.encodingTight] = new O.default(), v._decoders[h.encodings.encodingTightPNG] = new I.default(), v._decoders[h.encodings.encodingZRLE] = new Z.default(), v._decoders[h.encodings.encodingJPEG] = new q.default(), v._decoders[h.encodings.encodingH264] = new $.default();
         try {
           v._display = new u.default(v._canvas);
         } catch (H) {
@@ -13302,7 +13302,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         return _[0] = v >> 24, _[1] = 0, _[2] = 0, _[3] = T, _;
       },
       extendedClipboardProvide: function(R, D, _) {
-        for (var T = new k.default(), v = [], H = 0; H < D.length; H++) {
+        for (var T = new S.default(), v = [], H = 0; H < D.length; H++) {
           if (D[H] != wt) throw new Error("Unsupported extended clipboard format for Provide message.");
           _[H] = _[H].replace(/\r\n|\r|\n/gm, `\r
 `);
@@ -13425,13 +13425,13 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
   })($a);
   const af = Ts($a);
   function of(e) {
-    let t, n, r, i, a, o, s, y, u, l, k, X, g;
+    let t, n, r, i, a, o, s, y, u, l, S, X, g;
     return {
       c() {
-        t = _t("div"), n = _t("div"), r = _t("button"), r.textContent = "Ctrl + Alt + Del", i = Xr(), a = _t("input"), o = Xr(), s = _t("button"), s.textContent = "\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C", y = Xr(), u = _t("button"), u.textContent = "\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430", l = Xr(), k = _t("div"), ft(r, "class", "button"), ft(a, "class", "input"), ft(a, "maxlength", "1000"), ft(a, "type", "text"), ft(s, "class", "button"), ft(u, "class", "button"), ft(n, "class", "flex flex-row items-center w-full"), ft(k, "class", "vnc-screen-container");
+        t = _t("div"), n = _t("div"), r = _t("button"), r.textContent = "Ctrl + Alt + Del", i = Xr(), a = _t("input"), o = Xr(), s = _t("button"), s.textContent = "\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C", y = Xr(), u = _t("button"), u.textContent = "\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430", l = Xr(), S = _t("div"), ft(r, "class", "button"), ft(a, "class", "input"), ft(a, "maxlength", "1000"), ft(a, "type", "text"), ft(s, "class", "button"), ft(u, "class", "button"), ft(n, "class", "flex flex-row items-center w-full"), ft(S, "class", "vnc-screen-container");
       },
       m(b, d) {
-        Ur(b, t, d), Ge(t, n), Ge(n, r), Ge(n, i), Ge(n, a), Oi(a, e[1]), Ge(n, o), Ge(n, s), Ge(n, y), Ge(n, u), Ge(t, l), Ge(t, k), e[11](k), X || (g = [
+        Ur(b, t, d), Ge(t, n), Ge(n, r), Ge(n, i), Ge(n, a), Oi(a, e[1]), Ge(n, o), Ge(n, s), Ge(n, y), Ge(n, u), Ge(t, l), Ge(t, S), e[11](S), X || (g = [
           tn(r, "click", e[2]),
           tn(a, "input", e[10]),
           tn(s, "click", e[3]),
@@ -13466,36 +13466,36 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
     }));
     const l = () => {
       r == null ? void 0 : r.sendCtrlAltDel();
-    }, k = function(c) {
-      var h = c.shift();
-      if (h != null && r != null) {
-        var K = h.charCodeAt(0);
-        if (K === 13) {
-          Kr(50).then((F) => {
-            k(c);
+    }, S = function(c, h) {
+      var K = h.shift();
+      if (K != null && r != null) {
+        var x = K.charCodeAt(0);
+        if (x === 13) {
+          Kr(50).then((k) => {
+            S(c, h);
           });
           return;
         }
-        if (K === 10) {
-          r.sendKey(uf, null), Kr(50).then((F) => {
-            k(c);
+        if (x === 10) {
+          r.sendKey(uf, null), Kr(50).then((k) => {
+            S(c, h);
           });
           return;
         }
-        var x = h.match(/[A-Z!@#$%^&*()_+{}:\"<>?~|]/);
-        x ? (r.sendKey(Na, null, true), Kr(50).then((F) => {
-          r != null && (r.sendKey(K, null), Kr(50).then((S) => {
-            r.sendKey(Na, null, false);
-          }));
-        })) : r.sendKey(K, null), Kr(50).then((F) => {
-          k(c);
+        var F = K.match(/[A-Z!@#$%^&*()_+{}:\"<>?~|]/);
+        F ? (c || (r.sendKey(Na, null, true), c = true), Kr(50).then((k) => {
+          r == null ? void 0 : r.sendKey(x, null);
+        })) : (c && (r.sendKey(Na, null, false), c = false), Kr(50).then((k) => {
+          r == null ? void 0 : r.sendKey(x, null);
+        })), Kr(200).then((k) => {
+          S(c, h);
         });
       }
     }, X = () => {
-      b.length > 0 && b.length < 1001 && r != null && k(b.split(""));
+      b.length > 0 && b.length < 1001 && r != null && S(false, b.split(""));
     }, g = () => {
       navigator.clipboard.readText().then((c) => {
-        r != null && k(c.split(""));
+        r != null && S(false, c.split(""));
       }).catch((c) => {
         console.error("Failed to read clipboard contents: ", c);
       });
@@ -13605,34 +13605,34 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
   }
   function df(e) {
     let t, n, r, i, a = e[6], o;
-    function s(k, X) {
-      return k[0] ? hf : cf;
+    function s(S, X) {
+      return S[0] ? hf : cf;
     }
     let y = s(e), u = y(e), l = ja(e);
     return {
       c() {
         t = _t("div"), n = _t("div"), r = _t("div"), u.c(), i = Xr(), l.c(), ft(r, "class", "flex flex-row items-center justify-between text-slate w-full"), ft(n, "class", "vnc-container"), ft(t, "class", "vnc-container__wrapper");
       },
-      m(k, X) {
-        Ur(k, t, X), Ge(t, n), Ge(n, r), u.m(r, null), Ge(n, i), l.m(n, null), o = true;
+      m(S, X) {
+        Ur(S, t, X), Ge(t, n), Ge(n, r), u.m(r, null), Ge(n, i), l.m(n, null), o = true;
       },
-      p(k, [X]) {
-        y === (y = s(k)) && u ? u.p(k, X) : (u.d(1), u = y(k), u && (u.c(), u.m(r, null))), X & 64 && vn(a, a = k[6]) ? (Za(), pr(l, 1, 1, Jt), qa(), l = ja(k), l.c(), Nt(l, 1), l.m(n, null)) : l.p(k, X);
+      p(S, [X]) {
+        y === (y = s(S)) && u ? u.p(S, X) : (u.d(1), u = y(S), u && (u.c(), u.m(r, null))), X & 64 && vn(a, a = S[6]) ? (Za(), pr(l, 1, 1, Jt), qa(), l = ja(S), l.c(), Nt(l, 1), l.m(n, null)) : l.p(S, X);
       },
-      i(k) {
+      i(S) {
         o || (Nt(l), o = true);
       },
-      o(k) {
+      o(S) {
         pr(l), o = false;
       },
-      d(k) {
-        k && gr(t), u.d(), l.d(k);
+      d(S) {
+        S && gr(t), u.d(), l.d(S);
       }
     };
   }
   function _f(e, t, n) {
     let r = "", i = false, a = {}, { getPowerCallback: o = async () => null } = t, { controlPower: s = true } = t, { showDesktopName: y = true } = t, { url: u } = t, { onConnectCallback: l = async () => {
-    } } = t, { onDisconnectCallback: k = async () => {
+    } } = t, { onDisconnectCallback: S = async () => {
     } } = t;
     const X = (d) => {
       n(4, r = d.detail.name), document.title = d.detail.name;
@@ -13645,12 +13645,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       i || b();
     }, 2e3), () => {
     })), s && o(), e.$$set = (d) => {
-      "getPowerCallback" in d && n(9, o = d.getPowerCallback), "controlPower" in d && n(10, s = d.controlPower), "showDesktopName" in d && n(0, y = d.showDesktopName), "url" in d && n(1, u = d.url), "onConnectCallback" in d && n(2, l = d.onConnectCallback), "onDisconnectCallback" in d && n(3, k = d.onDisconnectCallback);
+      "getPowerCallback" in d && n(9, o = d.getPowerCallback), "controlPower" in d && n(10, s = d.controlPower), "showDesktopName" in d && n(0, y = d.showDesktopName), "url" in d && n(1, u = d.url), "onConnectCallback" in d && n(2, l = d.onConnectCallback), "onDisconnectCallback" in d && n(3, S = d.onDisconnectCallback);
     }, [
       y,
       u,
       l,
-      k,
+      S,
       r,
       i,
       a,

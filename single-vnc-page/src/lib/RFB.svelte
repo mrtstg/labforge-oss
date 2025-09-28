@@ -45,41 +45,49 @@
   // taken from https://gist.github.com/byjg/a6378edb420a1c654c5f27bb494ca1c8
   const XK_Shift_L = 65505; // https://docs.rs/x11-dl/1.0.1/x11_dl/keysym/constant.XK_Shift_L.html
   const XK_Return = 65293;
-  const sendString = function (str: string[]) {
+  const sendString = function (shift_state: boolean, str: string[]) {
     var character = str.shift();
     if (character != undefined && rfb != null) {
       var code = character.charCodeAt(0);
       if (code === '\r'.charCodeAt(0)) {
-        delay(50).then(_ => { sendString(str) })
+        delay(50).then(_ => { sendString(shift_state, str) })
         return
       }
       if (code === '\n'.charCodeAt(0)) {
         rfb.sendKey(XK_Return, null);
-        delay(50).then(_ => { sendString(str) })
+        delay(50).then(_ => { sendString(shift_state, str) })
         return;
       }
       var needs_shift = character.match(/[A-Z!@#$%^&*()_+{}:\"<>?~|]/);
       if (needs_shift) {
-        rfb.sendKey(XK_Shift_L, null ,true);
+        if (!shift_state) {
+          rfb.sendKey(XK_Shift_L, null ,true);
+          shift_state = true
+        }
         delay(50).then(_ => {
           if (rfb != null) {
             rfb.sendKey(code, null);
-            delay(50).then(_ => {
-              rfb!.sendKey(XK_Shift_L, null, false);
-            })
           }
         })
       } else {
-        rfb.sendKey(code, null);
+        if (shift_state) {
+          rfb.sendKey(XK_Shift_L, null, false)
+          shift_state = false
+        }
+        delay(50).then(_ => {
+          if (rfb != null) {
+            rfb.sendKey(code, null);
+          }
+        })
       }
-      delay(50).then(_ => { sendString(str) })
+      delay(200).then(_ => { sendString(shift_state, str) })
     }
   }
 
   const sendBuffer = () => {
     if (clipboard.length > 0 && clipboard.length < 1001) {
         if (rfb != null) {
-          sendString(clipboard.split(''))
+          sendString(false, clipboard.split(''))
         }
     }
   }
@@ -88,7 +96,7 @@
     navigator.clipboard.readText()
       .then(text => {
         if (rfb != null) {
-          sendString(text.split(''))
+          sendString(false, text.split(''))
         }
       })
       .catch(err => {
