@@ -1,0 +1,54 @@
+name:                keycloak-api
+version:             0.1.3.9
+github:              "learnew2/keycloak-api"
+license:             BSD-3-Clause
+author:              "Ilya Zamaratskikh"
+maintainer:          "mrtstg@yandex.ru"
+copyright:           "2025 Ilya Zamaratskikh"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+description:         Please see the README on GitHub at <https://github.com/learnew2/keycloak-api#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- aeson == 2.1.2.1
+- text == 2.0.2
+- http-conduit == 2.3.8.1
+- servant == 0.19.1
+- servant-client == 0.19
+- transformers == 0.5.6.2
+- containers == 0.6.7
+- http-api-data == 0.5
+- bytestring == 0.11.5.2
+- http-types == 0.12.3
+- mtl == 2.2.2
+- unordered-containers == 0.2.19.1
+- stm == 2.5.1.0
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+
+tests:
+  keycloak-api-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - keycloak-api
