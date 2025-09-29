@@ -50,8 +50,8 @@ build-bin: $(HS_SERVICES)
 		(cd $$n && echo "Building $$n" && stack build); \
 	done
 
-build-websockify: ./deployment/websockify/Dockerfile
-	docker build --network host -t labforge-websockify -f ./deployment/websockify/Dockerfile .
+build-websockify: ./websockify-go/Dockerfile
+	docker build --network host -t labforge-websockify -f ./websockify-go/Dockerfile ./websockify-go
 
 install-deps: $(HS_SERVICES)
 	@for n in $(HS_SERVICES); do \
