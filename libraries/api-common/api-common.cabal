@@ -41,6 +41,7 @@ library
       Deployment.Models.Deployment
       Deployment.Models.Stats
       Deployment.Schema
+      Jobservice.Models
       Kroki.Client
       Kroki.Schema
       Models.JSONError
