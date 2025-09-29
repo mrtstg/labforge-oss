@@ -1,0 +1,11 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/21/15.yaml
+
+packages:
+- .
+
+extra-deps:
+- git: https://github.com/learnew2/keycloak-api.git
+  commit: 79c2e38f061d06701d9e412d55d50efa4fbd5229
+- git: https://github.com/learnew2/api-common.git
+  commit: 05a9c8b5761f4fcb85a7686e819ba766c27f83c4

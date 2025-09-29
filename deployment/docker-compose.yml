@@ -1,0 +1,145 @@
+x-extra-hosts:
+  &default-extra-hosts
+  - "auth.mrtstg.local:172.17.0.1"
+  - "prometheus:127.0.0.1"
+  - "nginx:127.0.0.1"
+  - "nginx-exporter:127.0.0.1"
+  - "cadvisor:127.0.0.1"
+
+services:
+  postgresql:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    hostname: postgres
+    container_name: keycloak-db
+    environment:
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: dbpass
+      POSTGRES_DB: keycloak
+      PGDATA: /data/postgres
+      POSTGRES_MULTIPLE_DATABASES: labforge
+    volumes:
+      - ../pgdata:/data/postgres
+      - ./db-script.sh:/docker-entrypoint-initdb.d/db-script.sh:ro
+    ports:
+      - 5432:5432
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    restart: unless-stopped
+    container_name: keycloak
+    command: start-dev
+    ports:
+      - 8080:8080
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: dbuser
+      KC_DB_PASSWORD: dbpass
+      KC_HOSTNAME: https://auth.mrtstg.local
+  redis:
+    image: redis:8.2.0-bookworm
+    restart: unless-stopped
+    container_name: redis
+    ports:
+      - 6379:6379
+  dev-nginx:
+    image: labforge-nginx
+    container_name: labforge-nginx
+    hostname: nginx
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.dev/:/etc/nginx/conf.d/:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+#  dev-rabbitmq:
+#    image: rabbitmq:3.13-rc-management-alpine
+#    container_name: labforge-rabbitmq
+#    hostname: rabbitmq
+#    ports:
+#      - 5672:5672
+#      - 15672:15672
+#    restart: unless-stopped
+#    environment:
+#      RABBITMQ_DEFAULT_USER: 'user'
+#      RABBITMQ_DEFAULT_PASS: 'rbpass'
+#    healthcheck:
+#      test: rabbitmq-diagnostics -q ping
+#      interval: 3s
+#      timeout: 3s
+#      retries: 5
+  dev-websocket:
+    image: labforge-websockify
+    container_name: labforge-websockify
+    hostname: websockify
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./websockify/tokens.cfg:/tokens.cfg:ro
+  dev-kroki:
+    image: yuzutech/kroki
+    container_name: labforge-kroki
+    restart: unless-stopped
+    ports:
+      - 8050:8000
+  dev-grafana:
+    image: grafana/grafana:12.2.0-17567790421-ubuntu
+    container_name: labforge-grafana
+    extra_hosts: *default-extra-hosts
+    restart: unless-stopped
+    network_mode: host
+    hostname: grafana
+    user: root
+    ports:
+      - 3000:3000
+    env_file:
+      - ../.env
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./grafana/provisioning/:/etc/grafana/provisioning/:ro
+      - ./grafana/dashboards/:/etc/grafana/dashboards/:ro
+      - ../grafana:/var/lib/grafana
+  dev-nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4
+    container_name: labforge-nginx-exporter
+    restart: unless-stopped
+    hostname: nginx-exporter
+    extra_hosts: *default-extra-hosts
+    network_mode: host
+    command: --nginx.scrape-uri=http://nginx:8081/stub_status
+    ports:
+      - 9113:9113
+  dev-prometheus:
+    image: prom/prometheus:v3.5.0
+    user: root
+    volumes:
+      - ./prometheus/:/etc/prometheus/:ro
+      - ../prometheus_data/:/prometheus/
+    container_name: labforge-prometheus
+    extra_hosts: *default-extra-hosts
+    network_mode: host
+    hostname: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    restart: unless-stopped
+  dev-cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    container_name: labforge-cadvisor
+    hostname: cadvisor
+    network_mode: host
+    privileged: true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    command:
+      - '-port=9092'
+    restart: unless-stopped

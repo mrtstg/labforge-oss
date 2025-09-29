@@ -1,0 +1,21 @@
+site_name: Labforge docs
+site_url: ""
+copyright: "2025, Ilya Zamaratskikh"
+site_author: "Ilya Zamaratskikh"
+theme:
+  name: readthedocs
+
+nav:
+  - Введение: ./index.md
+  - Руководство пользователя: 
+    - Вход и работа со стендами: user-guide/index.md
+    - Создание шаблонов развертывания: usage-guide/deployment-templates.md
+  - Руководство установки:
+    - Требования к окружению: install-guide/requirements.md
+    - Установка из репозитория: install-guide/index.md
+  - Пост-установочные шаги: install-guide/postinstall.md
+
+plugins: 
+  - search:
+      lang: [en, ru]
+      indexing: 'full'

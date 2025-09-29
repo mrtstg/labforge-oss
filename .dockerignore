@@ -1,0 +1,16 @@
+**/.stack-work
+**/deployment
+!./deployment
+pgdata
+.env
+sample.env
+docker-sample.env
+pgadmin
+frontend/**/node_modules
+frontend/node_modules
+logs
+images
+*.tar
+*.tar.gz
+images/
+grafana

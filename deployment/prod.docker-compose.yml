@@ -1,0 +1,145 @@
+services:
+  postgresql:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    hostname: postgres
+    container_name: labforge-db
+    env_file:
+      - ../docker.env
+    volumes:
+      - ../pgdata:/data/postgres
+      - ./db-script.sh:/docker-entrypoint-initdb.d/db-script.sh:ro
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    restart: unless-stopped
+    container_name: keycloak
+    hostname: keycloak
+    command: start-dev
+    volumes:
+      - ./keycloak/jq:/usr/bin/jq:ro
+    env_file:
+      - ../docker.env
+  redis:
+    image: redis:8.2.0-bookworm
+    restart: unless-stopped
+    container_name: redis
+    hostname: redis
+  nginx:
+    profiles: ['app']
+    image: labforge-nginx-prod
+    container_name: labforge-nginx
+    hostname: nginx
+    ports:
+      - 443:443
+      - 80:80
+    restart: unless-stopped
+  websocket:
+    profiles: ['app']
+    image: labforge-websockify
+    container_name: labforge-websockify
+    hostname: websockify
+    restart: unless-stopped
+    volumes:
+      - ./websockify/tokens.cfg:/tokens.cfg:ro
+  auth-service:
+    profiles: ['app']
+    image: auth-service
+    container_name: labforge-auth
+    hostname: auth
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../auth.env
+  cluster-manager:
+    profiles: ['app']
+    image: cluster-manager
+    container_name: labforge-cluster
+    hostname: cluster
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../cluster.env
+  deployment-api:
+    profiles: ['app']
+    image: deployment-api
+    container_name: labforge-deployment
+    hostname: deployment
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../deployment.env
+  frontend:
+    profiles: ['app']
+    image: frontend-server
+    container_name: labforge-frontend
+    hostname: frontend
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../frontend.env
+  kroki-proxy:
+    profiles: ['app']
+    image: kroki-proxy
+    container_name: labforge-kroki-proxy
+    hostname: kroki
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../kroki.env
+  kroki:
+    profiles: ['app']
+    image: yuzutech/kroki
+    container_name: labforge-kroki
+    hostname: kroki-server
+    restart: unless-stopped
+  grafana:
+    profiles: ['app']
+    image: grafana/grafana:12.2.0-17567790421-ubuntu
+    container_name: labforge-grafana
+    restart: unless-stopped
+    hostname: grafana
+    user: root
+    env_file:
+      - ../docker.env
+      - ../auth.env
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./grafana/provisioning/:/etc/grafana/provisioning/:ro
+      - ./grafana/dashboards/:/etc/grafana/dashboards/:ro
+      - ../grafana:/var/lib/grafana
+  nginx-exporter:
+    profiles: ['app']
+    image: nginx/nginx-prometheus-exporter:1.4
+    container_name: labforge-nginx-exporter
+    restart: unless-stopped
+    hostname: nginx-exporter
+    command: --nginx.scrape-uri=http://nginx:8080/stub_status
+  prometheus:
+    profiles: ['app']
+    image: prom/prometheus:v3.5.0
+    user: root
+    volumes:
+      - ./prometheus/:/etc/prometheus/:ro
+      - ../prometheus_data/:/prometheus/
+    container_name: labforge-prometheus
+    hostname: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+  cadvisor:
+    profiles: ['app']
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    container_name: labforge-cadvisor
+    hostname: cadvisor
+    privileged: true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    command:
+      - '-port=9092'
+    restart: unless-stopped
