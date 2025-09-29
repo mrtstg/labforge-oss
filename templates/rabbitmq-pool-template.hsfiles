@@ -1,11 +1,3 @@
-{-# START_FILE .env #-}
-AUTH_URL=1
-KEYCLOAK_CLIENT_ID=1
-KEYCLOAK_CLIENT_SECRET=1
-RABBITMQ_HOST=127.0.0.1
-RABBITMQ_USER=user
-RABBITMQ_PASS=rbpass
-
 {-# START_FILE .gitignore #-}
 .stack-work/
 *~
@@ -698,6 +690,13 @@ the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 
+{-# START_FILE Makefile #-}
+run:
+	stack run -- -v
+
+build-image: deployment/Dockerfile
+	docker build --network host -t {{name}} -f deployment/Dockerfile .
+
 {-# START_FILE README.md #-}
 # {{name}}
 
@@ -712,6 +711,22 @@ import           Init
 
 main :: IO ()
 main = mainF
+
+{-# START_FILE deployment/Dockerfile #-}
+FROM labforge-haskell AS builder
+WORKDIR /ln2/{{name}}
+COPY *.cabal package.yaml stack.yaml stack.yaml.lock ./
+RUN stack install --only-dependencies
+COPY . .
+RUN stack install --copy-bins
+
+FROM mrtstg/kpfu-debian:bookworm AS runner
+ENV TZ="Europe/Moscow"
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked apt-get update && apt-get install ca-certificates libpq-dev -y
+WORKDIR /usr/src/app
+COPY --from=builder /root/.local/bin/{{name}}-exe /usr/src/app/haskell-binary
+CMD /usr/src/app/haskell-binary -v migrate && /usr/src/app/haskell-binary run -p 8000
 
 {-# START_FILE package.yaml #-}
 name:                {{name}}
@@ -772,7 +787,7 @@ library:
   source-dirs: src
 
 executables:
-  {{name}}:
+  {{name}}-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -1086,9 +1101,10 @@ snapshot:
 
 packages:
 - .
+- ../libraries/keycloak-api
+- ../libraries/api-common
+- ../libraries/proxmox-api
+- ../libraries/proxmox-deploy-toolkit
+- ../proxmox-fs-agent/proxmox-fs-agent-api
 
-extra-deps:
-- git: https://github.com/learnew2/keycloak-api.git
-  commit: 79c2e38f061d06701d9e412d55d50efa4fbd5229
-- git: https://github.com/learnew2/api-common.git
-  commit: 05a9c8b5761f4fcb85a7686e819ba766c27f83c4
+extra-deps: []
