@@ -24,6 +24,7 @@ REALM_CLIENTS=(
     "kroki-proxy"
     "ln2"
     "auth-service"
+    "jobservice"
 )
 USERS_ROLES=(
     "validate-users"
@@ -32,7 +33,7 @@ USERS_ROLES=(
     "validate-users,deployment-admin"
     ""
     "validate-users,role-read,group-read,role-manage,user-read"
-    "image-view,image-read"
+    "deployment-admin,image-view"
 )
 
 cd /opt/keycloak/bin/
