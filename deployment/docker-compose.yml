@@ -30,6 +30,8 @@ services:
     command: start-dev
     ports:
       - 8080:8080
+    volumes:
+      - ./keycloak/jq:/usr/bin/jq:ro
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
@@ -38,6 +40,7 @@ services:
       KC_DB_USERNAME: dbuser
       KC_DB_PASSWORD: dbpass
       KC_HOSTNAME: https://auth.mrtstg.local
+      KEYCLOAK_REALM: ln2
   redis:
     image: redis:8.2.0-bookworm
     restart: unless-stopped
@@ -54,22 +57,21 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.dev/:/etc/nginx/conf.d/:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-#  dev-rabbitmq:
-#    image: rabbitmq:3.13-rc-management-alpine
-#    container_name: labforge-rabbitmq
-#    hostname: rabbitmq
-#    ports:
-#      - 5672:5672
-#      - 15672:15672
-#    restart: unless-stopped
-#    environment:
-#      RABBITMQ_DEFAULT_USER: 'user'
-#      RABBITMQ_DEFAULT_PASS: 'rbpass'
-#    healthcheck:
-#      test: rabbitmq-diagnostics -q ping
-#      interval: 3s
-#      timeout: 3s
-#      retries: 5
+  dev-rabbitmq:
+    image: rabbitmq:3.13-rc-management-alpine
+    container_name: labforge-rabbitmq
+    hostname: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 3s
+      timeout: 3s
+      retries: 5
   dev-websocket:
     image: labforge-websockify
     container_name: labforge-websockify
