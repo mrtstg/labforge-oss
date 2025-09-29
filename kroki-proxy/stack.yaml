@@ -3,19 +3,11 @@ snapshot:
 
 packages:
 - .
+- ../libraries/keycloak-api
+- ../libraries/redis-utils
+- ../libraries/api-common
+- ../libraries/proxmox-api
+- ../libraries/proxmox-deploy-toolkit
+- ../proxmox-fs-agent/proxmox-fs-agent-api
 
-extra-deps:
-- git: https://github.com/learnew2/keycloak-api.git
-  commit: d8fa88a7d92487771cd0555e6e0d42a640f810a9
-- git: https://github.com/learnew2/api-common.git
-  commit: 84298ccb4da19c7289a245b43e808e8a85431103
-- git: https://github.com/learnew2/proxmox-api.git
-  commit: e67ffe5e867125a884075fbbc7c9d31fa236a1be
-- git: https://github.com/learnew2/proxmox-fs-agent.git
-  commit: 6f62d1b7f847c0d9d36516d3bb18dd4991693cd9
-  subdirs:
-  - proxmox-fs-agent-api
-- git: https://github.com/learnew2/proxmox-deploy-toolkit.git
-  commit: 6470e0a7043e682e1112ebe64793ccd2badb6757
-- git: https://github.com/learnew2/redis-utils.git
-  commit: 3a9b7f55bed282b02da41bf849c5334548cbcaf5
+extra-deps: []

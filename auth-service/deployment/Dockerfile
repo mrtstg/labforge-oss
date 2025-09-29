@@ -1,5 +1,5 @@
 FROM labforge-haskell AS builder
-WORKDIR /usr/src/app
+WORKDIR /ln2/auth-service
 COPY *.cabal package.yaml stack.yaml stack.yaml.lock ./
 RUN stack install --only-dependencies
 COPY . .
