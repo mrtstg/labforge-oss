@@ -1,2 +1,14 @@
-.stack-work/
-*~
+**/.stack-work
+**/.env
+*.env
+!*-sample.env
+deployment/nginx/ssl
+deployment/nginx/ssl-prod
+deployment/websockify/tokens.cfg
+*.tar.gz
+*.tar
+.clients.json
+grafana
+!deployment/grafana
+prometheus_data
+ca
