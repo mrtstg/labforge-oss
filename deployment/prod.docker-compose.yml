@@ -143,3 +143,18 @@ services:
     command:
       - '-port=9092'
     restart: unless-stopped
+  rabbitmq:
+    profiles: ['app']
+    image: rabbitmq:3.13-rc-management-alpine
+    container_name: labforge-rabbitmq
+    hostname: rabbitmq
+    ports:
+      - 15672:15672
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 3s
+      timeout: 3s
+      retries: 5
