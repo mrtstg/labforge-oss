@@ -6,7 +6,12 @@ module Service.Environment
 
 import           Servant.Client
 
-data ServiceType = AuthService | ClusterManager | DeploymentService | KrokiProxy deriving (Show, Eq, Enum)
+data ServiceType =
+  AuthService |
+  ClusterManager |
+  DeploymentService |
+  KrokiProxy |
+  JobserviceAPI deriving (Show, Eq, Enum)
 
 class ServiceEnvironment a where
   getEnvFor :: ServiceType -> a -> ClientEnv
