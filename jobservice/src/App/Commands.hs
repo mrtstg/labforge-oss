@@ -105,9 +105,12 @@ runCommand AppOpts { debugOn=debug } = do
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
   (depUrl, depManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
+
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
   channel <- openChannel amqpConn
-  (queue, _, _) <- declareQueue channel newQueue { queueName = "testQueue" }
+  (queue, _, _) <- declareQueue channel newQueue { queueName = "jobserviceQueue" }
+  declareExchange channel newExchange { exchangeName = "jobserviceExchange", exchangeType = "direct" }
+  bindQueue channel "jobserviceQueue" "jobserviceExchange" ""
 
   let config = Config { serviceCredentials=creds
     , logFunction=logFunction
