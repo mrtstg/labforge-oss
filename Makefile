@@ -1,4 +1,4 @@
-HS_SERVICES=auth-service cluster-manager deployment-api frontend-server kroki-proxy
+HS_SERVICES=auth-service cluster-manager deployment-api frontend-server kroki-proxy jobservice jobservice-api
 IMAGES_LIST=auth-service cluster-manager deployment-api frontend-server kroki-proxy labforge-websockify labforge-nginx-prod postgres:15-alpine quay.io/keycloak/keycloak:26.2.5 redis:8.2.0-bookworm yuzutech/kroki grafana/grafana:12.2.0-17567790421-ubuntu nginx/nginx-prometheus-exporter:1.4 prom/prometheus:v3.5.0 rabbitmq:3.13-rc-management-alpine
 COMPOSE_BIN=docker compose
 ENV_FILE=.env
