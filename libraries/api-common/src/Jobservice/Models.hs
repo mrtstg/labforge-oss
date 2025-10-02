@@ -7,7 +7,7 @@ module Jobservice.Models
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 
-jobserviceUsedImagesKey = "jobservuce-used-images"
+jobserviceUsedImagesKey = "jobservice-used-images"
 
 data JobserviceMessage = JobserviceUpdateUsedImages {} deriving (Show, Eq)
 
