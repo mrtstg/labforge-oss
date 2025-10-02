@@ -16,6 +16,7 @@ REALM_ROLES=(
     "grafana-viewer"
     "realm-manager"
     "full-admin"
+    "jobservice-send"
 )
 REALM_CLIENTS=(
     "cluster-manager"
@@ -25,15 +26,17 @@ REALM_CLIENTS=(
     "ln2"
     "auth-service"
     "jobservice"
+    "jobservice-api"
 )
 USERS_ROLES=(
     "validate-users"
-    "validate-users,role-read,group-read,role-manage,cluster-admin,user-read"
+    "validate-users,role-read,group-read,role-manage,cluster-admin,user-read,jobservice-send"
     "validate-users,group-read,user-read"
     "validate-users,deployment-admin"
     ""
     "validate-users,role-read,group-read,role-manage,user-read"
     "deployment-admin,image-view"
+    "jobservice-send,validate-users"
 )
 
 cd /opt/keycloak/bin/
