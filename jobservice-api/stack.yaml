@@ -1,0 +1,13 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/21/15.yaml
+
+packages:
+- .
+- ../libraries/keycloak-api
+- ../libraries/api-common
+- ../libraries/proxmox-api
+- ../libraries/proxmox-deploy-toolkit
+- ../proxmox-fs-agent/proxmox-fs-agent-api
+- ../libraries/redis-utils
+
+extra-deps: []
