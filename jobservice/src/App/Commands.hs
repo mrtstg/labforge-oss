@@ -77,8 +77,8 @@ f (env, msg) = do
       liftIO $ ackEnv env
       $(logError) $ "Decode error: " <> pack e
     (Right (JobserviceUpdateUsedImages {})) -> do
+      liftIO $ ackEnv env
       $(logInfo) "Updating used images"
-      deleteValue' jobserviceUsedImagesKey
       $(logInfo) "Getting templates"
       tmpls <- getAllTemplates
       case tmpls of
