@@ -12,17 +12,32 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes     #-}
+{-# LANGUAGE RecordWildCards #-}
 module Templates.Base where
 
 import           Api.Keycloak.Models.Introspect
 import           Config
 import           Data.Maybe
 import           Data.Text                      (Text)
+import           Models.JSONError
 import           Roles
 import           Text.Blaze.Html
 import           Text.Hamlet
 import           Text.Shakespeare
+
+badRequestTemplate :: JSONError -> Html
+badRequestTemplate (JSONError { .. }) = headlessTemplate (Just "Неверный запрос") [shamlet|
+<section class="hero is-warning is-fullheight">
+  <div class="hero-body">
+    <div x-data={}>
+      <p class="title"> Неверный запрос!
+      $if length errorMessage == 0
+        <p class="subtitle"> Возможно, вы ввели что-то неверно
+      $else
+        <p .subtitle> #{errorMessage}
+      <button .button x-on:click="history.back()"> Вернуться назад
+|]
 
 headlessTemplate :: Maybe String -> Html -> Html
 headlessTemplate title' body = [shamlet|
@@ -31,6 +46,7 @@ $doctype 5
   <head>
     <title> #{fromMaybe "Labforge" title'}
     <meta charset=utf-8>
+    <script defer src="/static/js/alpine.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="/static/css/bulma.min.css">
   <body>
