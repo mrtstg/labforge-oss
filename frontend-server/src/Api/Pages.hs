@@ -49,6 +49,8 @@ import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
+import qualified Data.Text.Encoding                       as T
+import qualified Data.Text.Lazy                           as LT
 import           Database.Persist
 import qualified Deployment.Client                        as C
 import           Deployment.Models.Deployment
@@ -70,6 +72,7 @@ import           Service.Environment
 import           Templates.Base
 import           Templates.Components
 import           Text.Blaze.Html
+import           Text.Blaze.Html.Renderer.Text            (renderHtml)
 import           Text.Hamlet
 import           Text.Printf
 import           Utils
@@ -99,11 +102,15 @@ globalDecoder' v = do
   r <- v
   globalDecoder (tryDecodeError r)
 
+sendHTMLError :: Html -> AppT a
+sendHTMLError body = throwError $ ServerError {errReasonPhrase="", errHeaders=[("Content-Type", "text/html")], errHTTPCode=200, errBody=(LBS.fromStrict . T.encodeUtf8 . LT.toStrict . renderHtml) body}
+
 globalDecoder :: DecodeResult a -> AppT a
 globalDecoder (DecodedResult a) = pure a
 globalDecoder (DecodedError code e@(JSONError { .. })) = do
   $(logError) $ "Got decoded error: " <> (T.pack . show) e
-  sendJSONError (ServerError {errReasonPhrase="", errHeaders=[], errHTTPCode=code, errBody=""}) e
+  if code == 400 then sendHTMLError (badRequestTemplate e) else
+    sendJSONError (ServerError {errReasonPhrase="", errHeaders=[], errHTTPCode=code, errBody=""}) e
 globalDecoder (UndecodedError code b) = throwError $ ServerError {errReasonPhrase="", errHeaders=[], errHTTPCode=code, errBody=LBS.fromStrict b}
 globalDecoder (OtherError e) = do
   $(logError) $ "Got other error: " <> (T.pack .  show) e
