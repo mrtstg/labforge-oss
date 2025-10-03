@@ -11,4 +11,4 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked apt-get update && apt-get install ca-certificates libpq-dev -y
 WORKDIR /usr/src/app
 COPY --from=builder /root/.local/bin/jobservice-exe /usr/src/app/haskell-binary
-CMD /usr/src/app/haskell-binary -v migrate && /usr/src/app/haskell-binary run -p 8000
+CMD /usr/src/app/haskell-binary run -p 8000
