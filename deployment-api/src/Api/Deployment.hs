@@ -46,6 +46,8 @@ import           Database.Persist.Postgresql
 import           Deployment.Models.Deployment
 import           Deployment.Models.Stats
 import           Deployment.Schema
+import           Jobservice.Client
+import           Jobservice.Models
 import           Models
 import           Models.JSONError
 import           Pool
@@ -65,6 +67,7 @@ import           Proxmox.Schema
 import           Redis.Common
 import           Servant
 import           Servant.Client
+import           Service.Environment
 import           Text.Read                                (read, readMaybe)
 import           Utils
 
@@ -87,10 +90,17 @@ getPagedTemplates pageN (BearerWrapper token) = do
 deleteTemplate :: Int -> BearerWrapper -> AppT ()
 deleteTemplate templateID (BearerWrapper token) = do
   _ <- requireRealmRoles token [templateAdminRole]
-  templateExists <- runDB $ exists [ MachineTemplateDataId ==. (toSqlKey . fromIntegral) templateID ]
-  if not templateExists then sendJSONError err404 (JSONError "notFound" "Template not found" Null) else do
-    _ <- runDB $ deleteWhere [ MachineTemplateDataId ==. (toSqlKey . fromIntegral) templateID ]
-    pure ()
+  template' <- runDB $ get (MachineTemplateDataKey . fromIntegral $ templateID)
+  case template' of
+    Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
+    (Just (MachineTemplateData templateName)) -> do
+      jobEnv <- asks $ getEnvFor JobserviceAPI
+      images <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (getHeldImages (BearerWrapper t))
+      if T.unpack templateName `elem` images then do
+        sendJSONError err400 (JSONError "imageHeld" "This image is held by deployments" Null)
+      else do
+        _ <- runDB $ deleteWhere [ MachineTemplateDataId ==. (toSqlKey . fromIntegral) templateID ]
+        pure ()
 
 createTemplate :: ConfigTemplate -> BearerWrapper -> AppT ()
 createTemplate (ConfigTemplate { .. }) (BearerWrapper token) = do
@@ -142,6 +152,8 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         , deploymentTemplateDataExistingNetworks=reqExistingNetworks
         , deploymentTemplateDataAvailableVMs=reqAvailableVMs
         })
+      jobEnv <- asks $ getEnvFor JobserviceAPI
+      _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
       pure ()
 
 getDeploymentTemplate :: Int -> BearerWrapper -> AppT DeploymentTemplate
@@ -174,6 +186,8 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
         sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         runDB $ delete (DeploymentTemplateDataKey . fromIntegral $ tID)
+        jobEnv <- asks $ getEnvFor JobserviceAPI
+        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
         pure ()
 
 patchDeploymentTemplate :: Int -> DeploymentCreate -> BearerWrapper -> AppT ()
@@ -195,6 +209,8 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
             , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
             , DeploymentTemplateDataExistingNetworks =. reqExistingNetworks
             ]
+          jobEnv <- asks $ getEnvFor JobserviceAPI
+          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
           pure ()
 
 requestDeploymentVMID = undefined
