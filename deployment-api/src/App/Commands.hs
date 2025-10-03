@@ -66,7 +66,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
-  --rmqConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
+  (jobUrl, jobManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
   deployZone <- runLoggingT
     (requireEnv "DEPLOY_SDN_ZONE" ($(logError) "DEPLOY_SDN_ZONE is not set" >> (liftIO . exitWith) (ExitFailure 1))) logFunction
 
@@ -87,6 +87,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     , tasksPool = error "Pool is not created"
     , deploySDNZone = pack deployZone
     , redisConnection = fromJust redisConn
+    , jobserviceEnv = mkClientEnv jobManager jobUrl
     }
 
   tasksPool <- Pool.createPool handleTask (\m -> appTIO m poolConfig >> pure ()) 1
@@ -102,6 +103,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     , tasksPool = tasksPool
     , deploySDNZone = pack deployZone
     , redisConnection = fromJust redisConn
+    , jobserviceEnv = jobserviceEnv poolConfig
     }
   let app' = app config
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"

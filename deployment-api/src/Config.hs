@@ -63,7 +63,7 @@ data Config = Config
   , authToken          :: !(TokenVariable Text)
   , authFunctions      :: TokenVariableFunctions Text
   , clusterEnv         :: !ClientEnv
-  --, rabbitConnection   :: !Connection
+  , jobserviceEnv      :: !ClientEnv
   , authEnv            :: !ClientEnv
   , tasksPool          :: AsyncPool QueryRequest AppT
   , deploySDNZone      :: !Text
@@ -73,6 +73,7 @@ data Config = Config
 instance ServiceEnvironment Config where
   getEnvFor AuthService       = authEnv
   getEnvFor ClusterManager    = clusterEnv
+  getEnvFor JobserviceAPI     = jobserviceEnv
   getEnvFor DeploymentService = error "DeploymentService env is not specified"
 
 instance RedisConnection Config where
