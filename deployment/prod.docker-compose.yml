@@ -86,6 +86,28 @@ services:
     env_file:
       - ../docker.env
       - ../kroki.env
+  jobservice:
+    profiles: ['app']
+    image: jobservice
+    container_name: labforge-jobservice
+    hostname: jobservice
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../jobservice.env
+    depends_on:
+      - rabbitmq
+  jobservice-api:
+    profiles: ['app']
+    image: jobservice-api
+    container_name: labforge-jobservice-api
+    hostname: jobservice-api
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../jobservice-api.env
+    depends_on:
+      - rabbitmq
   kroki:
     profiles: ['app']
     image: yuzutech/kroki
