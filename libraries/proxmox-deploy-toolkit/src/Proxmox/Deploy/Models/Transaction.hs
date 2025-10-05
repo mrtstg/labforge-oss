@@ -83,6 +83,7 @@ data TransactionAction
   | MakeSnapshot String ProxmoxSnapshotCreate
   | DeleteSnapshot String ProxmoxSnapshotCreate
   | RollbackVM String String
+  | ApplySDNNetworks
   deriving (Show, Eq)
 
 data DeployTarget = Deploy | Destroy deriving (Show, Eq)
