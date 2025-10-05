@@ -148,7 +148,7 @@ deployTransaction stages deploymentKey deployConfig@(DeployConfig { deployParame
       v <- liftIO $ runProxmoxClient' state $ do
         a <- P.getBridgeNodeNetworks nodeName
         (ProxmoxResponse b _) <- P.getSDNZones
-        (ProxmoxResponse c _) <- P.getSDNNetworks
+        (ProxmoxResponse c _) <- P.getSDNNetworks Nothing
         d <- P.getNodeStorage nodeName defaultProxmoxStorageFilter
         e <- P.getActiveNodesVMMap
         pure (a, b, c, d, e)
@@ -204,7 +204,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
       v <- liftIO $ runProxmoxClient' state $ do
         a <- P.getBridgeNodeNetworks nodeName
         (ProxmoxResponse b _) <- P.getSDNZones
-        (ProxmoxResponse c _) <- P.getSDNNetworks
+        (ProxmoxResponse c _) <- P.getSDNNetworks Nothing
         d <- P.getNodeStorage nodeName defaultProxmoxStorageFilter
         e <- P.getActiveNodesVMMap
         pure (a, b, c, d, e)
