@@ -425,7 +425,7 @@ executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreat
       ("SDN network " <> (T.pack . show) vnetName <> " is not created. Waiting...")
       20
       1_000_000
-      (defaultRetryClient' transactionProxmoxState $ (createSDNNetwork networkCreate >> getSDNNetworks (Just 1)))
+      (defaultRetryClient' transactionProxmoxState $ getSDNNetworks (Just 1))
       (sdnNetworkExists vnetName True)
     case bridgeResult of
       (Left e) -> throwError (ClientError e)
@@ -444,7 +444,7 @@ executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetwor
       ("SDN network " <> (T.pack . show) vnetName <> " is existing. Waiting...")
       20
       1_000_000
-      (defaultRetryClient' transactionProxmoxState $ (deleteSDNNetwork (T.pack vnetName) >> getSDNNetworks (Just 1)))
+      (defaultRetryClient' transactionProxmoxState $ getSDNNetworks (Just 1))
       (sdnNetworkExists vnetName True)
     case bridgeResult of
       (Left e) -> throwError (ClientError e)
