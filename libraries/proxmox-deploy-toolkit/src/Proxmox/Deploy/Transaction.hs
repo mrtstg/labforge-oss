@@ -111,6 +111,19 @@ getVMID vmName (TransactionData vmIDMap) (DeployConfig {deployVMs=vms }) = do
       []     -> Nothing
       (vm:_) -> configVMID vm
 
+applySDNWrapper :: StatefulTransactionT ()
+applySDNWrapper = do
+  (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  _ <- waitForClient
+    300_000_000
+    "There is existing network reload tasks. Waiting..."
+    40
+    2_000_000
+    (defaultRetryClient' transactionProxmoxState $ getActiveNodeTasks nodeName (Just "srvreload") Nothing)
+    null
+  _ <- defaultRetryClient' transactionProxmoxState applySDNSettings
+  pure ()
+
 executeTransactionAction :: TransactionAction -> StatefulTransactionT ()
 executeTransactionAction (AssignVMID vmName) = do
   (TransactionState { .. }) <- get
@@ -399,7 +412,7 @@ executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreat
     $(logInfo) $ T.pack $ "Creating SDN network " <> show vnetName
     _ <- (defaultRetryClient' transactionProxmoxState) (createSDNNetwork networkCreate) >>= defaultClientErrorWrapper
     $(logInfo) $ T.pack $ "Applying SDN settings"
-    _ <- (defaultRetryClient' transactionProxmoxState) applySDNSettings
+    _ <- applySDNWrapper
     bridgeResult <- waitForClient
       60_000_000
       ("SDN network " <> (T.pack . show) vnetName <> " is not created. Waiting...")
@@ -420,7 +433,7 @@ executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetwor
     $(logInfo) $ T.pack $ "Deleting SDN network " <> show vnetName
     _ <- (defaultRetryClient' transactionProxmoxState) (deleteSDNNetwork (T.pack vnetName)) >>= defaultClientErrorWrapper
     $(logInfo) "Applying SDN settings"
-    _ <- (defaultRetryClient' transactionProxmoxState) applySDNSettings
+    _ <- applySDNWrapper
     bridgeResult <- waitForClient
       60_000_000
       ("SDN network " <> (T.pack . show) vnetName <> " is existing. Waiting...")
