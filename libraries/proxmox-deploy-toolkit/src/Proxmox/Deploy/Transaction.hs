@@ -532,9 +532,9 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
       else do
         let matchingNameNetwork = filter (\x -> sdnNetworkName x == configNetworkName && sdnNetworkZone x /= configNetworkZone) sdnNetworks
         case matchingNameNetwork of
-          [] -> helper ts (defaultTransactionDelayAfter ApplySDNNetworks:DeploySDNNetwork sdnCreate:acc)
+          [] -> helper ts (ApplySDNNetworks:DeploySDNNetwork sdnCreate:acc)
           ((ProxmoxSDNNetwork { sdnNetworkZone = conflictZone }):_) -> do
-            helper ts (defaultTransactionDelayAfter ApplySDNNetworks:DeploySDNNetwork sdnCreate:DestroySDNNetwork (sdnCreate { sdnNetworkCreateZone = conflictZone }):acc)
+            helper ts (ApplySDNNetworks:DeploySDNNetwork sdnCreate:DestroySDNNetwork (sdnCreate { sdnNetworkCreateZone = conflictZone }):acc)
   helper ((NetworkNotExists (ExistingNetwork {})):ts) acc = helper ts acc
   helper ((NetworkNotExists (SDNNetwork { .. })):ts) acc = do
     if any (\x -> sdnNetworkZone x == configNetworkZone && sdnNetworkName x == configNetworkName) sdnNetworks then do
@@ -545,7 +545,7 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
            , sdnNetworkCreateTag=Nothing
            , sdnNetworkCreateAlias=Nothing
            }
-      helper ts (defaultTransactionDelayAfter ApplySDNNetworks:DestroySDNNetwork sdnCreate:acc)
+      helper ts (ApplySDNNetworks:DestroySDNNetwork sdnCreate:acc)
     else helper ts acc
   helper ((TemplateExists t@(ConfigTemplate { configTemplateID = tID })):ts) acc = do
     case M.lookup tID vmMap of
