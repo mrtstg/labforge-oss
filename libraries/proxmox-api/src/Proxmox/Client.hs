@@ -32,6 +32,8 @@ module Proxmox.Client
   , deleteVMSnapshot
   , rollbackVM
   , createSnapshot
+  , getNodeTasks'
+  , getActiveNodeTasks
   ) where
 
 
@@ -52,6 +54,7 @@ import           Proxmox.Models.Network
 import           Proxmox.Models.Node
 import           Proxmox.Models.SDNNetwork
 import           Proxmox.Models.Storage
+import           Proxmox.Models.Task
 import           Proxmox.Models.VM
 import           Proxmox.Models.VMClone
 import           Proxmox.Models.VMConfig
@@ -83,7 +86,13 @@ getVersion
   :<|> getVMSnapshots
   :<|> deleteVMSnapshot
   :<|> rollbackVM
-  :<|> createSnapshot = client api
+  :<|> createSnapshot
+  :<|> getNodeTasks' = client api
+
+getActiveNodeTasks :: Text -> Maybe Text -> Maybe Int -> ClientM [ProxmoxTask]
+getActiveNodeTasks node tasktype limit = do
+  (ProxmoxResponse tasks _) <- getNodeTasks' node Nothing limit Nothing Nothing (Just ActiveTasks) Nothing tasktype Nothing Nothing
+  pure tasks
 
 getNodeStorage :: Text -> ProxmoxStorageFilter -> ClientM [ProxmoxStorage]
 getNodeStorage nodeName (ProxmoxStorageFilter { .. }) = do

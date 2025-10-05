@@ -24,6 +24,7 @@ import           Proxmox.Models.SDNNetwork
 import           Proxmox.Models.SDNZone
 import           Proxmox.Models.Snapshot
 import           Proxmox.Models.Storage
+import           Proxmox.Models.Task
 import           Proxmox.Models.Version
 import           Proxmox.Models.VM          (ProxmoxVM, ProxmoxVMDeleteRequest,
                                              ProxmoxVMStatus,
@@ -61,6 +62,7 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "snapshot" :> SnapshotNameCapture :> Delete '[JSON] ()
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "snapshot" :> SnapshotNameCapture :> "rollback" :> ReqBody '[JSON] ProxmoxRollbackParams :> Post '[JSON] ()
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "snapshot" :> ReqBody '[JSON] ProxmoxSnapshotCreate :> Post '[JSON] (ProxmoxResponse String)
+  :<|> "nodes" :> NodeNameCapture :> "tasks" :> QueryParam "errors" Int :> QueryParam "limit" Int :> QueryParam "since" Int :> QueryParam "until" Int :> QueryParam "source" ProxmoxTaskSource :> QueryParam "statusfilter" Text :> QueryParam "typefilter" Text :> QueryParam "userfilter" Text :> QueryParam "vmid" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxTask])
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT
