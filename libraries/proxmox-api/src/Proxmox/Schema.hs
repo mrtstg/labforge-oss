@@ -43,7 +43,7 @@ type VMIDCapture = Capture "vmid" Int
 
 type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "cluster" :> "sdn" :> "zones" :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNZone])
-  :<|> "cluster" :> "sdn" :> "vnets" :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNNetwork])
+  :<|> "cluster" :> "sdn" :> "vnets" :> QueryParam "pending" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNNetwork])
   :<|> "cluster" :> "sdn" :> "vnets" :> ReqBody '[JSON] ProxmoxSDNNetworkCreate :> Post '[JSON] (ProxmoxResponse ())
   :<|> "cluster" :> "sdn" :> Put '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "config" :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))

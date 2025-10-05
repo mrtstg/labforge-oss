@@ -16,6 +16,7 @@ data ProxmoxSDNNetwork = ProxmoxSDNNetwork
   , sdnNetworkTag    :: !(Maybe Int)
   , sdnNetworkName   :: !String
   , sdnNetworkDigest :: !(Maybe String)
+  , sdnNetworkState  :: !(Maybe String)
   } deriving (Show, Eq, Ord)
 
 instance FromJSON ProxmoxSDNNetwork where
@@ -24,6 +25,7 @@ instance FromJSON ProxmoxSDNNetwork where
     <*> v .:? "tag"
     <*> v .: "vnet"
     <*> v .:? "digest"
+    <*> v .:? "state"
 
 instance ToJSON ProxmoxSDNNetwork where
   toJSON (ProxmoxSDNNetwork { .. }) = object
