@@ -14,3 +14,6 @@ images
 *.tar.gz
 images/
 grafana
+.*.json
+ca
+prometheus_data
