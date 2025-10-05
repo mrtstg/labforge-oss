@@ -7,6 +7,8 @@ module Proxmox.Models.SDNNetwork
   ) where
 
 import           Data.Aeson
+import qualified Data.Aeson.KeyMap as KV
+import qualified Data.Text         as T
 
 type Zone = String
 type Name = String
@@ -21,11 +23,18 @@ data ProxmoxSDNNetwork = ProxmoxSDNNetwork
 
 instance FromJSON ProxmoxSDNNetwork where
   parseJSON = withObject "ProxmoxSDNNetwork" $ \v -> ProxmoxSDNNetwork
-    <$> v .: "zone"
+    <$> fmap T.unpack (zoneParser v)
     <*> v .:? "tag"
     <*> v .: "vnet"
     <*> v .:? "digest"
-    <*> v .:? "state"
+    <*> v .:? "state" where
+      zoneParser v = case KV.lookup "zone" v of
+        (Just (String zone)) -> pure zone
+        _anyOther -> case KV.lookup "pending" v of
+          (Just (Object obj)) -> case KV.lookup "zone" obj of
+            (Just (String zone')) -> pure zone'
+            _anyOther             -> fail "Invalid pending zone type"
+          _anyOther -> fail "Invalid pending object type"
 
 instance ToJSON ProxmoxSDNNetwork where
   toJSON (ProxmoxSDNNetwork { .. }) = object
