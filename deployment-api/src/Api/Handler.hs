@@ -475,6 +475,7 @@ handleTask tasksQueue (DestroyInstance dID) = do
           $(logError) $ "Deployment config is not set!"
           logInstance "Deployment config is not set!"
           setStatus Created
+          runDB $ delete instanceKey
         (Just deployConfig) -> do
           deployed <- generateAndDeployTransaction Destroy instanceKey deployConfig
           if deployed then runDB $ delete instanceKey else pure ()
