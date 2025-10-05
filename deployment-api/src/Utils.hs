@@ -22,6 +22,14 @@ import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Models.VM
 import           Redis.Common
 
+leaveLastItem :: (Eq a) => a -> [a] -> [a]
+leaveLastItem item = helper [] where
+  helper acc [] = reverse acc
+  helper acc (el:ls) = if el == item && hasItem item ls then helper acc ls else helper (el:acc) ls
+
+hasItem :: (Eq a) => a -> [a] -> Bool
+hasItem item = foldr (\ el -> (||) (item == el)) False
+
 matchSnapshotRequirements :: String -> Bool
 matchSnapshotRequirements "" = False
 matchSnapshotRequirements s | length s > 30 = False

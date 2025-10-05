@@ -167,7 +167,8 @@ deployTransaction stages deploymentKey deployConfig@(DeployConfig { deployParame
               --setDeploymentInstanceStatus deploymentKey Failed
               pure False
             (Right actions) -> do
-              result <- (liftIO . runExceptT) $ (runStateT (unTransaction executeTransaction) (planState { transactionActions = actions }))
+              $(logDebug) $ "Generated actions: " <> (pack . show) actions
+              result <- (liftIO . runExceptT) $ (runStateT (unTransaction executeTransaction) (planState { transactionActions = leaveLastItem ApplySDNNetworks actions }))
               case result of
                 (Left e) -> do
                   $(logError) $ "Failed to run transaction: " <> (pack . show) e
@@ -223,6 +224,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
               setDeploymentInstanceStatus deploymentKey Failed
               pure False
             (Right actions) -> do
+              $(logDebug) $ "Generated actions: " <> (pack . show) actions
               result <- (liftIO . runExceptT) $ (runStateT (unTransaction executeTransaction) (planState { transactionActions = actions }))
               case result of
                 (Left e) -> do
