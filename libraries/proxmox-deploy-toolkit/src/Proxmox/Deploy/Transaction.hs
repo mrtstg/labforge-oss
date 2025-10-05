@@ -413,7 +413,7 @@ executeTransactionAction (TransactionDelayAfter secondsPause action) = do
   (liftIO . threadDelay . (* 1_000_000)) secondsPause
 executeTransactionAction ApplySDNNetworks = applySDNWrapper
 executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = do
-  (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { .. }) <- get
   bridgesResponse <- (defaultRetryClient' transactionProxmoxState) (getSDNNetworks Nothing) >>= defaultClientErrorWrapper
   if sdnNetworkExists vnetName Nothing bridgesResponse then
     $(logWarn) $ T.pack $ "SDN network " <> show vnetName <> " already exists"
@@ -432,7 +432,7 @@ executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreat
       (Right True) -> $(logInfo) $ T.pack $ "Created SDN network " <> show vnetName
       (Right False) -> throwError (SDNVnetNotFound vnetName)
 executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = do
-  (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { .. }) <- get
   bridgesResponse <- (defaultRetryClient' transactionProxmoxState) (getSDNNetworks Nothing) >>= defaultClientErrorWrapper
   if not (sdnNetworkExists vnetName Nothing bridgesResponse) && not (sdnNetworkExists vnetName (Just True) bridgesResponse) then
     $(logWarn) $ T.pack $ "SDN network " <> show vnetName <> " does not exists"
@@ -445,7 +445,7 @@ executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetwor
       20
       1_000_000
       (defaultRetryClient' transactionProxmoxState $ getSDNNetworks (Just 1))
-      (not . sdnNetworkExists vnetName (Just False))
+      (sdnNetworkExists vnetName (Just False))
     case bridgeResult of
       (Left e) -> throwError (ClientError e)
       (Right True) -> $(logInfo) $ T.pack $ "Deleted SDN network " <> show vnetName
