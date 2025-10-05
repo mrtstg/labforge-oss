@@ -10,5 +10,7 @@ ENV PATH=${PATH}:/root/.ghcup/bin
 RUN stack update
 WORKDIR /ln2
 RUN echo "system-ghc: true" >> /root/.stack/config.yaml
+COPY Makefile .
+COPY libraries ./libraries
+RUN make install-libs
 COPY . .
-RUN make install-deps
