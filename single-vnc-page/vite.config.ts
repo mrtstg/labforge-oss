@@ -14,18 +14,16 @@ export default defineConfig({
     })
   ],
   esbuild: {
- //   target: 'es2022',
     supported: { 'top-level-await': true },
   },
   optimizeDeps: {
     include: ["@novnc/novnc"],
     esbuildOptions: {
- //     target: 'es2022',
       supported: { "top-level-await": true },
     },
   },
   build: {
-   // target: 'es2022',
+    minify: 'terser',
     rollupOptions: {
       output: {
         entryFileNames: '[name].js',

@@ -22,6 +22,7 @@
     "vite-plugin-top-level-await": "^1.6.0"
   },
   "dependencies": {
-    "@novnc/novnc": "^1.5.0"
+    "@novnc/novnc": "^1.5.0",
+    "terser": "^5.44.0"
   }
 }
