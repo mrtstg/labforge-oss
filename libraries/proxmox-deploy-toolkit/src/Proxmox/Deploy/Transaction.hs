@@ -41,6 +41,7 @@ import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
+import           Data.Time.Clock.POSIX
 import           Proxmox.Agent.Client
 import           Proxmox.Client
 import           Proxmox.Deploy.Models.Config
@@ -59,6 +60,7 @@ import           Proxmox.Models.SDNNetwork
 import           Proxmox.Models.SDNZone
 import           Proxmox.Models.Snapshot
 import           Proxmox.Models.Storage
+import           Proxmox.Models.Task
 import           Proxmox.Models.VM
 import qualified Proxmox.Models.VM                        as VM
 import           Proxmox.Models.VMClone
@@ -122,14 +124,16 @@ applySDNWrapper = do
     2_000_000
     (defaultRetryClient' transactionProxmoxState $ getActiveNodeTasks nodeName (Just "srvreload") Nothing)
     null
+  posixTime <- liftIO getPOSIXTime
+  let (posixTimeInt :: Int) = (fromIntegral . floor) posixTime
   _ <- defaultRetryClient' transactionProxmoxState applySDNSettings
   _ <- waitForClient
-    150_000_000
-    "Created task is not finished yet. Waiting..."
-    20
     5_000_000
-    (defaultRetryClient' transactionProxmoxState $ getActiveNodeTasks nodeName (Just "srvreload") Nothing)
-    null
+    "Waiting for completing network reload time"
+    120
+    2_000_000
+    (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just posixTimeInt) Nothing (Just ArchiveTasks) Nothing (Just "srvreload") Nothing Nothing)
+    (\(ProxmoxResponse tasks _) -> not . null $ tasks)
   pure ()
 
 executeTransactionAction :: TransactionAction -> StatefulTransactionT ()
