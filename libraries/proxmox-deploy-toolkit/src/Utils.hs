@@ -14,7 +14,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
 module Utils where
 
+import           Control.Monad.IO.Class
 import           Data.Char
+import           Data.Time.Clock.POSIX
 
 transliterateCharacter :: Char -> String
 transliterateCharacter 'а' = "a"
@@ -64,3 +66,8 @@ returnFirstDuplicate = helper [] where
   helper :: (Eq a) => [a] -> [a] -> Maybe a
   helper acc (el:els) = if el `elem` acc then Just el else helper (el:acc) els
   helper _ []         = Nothing
+
+getUnixIntTime :: (MonadIO m) => m Int
+getUnixIntTime = do
+  posixTime <- liftIO getPOSIXTime
+  (pure . fromIntegral . floor) posixTime

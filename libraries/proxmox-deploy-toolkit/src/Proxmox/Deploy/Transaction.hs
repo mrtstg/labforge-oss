@@ -41,7 +41,6 @@ import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
-import           Data.Time.Clock.POSIX
 import           Proxmox.Agent.Client
 import           Proxmox.Client
 import           Proxmox.Deploy.Models.Config
@@ -68,6 +67,7 @@ import           Proxmox.Models.VMConfig
 import           Proxmox.Retry
 import           Proxmox.Schema                           (ProxmoxState (ProxmoxState))
 import           Servant.Client                           (parseBaseUrl)
+import           Utils
 
 snapshotPresent :: Text -> ProxmoxResponse [ProxmoxSnapshot] -> Bool
 snapshotPresent snapName (ProxmoxResponse { proxmoxData = snaps }) = any ((==) snapName . snapshotName) snaps
@@ -114,6 +114,22 @@ getVMID vmName (TransactionData vmIDMap) (DeployConfig {deployVMs=vms }) = do
       []     -> Nothing
       (vm:_) -> configVMID vm
 
+powerVMWrapper :: Int -> Int -> StatefulTransactionT ()
+powerVMWrapper ts vmid = do
+  (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  r <- waitForClient
+    3_000_000
+    "VM power task is not found"
+    6
+    1_000_000
+    (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) (Just "OK") (Just "qmstart") Nothing (Just vmid))
+    (\(ProxmoxResponse tasks _) -> not . null $ tasks)
+  v <- defaultClientErrorWrapper r
+  if v then pure () else do
+    nts <- getUnixIntTime
+    _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
+    powerVMWrapper nts vmid
+
 applySDNWrapper :: StatefulTransactionT ()
 applySDNWrapper = do
   (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
@@ -124,8 +140,7 @@ applySDNWrapper = do
     2_000_000
     (defaultRetryClient' transactionProxmoxState $ getActiveNodeTasks nodeName (Just "srvreload") Nothing)
     null
-  posixTime <- liftIO getPOSIXTime
-  let (posixTimeInt :: Int) = (fromIntegral . floor) posixTime
+  posixTimeInt <- getUnixIntTime
   _ <- defaultRetryClient' transactionProxmoxState applySDNSettings
   _ <- waitForClient
     5_000_000
@@ -211,12 +226,15 @@ executeTransactionAction (StartVM vmName) = do
       case M.lookup vmid vmMap of
         Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
         _ -> do
+          initReqTime <- getUnixIntTime
+          _ <- (defaultRetryClient' transactionProxmoxState) $ startVM nodeName vmid
+          _ <- powerVMWrapper initReqTime vmid
           powerResult <- waitForClient
-            60_000_000
+            5_000_000
             ("VM " <> (T.pack . show) vmid <> " is not powered on. Waiting...")
-            10
+            20
             1_000_000
-            (defaultRetryClient' transactionProxmoxState (startVM nodeName vmid >> (liftIO . threadDelay) 5_000_000 >> getVMPower nodeName vmid))
+            (defaultRetryClient' transactionProxmoxState (getVMPower nodeName vmid))
             (`vmStateIs` VM.VMRunning)
           case powerResult of
             (Left e) -> throwError (ClientError e)
