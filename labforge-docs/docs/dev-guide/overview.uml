@@ -1,0 +1,91 @@
+@startuml
+!theme plain
+
+actor "Конечный пользователь" as user
+
+artifact nginx
+component "websockify-go"
+component "frontend-server"
+component "deployment-api"
+component "cluster-manager"
+
+storage #white;line:white; {
+artifact Kroki
+component "kroki-proxy"
+}
+
+storage #white;line:white; {
+artifact Grafana
+artifact "nginx-prometheus-exporter" as nginxe
+database Prometheus
+artifact Cadvisor
+}
+
+cloud Authorization {
+artifact Keycloak
+component "auth-service"
+person "LDAP/AD/FreeIPA" as ldap
+}
+
+storage #white;line:white; {
+database PostgreSQL
+queue RabbitMQ
+artifact Redis
+}
+
+cloud "Proxmox node N" as proxmox {
+component "proxmox-fs-agent"
+component "Proxmox API"
+entity "VNC ports" as vnc
+}
+
+storage #white;line:white; {
+component "jobservice"
+component "jobservice-api"
+}
+
+user -> nginx
+
+nginx --> "deployment-api"
+nginx --> "frontend-server"
+nginx --> "kroki-proxy"
+nginx --> "Grafana"
+nginx --> "websockify-go"
+
+nginxe --> nginx
+
+Prometheus --> nginxe
+Prometheus --> Cadvisor
+
+Grafana --> Prometheus
+
+"kroki-proxy" -up-> Kroki
+"kroki-proxy" --> "deployment-api"
+"kroki-proxy" --> Redis
+
+"frontend-server" --> "kroki-proxy"
+"frontend-server" --> "cluster-manager"
+"frontend-server" --> "deployment-api"
+
+"deployment-api" --> "cluster-manager"
+"deployment-api" -down-> "jobservice-api"
+"deployment-api" --> PostgreSQL
+"deployment-api" --> "Proxmox API"
+"deployment-api" --> Redis
+"deployment-api" --> "proxmox-fs-agent"
+
+"auth-service" --> Keycloak
+"auth-service" --> Redis
+"auth-service" --> ldap
+
+"cluster-manager" --> PostgreSQL
+"cluster-manager" -- "Proxmox API"
+
+"jobservice" -up-> RabbitMQ
+"jobservice" --> "deployment-api"
+
+"jobservice-api" --> RabbitMQ
+"jobservice-api" --> Redis
+
+"websockify-go" --> vnc
+@enduml
