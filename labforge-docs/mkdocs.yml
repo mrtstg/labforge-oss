@@ -2,14 +2,45 @@ site_name: Labforge docs
 site_url: ""
 copyright: "2025, Ilya Zamaratskikh"
 site_author: "Ilya Zamaratskikh"
+
+repo_url: https://gitverse.ru/mrtstg/labforge-oss
+
+extra:
+  social:
+    - icon: fontawesome/brands/gitlab
+      name: Gitverse mirror
+      link: https://gitverse.ru/mrtstg/labforge-oss
+
 theme:
-  name: readthedocs
+  icon:
+    repo: fontawesome/brands/git
+  features:
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+  name: material
+  language: ru
+  palette:
+    - scheme: default
+      media: "(prefers-color-scheme: light)"
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      media: "(prefers-color-scheme: dark)"
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
 
 nav:
   - Введение: ./index.md
   - Руководство разработки:
     - Общее описание системы: dev-guide/index.md
     - Конфигурация сервисов: dev-guide/configuration.md
+    - Реализация VNC-подключения к ВМ: dev-guide/remote.md
   - Руководство пользователя: 
     - Вход и работа со стендами: user-guide/index.md
     - Создание шаблонов развертывания: usage-guide/deployment-templates.md
@@ -18,7 +49,15 @@ nav:
     - Установка из репозитория: install-guide/index.md
     - Пост-установочные шаги: install-guide/postinstall.md
 
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
 plugins: 
   - search:
       lang: [en, ru]
-      indexing: 'full'
