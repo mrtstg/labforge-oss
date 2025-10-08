@@ -19,6 +19,11 @@ build-ca: docker.env install/ca.sh
 		(cp ca/$$n deployment/nginx/ssl-prod/); \
 	done
 
+build-fs-agent: ./proxmox-fs-agent ./fs-agent
+	docker build -f ./proxmox-fs-agent/deployment/Dockerfile --output=./fs-agent/ ./proxmox-fs-agent/
+	cp ./proxmox-fs-agent/deployment/install.sh ./fs-agent/
+	cp ./proxmox-fs-agent/deployment/proxmox-fs-agent.service.template ./fs-agent/
+
 replace-nginx: docker.env install/nginx.sh
 	bash install/nginx.sh
 
@@ -72,6 +77,9 @@ build-images:
 ./images:
 	mkdir ./images -p
 
+./fs-agent:
+	mkdir ./fs-agent -p
+
 build-lib-image: deployment/Dockerfile
 	docker build --network host -t labforge-haskell -f deployment/Dockerfile .
 
@@ -120,4 +128,4 @@ restore-images: ./images
 		echo "Restoring $(image)"; docker load -i ./images/$(call escape_image, $(image)).tar;)
 
 bundle:
-	tar -zcvf labforge.tar.gz --exclude={*/tokens.cfg,*/ssl*/*} *-sample.env Makefile images/ deployment/ install/
+	tar -zcvf labforge.tar.gz --exclude={*/tokens.cfg,*/ssl*/*} *-sample.env Makefile images/ deployment/ install/ fs-agent/
