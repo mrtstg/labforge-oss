@@ -76,7 +76,7 @@ Grafana --> Prometheus
 
 "auth-service" --> Keycloak
 "auth-service" --> Redis
-"auth-service" --> ldap
+Keycloak --> ldap
 
 "cluster-manager" --> PostgreSQL
 "cluster-manager" -- "Proxmox API"
