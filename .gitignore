@@ -12,3 +12,4 @@ grafana
 !deployment/grafana
 prometheus_data
 ca
+fs-agent
