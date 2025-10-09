@@ -17,3 +17,4 @@ grafana
 .*.json
 ca
 prometheus_data
+fs-agent
