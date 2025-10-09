@@ -64,7 +64,7 @@ $doctype 5
     ^{body}
     <footer .class>
       <div .content.has-text-centered>
-        Labforge, by <a href="https://github.com/mrtstg"> Ilya Zamaratskikh </a>. <a href="https://github.com/learnew2/labforge> Code </a> is licensed under GPLv3
+        Labforge, by <a href="https://gitverse.ru/mrtstg"> Ilya Zamaratskikh </a>. <a href="https://gitverse.ru/mrtstg/labforge-oss"> Code </a> is licensed under GPLv3
 |]
 
 baseTemplate :: IntrospectResponse -> Maybe Html -> Maybe String -> Html -> Maybe Html -> AppT Html
@@ -131,9 +131,9 @@ $doctype 5
         <b>
           Labforge,
         by
-        <a href="https://github.com/mrtstg">
+        <a href="https://gitverse.ru/mrtstg">
           Ilya Zamaratskikh.
-        <a href="https://github.com/learnew2/labforge">
+        <a href="https://gitverse.ru/mrtstg/labforge-oss">
           Code
         is licensed under GPLv3
   $case afterBody
