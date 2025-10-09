@@ -8,6 +8,7 @@ DEV_COMPOSE_FILE=deployment/docker-compose.yml
 PROD_COMPOSE_FILE=deployment/prod.docker-compose.yml
 ENV_SAMPLES := $(shell find ./ -name "*-sample.env" ! -name "docker-sample.env" 2> /dev/null)
 CA_CERTIFICATES=labforge.crt labforge.key keycloak.crt keycloak.key
+PROD_CONFIGS=./deployment/nginx/conf.prod/keycloak.conf ./deployment/nginx/conf.prod/labforge.conf ./deployment/nginx/conf.prod/stats.conf
 
 all:
 	echo ""
@@ -17,6 +18,14 @@ build-ca: docker.env install/ca.sh
 	bash install/ca.sh
 	@for n in $(CA_CERTIFICATES); do \
 		(cp ca/$$n deployment/nginx/ssl-prod/); \
+	done
+
+copy-nginx-prod: $(PROD_CONFIGS)
+	@for n in $(CA_CERTIFICATES); do \
+		(docker cp deployment/nginx/ssl-prod/$$n labforge-nginx:/etc/nginx/ssl/$$n); \
+	done
+	@for n in $(PROD_CONFIGS); do \
+		(docker cp $$n labforge-nginx:/etc/nginx/conf.d/); \
 	done
 
 build-fs-agent: ./proxmox-fs-agent ./fs-agent
