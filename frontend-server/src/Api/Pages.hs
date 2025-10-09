@@ -769,6 +769,15 @@ instanceSchemaPage dID t = do
 |]
   baseTemplate token (Just head') (Just "Топология") body Nothing
 
+getUserName :: Text -> AppT (Maybe BriefUser)
+getUserName uid = do
+  e <- asks $ getEnvFor AuthService
+  r <- withTokenVariable' $ \token -> do
+    defaultRetryClientC e $ Auth.getUserBriefInfo uid (BearerWrapper token)
+  case r of
+    (Left _)  -> pure Nothing
+    (Right u) -> pure (Just u)
+
 instancePage :: Text -> Maybe BearerWrapper -> Maybe Text -> AppT Html
 instancePage dID t (Just vmPort) = do
   _ <- requireToken' t
@@ -779,11 +788,13 @@ instancePage dID t (Just vmPort) = do
 instancePage dID t Nothing = do
   deploymentEnv <- asks $ getEnvFor DeploymentService
   token <- requireToken' t
+  let (ActiveToken { .. }) = token
   let ~(Just userToken) = t
   d@(DeploymentInstance { instanceDeployConfig = unsafeConfig,.. }) <- globalDecoder' $ defaultRetryClientC deploymentEnv (C.getDeploymentInstance dID userToken)
   let instanceDeployConfig = fmap (\c@(DeployConfig { deployParameters = p, deployAgent = a }) -> c { deployParameters = p { deployToken = Nothing }, deployAgent = fmap (\agent -> agent { configAgentToken = "" }) a }) unsafeConfig
 
   let showText = "open ? 'Закрыть' : 'Открыть'" :: String
+  displayName <- if Just instanceUser == tokenUUID then pure Nothing else getUserName instanceUser
 
   let head' = [shamlet|
 <style>
@@ -807,7 +818,12 @@ instancePage dID t Nothing = do
       topologyReq <- defaultRetryClientC krokiEnv (renderInstanceDiagram dID userToken)
       (\v -> baseTemplate token (Just head') (Just . T.unpack $ instanceTitle) v Nothing) [shamlet|
 <div .container>
-  <h1 .title.is-3> #{instanceTitle}
+  <h1 .title.is-3>
+    #{instanceTitle}
+    $case displayName
+      $of Just (BriefUser { .. })
+        : #{fromMaybe "-" userFirstName} #{fromMaybe "-" userLastName}
+      $of Nothing
   $case topologyReq
     $of (Right svg)
       <div x-data="{ open: false }">
@@ -879,6 +895,10 @@ instancePage dID t Nothing = do
       (\v -> baseTemplate token Nothing (Just . T.unpack $ instanceTitle) v Nothing) [shamlet|
 <div .container>
   <h1 .title.is-3> #{instanceTitle}
+    $case displayName
+      $of Just (BriefUser { .. })
+        : #{fromMaybe "-" userFirstName} #{fromMaybe "-" userLastName}
+      $of Nothing
   <article .message.is-info>
     <div .message-header>
       Ой!
