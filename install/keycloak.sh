@@ -83,7 +83,7 @@ for client in "${REALM_CLIENTS[@]}"; do
     if [ $? -ne 0 ]; then
         echo "Client $client does not exists!"
         if [ "$USER_LOGIN_CLIENT" = "$client" ]; then
-            ./kcadm.sh create clients -r $KEYCLOAK_REALM -s 'name=AuthPortal' -s clientId=$client -s 'redirectUris=["*"]' -s 'webOrigins=["*"]' -s 'standardFlowEnabled=true' -s 'serviceAccountsEnabled=false' -s baseUrl="$FRONTEND_HOSTNAME"
+            ./kcadm.sh create clients -r $KEYCLOAK_REALM -s 'name=AuthPortal' -s clientId=$client -s 'redirectUris=["*"]' -s 'webOrigins=["*"]' -s 'standardFlowEnabled=true' -s 'serviceAccountsEnabled=false' -s rootUrl="$FRONTEND_HOSTNAME"
         else
             ./kcadm.sh create clients -r $KEYCLOAK_REALM -s name=$client -s clientId=$client -s 'serviceAccountsEnabled=true' -s 'standardFlowEnabled=false'
         fi
