@@ -14,3 +14,4 @@ COPY Makefile .
 COPY libraries ./libraries
 RUN make install-libs
 COPY . .
+RUN make install-deps
