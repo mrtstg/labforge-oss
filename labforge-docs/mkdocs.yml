@@ -46,7 +46,8 @@ nav:
     - Создание шаблонов развертывания: usage-guide/deployment-templates.md
   - Руководство установки:
     - Требования к окружению: install-guide/requirements.md
-    - Установка из репозитория: install-guide/index.md
+    - Установка из установщика: install-guide/installer.md
+    - Установка из репозитория: install-guide/repository.md
     - Пост-установочные шаги: install-guide/postinstall.md
 
 markdown_extensions:
