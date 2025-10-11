@@ -30,16 +30,6 @@ library
       App.Commands.Up
       App.Parser
       App.Types
-      Data.Models.Config
-      Data.Models.Config.Deploy
-      Data.Models.Config.DeployAgent
-      Data.Models.Config.Network
-      Data.Models.Config.Template
-      Data.Models.Config.VM
-      Data.Models.Transaction
-      Deploy.Transaction
-      Deploy.Types
-      Deploy.VM
       Utils
   other-modules:
       Paths_proxmox_compose

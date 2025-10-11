@@ -3,30 +3,33 @@ module App.Commands
   ( runCommand
   ) where
 
-import           Api.Proxmox
-import qualified Api.Proxmox.Client         as C
-import           Api.Proxmox.Models
-import           Api.Proxmox.Models.Version
-import           Api.Retry
-import           Api.Ssl                    (createProxmoxManager)
+import           App.Commands.Common
 import           App.Commands.Down
 import           App.Commands.Up
 import           App.Types
 import           Control.Exception
-import           Data.List                  (intercalate)
-import           Data.Models.Config
-import           Data.Models.Config.Deploy
-import qualified Data.Text                  as T
+import           Control.Monad.Logger
+import           Data.List                           (intercalate)
+import qualified Data.Text                           as T
+import qualified Proxmox.Client                      as C
+import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Config.Deploy
+import           Proxmox.Deploy.Ssl                  (createProxmoxManager)
+import           Proxmox.Models
+import           Proxmox.Models.Version
+import           Proxmox.Retry
+import           Proxmox.Schema
 import           Servant.Client
 import           System.Exit
 import           System.IO
 import           System.Log
 import           System.Log.Formatter
-import           System.Log.Handler         (LogHandler (setFormatter))
+import           System.Log.Handler                  (LogHandler (setFormatter))
 import           System.Log.Handler.Simple
-import           System.Log.Logger          (errorM, infoM, rootLoggerName,
-                                             setHandlers, setLevel,
-                                             updateGlobalLogger)
+import           System.Log.Logger                   (errorM, infoM,
+                                                      rootLoggerName,
+                                                      setHandlers, setLevel,
+                                                      updateGlobalLogger)
 import           Utils
 
 loggerName = "ProxmoxCompose.Main"
@@ -81,7 +84,7 @@ runCommand opts@(AppOpts { .. }) = do
     (Right proxmoxUrl) -> do
       manager <- createProxmoxManager deployConfig
       let proxmoxState = ProxmoxState proxmoxUrl manager
-      pvePingResult <- defaultRetryClient' proxmoxState C.getVersion
+      pvePingResult <- flip runLoggingT transitionLogF $ defaultRetryClient' proxmoxState C.getVersion
       case pvePingResult of
         (Left e) -> do
           errorM loggerName $ "Proxmox version API request error: " <> displayException e

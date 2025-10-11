@@ -3,20 +3,7 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/topics/lock_files
 
-packages:
-- completed:
-    commit: 6f62d1b7f847c0d9d36516d3bb18dd4991693cd9
-    git: https://github.com/learnew2/proxmox-fs-agent.git
-    name: proxmox-fs-agent-api
-    pantry-tree:
-      sha256: 68e10ec1ad400d7912c4ecaad5e12205abc3489c137ea1b2f0380ea7e8594fc7
-      size: 552
-    subdir: proxmox-fs-agent-api
-    version: 0.1.1.0
-  original:
-    commit: 6f62d1b7f847c0d9d36516d3bb18dd4991693cd9
-    git: https://github.com/learnew2/proxmox-fs-agent.git
-    subdir: proxmox-fs-agent-api
+packages: []
 snapshots:
 - completed:
     sha256: 350737ef1c4c748f4c7ff56b6e74f2f6d15039a2f148662a8ec1aded016b80d0

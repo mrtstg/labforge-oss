@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Utils
   ( findExistingFile
   , defaultConfigFiles
@@ -6,6 +7,9 @@ module Utils
   , commonErrorStdoutHandler'
   ) where
 
+import           Control.Monad.IO.Class
+import           Control.Monad.Logger
+import qualified Data.Text              as T
 import           Servant.Client
 import           System.Directory
 import           System.Exit
@@ -31,14 +35,14 @@ findExistingFile = f [] where
     fileExists <- doesFileExist path
     if fileExists then return (Just path, acc) else f (acc ++ [path]) paths
 
-commonErrorStdoutHandler' :: (Show e) => LoggerName -> IO (Either e a) -> IO a
-commonErrorStdoutHandler' loggerName res = commonErrorStdoutHandler loggerName res show
+commonErrorStdoutHandler' :: (Show e) => LoggingT IO (Either e a) -> LoggingT IO a
+commonErrorStdoutHandler' res = commonErrorStdoutHandler res (T.pack . show)
 
-commonErrorStdoutHandler :: (Show e) => LoggerName -> IO (Either e a) -> (e -> String) -> IO a
-commonErrorStdoutHandler loggerName res errorF = do
+commonErrorStdoutHandler :: LoggingT IO (Either e a) -> (e -> T.Text) -> LoggingT IO a
+commonErrorStdoutHandler res errorF = do
   v <- res
   case v of
     (Left e) -> do
-      errorM loggerName (errorF e)
-      exitWith (ExitFailure 1)
+      $(logError) (errorF e)
+      liftIO $ exitWith (ExitFailure 1)
     (Right r) -> return r

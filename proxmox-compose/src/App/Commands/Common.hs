@@ -10,34 +10,36 @@ module App.Commands.Common
   , genericTransactionBuilder
   , getTransactionAgreement
   , defaultROTransactionState
+  , transitionLogF
   ) where
 
-import           Api.Proxmox
-import           Api.Proxmox.Client
-import qualified Api.Proxmox.Client            as C
-import           Api.Proxmox.Models
-import           Api.Proxmox.Models.Network
-import           Api.Proxmox.Models.SDNNetwork
-import           Api.Proxmox.Models.SDNZone
-import           Api.Proxmox.Models.Storage
-import           Api.Proxmox.Models.VM
-import           Api.Retry
 import           Control.Exception
-import           Control.Monad.IO.Class        (liftIO)
-import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.Except
-import           Control.Monad.Trans.State
+import           Control.Monad.Except
+import           Control.Monad.IO.Class              (liftIO)
+import           Control.Monad.Logger
+import           Control.Monad.State
 import           Data.Aeson
-import           Data.Map                      (Map)
-import qualified Data.Map                      as M
-import           Data.Models.Config
-import           Data.Models.Config.Deploy
-import           Data.Models.Transaction
-import           Data.Text                     (Text)
-import qualified Data.Text                     as T
-import           Deploy.Transaction
-import           Deploy.Types
-import           Deploy.VM
+import qualified Data.ByteString.Char8               as BS
+import           Data.Map                            (Map)
+import qualified Data.Map                            as M
+import           Data.Text                           (Text)
+import qualified Data.Text                           as T
+import           Proxmox.Client
+import qualified Proxmox.Client                      as C
+import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Config.Deploy
+import           Proxmox.Deploy.Models.Transaction
+import           Proxmox.Deploy.Transaction
+import           Proxmox.Deploy.Types
+import           Proxmox.Deploy.VM
+import           Proxmox.Models
+import           Proxmox.Models.Network
+import           Proxmox.Models.SDNNetwork
+import           Proxmox.Models.SDNZone
+import           Proxmox.Models.Storage
+import           Proxmox.Models.VM
+import           Proxmox.Retry
+import           Proxmox.Schema
 import           System.Directory
 import           System.Exit
 import           System.FilePath
@@ -65,7 +67,7 @@ genericTransactionBuilder statePath proxmoxState deployConfig@(DeployConfig
     , deployNetworks = networks
     }) target = do
   debugM loggerName $ "Parsed config: " <> show deployConfig
-  () <- commonErrorStdoutHandler loggerName (pure $ validateVMsData templates vms) show
+  () <- flip runLoggingT transitionLogF $ commonErrorStdoutHandler' (pure $ validateVMsData templates vms)
   vmMap <- getActiveNodesVMMap' proxmoxState
   bridges <- getBridges' proxmoxState nodeName
   sdnNetworks <- getSDNNetworks' proxmoxState
@@ -90,26 +92,26 @@ genericTransactionBuilder statePath proxmoxState deployConfig@(DeployConfig
 getNodeStorage' :: ProxmoxState -> Text -> IO [ProxmoxStorage]
 getNodeStorage' proxmoxState nodeName = do
   infoM loggerName "Getting target node storages..."
-  commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState $ C.getNodeStorage nodeName (ProxmoxStorageFilter { storageTarget = Just nodeName, storageEnabled = Just True })) (\err -> "Failed to get node VMs: " <> displayException err)
+  flip runLoggingT transitionLogF $ commonErrorStdoutHandler (defaultRetryClient' proxmoxState $ C.getNodeStorage nodeName (ProxmoxStorageFilter { storageTarget = Just nodeName, storageEnabled = Just True })) (\err -> T.pack $ "Failed to get node VMs: " <> displayException err)
 
 getActiveNodesVMMap' :: ProxmoxState -> IO (Map Int ProxmoxVM)
 getActiveNodesVMMap' proxmoxState = do
   infoM loggerName "Retrieving node virtual machines info..."
-  commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState C.getActiveNodesVMMap) (\err -> "Failed to get node VMs: " <> displayException err)
+  flip runLoggingT transitionLogF $ commonErrorStdoutHandler (defaultRetryClient' proxmoxState C.getActiveNodesVMMap) (\err -> T.pack $ "Failed to get node VMs: " <> displayException err)
 
 getBridges' :: ProxmoxState -> Text -> IO [ProxmoxNetwork]
 getBridges' proxmoxState nodeName = do
   infoM loggerName "Getting node bridges..."
-  commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState $ getBridgeNodeNetworks nodeName) (\e -> "Failed to get node bridges: " <> displayException e)
+  flip runLoggingT transitionLogF $ commonErrorStdoutHandler (defaultRetryClient' proxmoxState $ getBridgeNodeNetworks nodeName) (\e -> T.pack $ "Failed to get node bridges: " <> displayException e)
 
 getSDNNetworks' :: ProxmoxState -> IO [ProxmoxSDNNetwork]
 getSDNNetworks' proxmoxState = do
-  (ProxmoxResponse { proxmoxData = networks }) <- commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState getSDNNetworks) (\e -> "Failed to get SDN networks: " <> displayException e)
+  (ProxmoxResponse { proxmoxData = networks }) <- flip runLoggingT transitionLogF $ commonErrorStdoutHandler (defaultRetryClient' proxmoxState $ getSDNNetworks Nothing) (\e -> T.pack $ "Failed to get SDN networks: " <> displayException e)
   return networks
 
 getSDNZones' :: ProxmoxState -> IO [ProxmoxSDNZone]
 getSDNZones' proxmoxState = do
-  (ProxmoxResponse { proxmoxData = zones }) <- commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState getSDNZones) (\e -> "Failed to get SDN zones: " <> displayException e)
+  (ProxmoxResponse { proxmoxData = zones }) <- flip runLoggingT transitionLogF $ commonErrorStdoutHandler (defaultRetryClient' proxmoxState getSDNZones) (\e -> T.pack $ "Failed to get SDN zones: " <> displayException e)
   return zones
 
 defaultStatePathGenerator :: FilePath -> FilePath
@@ -118,16 +120,26 @@ defaultStatePathGenerator configPath = do
   let filename' = addExtension ("." <> dropExtensions filename <> "-state") "json"
   dir `combine` filename'
 
-defaultGetTrancactionF :: FilePath -> StatefulTransactionM TransactionData
+defaultGetTrancactionF :: FilePath -> StatefulTransactionT TransactionData
 defaultGetTrancactionF statePath = do
   stateFileExists <- liftIO $ doesFileExist statePath
   if stateFileExists then do
     decodeRes <- liftIO $ eitherDecodeFileStrict statePath
     case decodeRes of
-      (Left e)                       -> throwE (FileError e)
+      (Left e)                       -> throwError (FileError e)
       (Right d@(TransactionData {})) -> pure d
   else do
     return (TransactionData M.empty)
+
+transitionLogF :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+transitionLogF _ _ l msg = do
+  let strMsg = (BS.unpack . fromLogStr) msg
+  case l of
+    LevelInfo      -> infoM loggerName strMsg
+    LevelError     -> errorM loggerName strMsg
+    LevelWarn      -> warningM loggerName strMsg
+    LevelDebug     -> debugM loggerName strMsg
+    (LevelOther _) -> pure ()
 
 defaultROTransactionState :: DeployTarget -> FilePath -> ProxmoxState -> DeployConfig -> TransactionState
 defaultROTransactionState target statePath proxmoxState deployConfig =
@@ -139,24 +151,25 @@ defaultROTransactionState target statePath proxmoxState deployConfig =
     , transactionActions = []
     , transactionDeployConfig = deployConfig
     , transactionTarget = target
+    , transactionLogFunction = transitionLogF
     }
 
 defaultTransactionState :: DeployTarget -> FilePath -> [TransactionAction] -> ProxmoxState -> DeployConfig -> TransactionState
 defaultTransactionState target statePath actions proxmoxState deployConfig = let
 
-  allocateF :: StatefulTransactionM Int
+  allocateF :: StatefulTransactionT Int
   allocateF = do
-    (TransactionState { transactionDeployConfig = (DeployConfig { deployParameters = DeployParams { deployStartVMID = startVMID } }), .. }) <- lift get
+    (TransactionState { transactionDeployConfig = (DeployConfig { deployParameters = DeployParams { deployStartVMID = startVMID } }), .. }) <- get
     (TransactionData vmMap) <- transactionDataGetF
     let vmIds = map snd $ M.toList vmMap
-    nodeMap' <- liftIO $ defaultRetryClient' proxmoxState getActiveNodesVMMap
+    nodeMap' <- defaultRetryClient' proxmoxState getActiveNodesVMMap
     case nodeMap' of
-      (Left e) -> throwE (ClientError e)
+      (Left e) -> throwError (ClientError e)
       (Right nodeMap) -> do
         let nodeIds = map (vmID . snd) $ M.toList nodeMap
         (return . head) (getVMIDRange startVMID (vmIds ++ nodeIds))
 
-  setF :: TransactionData -> StatefulTransactionM ()
+  setF :: TransactionData -> StatefulTransactionT ()
   setF d = liftIO $ encodeFile statePath d
   in TransactionState
     { transactionProxmoxState = proxmoxState
@@ -166,4 +179,5 @@ defaultTransactionState target statePath actions proxmoxState deployConfig = let
     , transactionActions = actions
     , transactionDeployConfig = deployConfig
     , transactionTarget = target
+    , transactionLogFunction = transitionLogF
     }

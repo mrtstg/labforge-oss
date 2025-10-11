@@ -1,18 +1,15 @@
 module App.Commands.Down
   (runDownCommand) where
 
-import           Api.Proxmox
 import           App.Commands.Common
-import           Control.Monad.Trans.Except
-import           Control.Monad.Trans.State
-import           Data.Models.Config
-import           Data.Models.Config.Deploy
-import           Data.Models.Transaction
-import           Deploy.Transaction
-import           Deploy.VM
+import           Control.Monad.Except
+import           Control.Monad.State
+import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Transaction
+import           Proxmox.Deploy.Transaction
+import           Proxmox.Schema
 import           System.Exit
 import           System.Log.Logger
-import           Utils
 
 loggerName = "ProxmoxCompose.Main"
 
@@ -21,6 +18,10 @@ runDownCommand proxmoxState deployConfig configPath = do
   actions <- genericTransactionBuilder (defaultStatePathGenerator configPath) proxmoxState deployConfig Destroy
   () <- getTransactionAgreement
   let state' = defaultTransactionState Destroy (defaultStatePathGenerator configPath) actions proxmoxState deployConfig
-  (res, _) <- runStateT (runExceptT executeTransaction) state'
-  print res
+  result <- (liftIO . runExceptT) $ runStateT (unTransaction executeTransaction) state'
+  case result of
+    (Left e) -> do
+      errorM loggerName $ "Transaction error: " <> show e
+    (Right _) -> do
+      infoM loggerName "All finished!"
   exitSuccess
