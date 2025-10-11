@@ -7,9 +7,9 @@ module Proxmox.Models.Task
   ) where
 
 import           Data.Aeson
-import qualified Data.Aeson.KeyMap as KV
+import qualified Data.Aeson.KeyMap     as KV
 import           Data.Text
-import           Parsers
+import           Proxmox.Utils.Parsers
 import           Servant.API
 
 data ProxmoxTaskSource = ArchiveTasks | ActiveTasks | AllTasks deriving (Show, Eq, Enum, Ord)

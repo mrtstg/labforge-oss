@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Parsers
+module Proxmox.Utils.Parsers
   ( intStringParser
   , floatStringParser
   , notNullWrapper
@@ -10,12 +10,12 @@ module Parsers
   , limitedNumberParser
   ) where
 
-import Data.Aeson
-import qualified Data.Text as T
-import Data.Scientific
-import Text.Read (readMaybe)
-import Data.Functor ((<&>))
-import Data.Text (toLower)
+import           Data.Aeson
+import           Data.Functor    ((<&>))
+import           Data.Scientific
+import           Data.Text       (toLower)
+import qualified Data.Text       as T
+import           Text.Read       (readMaybe)
 
 variableBooleanParser :: MonadFail f => Value -> f Bool
 variableBooleanParser (String "1") = pure True
@@ -28,25 +28,25 @@ variableBooleanParser (String s) | toLower s `elem` ["true", "yes"] = pure True
 variableBooleanParser _ = error "Invalid boolean value!"
 
 nullMaybeWrapper :: MonadFail f => Maybe Value -> (Value -> f a) -> f (Maybe a)
-nullMaybeWrapper Nothing _ = pure Nothing
+nullMaybeWrapper Nothing _       = pure Nothing
 nullMaybeWrapper (Just v) parser = parser v <&> Just
 
 nullDefaultWrapper :: MonadFail f => Maybe Value -> a -> (Value -> f a) -> f a
-nullDefaultWrapper Nothing def _ = pure def
+nullDefaultWrapper Nothing def _     = pure def
 nullDefaultWrapper (Just v) _ parser = parser v
 
 notNullWrapper :: MonadFail f => Maybe Value -> (Value -> f a) -> f a
-notNullWrapper Nothing _ = fail "Value must be not null"
+notNullWrapper Nothing _       = fail "Value must be not null"
 notNullWrapper (Just v) parser = parser v
 
-nonEmptyStringParser Nothing = pure Nothing
+nonEmptyStringParser Nothing            = pure Nothing
 nonEmptyStringParser (Just (String "")) = pure Nothing
-nonEmptyStringParser (Just (String v)) = (pure . Just . T.unpack) v
-nonEmptyStringParser _ = fail "Invalid value type"
+nonEmptyStringParser (Just (String v))  = (pure . Just . T.unpack) v
+nonEmptyStringParser _                  = fail "Invalid value type"
 
 replaceEmptyStringWithNumber :: String -> String
 replaceEmptyStringWithNumber "" = "0"
-replaceEmptyStringWithNumber v = v
+replaceEmptyStringWithNumber v  = v
 
 limitedNumberParser :: MonadFail f => (Int -> Bool) -> String -> Value -> f Int
 limitedNumberParser f errorText value= do
@@ -57,10 +57,10 @@ intStringParser :: MonadFail f => Value -> f Int
 intStringParser (String v) = do
   let vs = (replaceEmptyStringWithNumber . T.unpack) v
   case (readMaybe vs :: Maybe Int) of
-    Nothing -> fail $ "Failed to parse string to int: " <> vs
+    Nothing   -> fail $ "Failed to parse string to int: " <> vs
     (Just vi) -> pure vi
 intStringParser (Number v) = case toBoundedInteger v of
-  Nothing -> fail "Failed to convert number"
+  Nothing  -> fail "Failed to convert number"
   (Just i) -> pure i
 intStringParser _ = fail "Invalid value type"
 
@@ -68,7 +68,7 @@ floatStringParser :: (Read a, RealFloat a, MonadFail f) => Value -> f a
 floatStringParser (String v) = do
   let vs = (replaceEmptyStringWithNumber . T.unpack . T.replace "," ".") v
   case readMaybe vs of
-    Nothing -> fail $ "Failed to parse string to float: " <> vs
+    Nothing  -> fail $ "Failed to parse string to float: " <> vs
     (Just i) -> pure i
 floatStringParser (Number v) = pure (toRealFloat v)
 floatStringParser _ = fail "Invalid value type"

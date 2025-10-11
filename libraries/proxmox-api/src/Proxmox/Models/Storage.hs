@@ -6,9 +6,9 @@ module Proxmox.Models.Storage
   ) where
 
 import           Data.Aeson
-import qualified Data.Aeson.KeyMap as KM
+import qualified Data.Aeson.KeyMap     as KM
 import           Data.Text
-import           Parsers
+import           Proxmox.Utils.Parsers
 
 data ProxmoxStorageFilter = ProxmoxStorageFilter
   { storageEnabled :: !(Maybe Bool)

@@ -7,10 +7,9 @@ module Proxmox.Models.Snapshot
   ) where
 
 import           Data.Aeson
-import qualified Data.Aeson.KeyMap as KM
-import           Data.Maybe
-import           Data.Text         (Text, pack)
-import           Parsers
+import qualified Data.Aeson.KeyMap     as KM
+import           Data.Text             (Text, pack)
+import           Proxmox.Utils.Parsers
 
 data ProxmoxSnapshot = ProxmoxSnapshot
   { snapshotDescription :: !Text
