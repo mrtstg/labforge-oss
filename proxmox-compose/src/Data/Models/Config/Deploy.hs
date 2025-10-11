@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Data.Models.Config.Deploy 
+module Data.Models.Config.Deploy
   ( DeployParams(..)
   ) where
 
-import Data.Aeson
-import Data.Text
+import           Data.Aeson
+import           Data.Text
 
 data DeployParams = DeployParams
-  { deployNodeName :: !Text
-  , deployToken :: !(Maybe Text)
-  , deployUrl :: !Text
+  { deployNodeName  :: !Text
+  , deployToken     :: !(Maybe Text)
+  , deployUrl       :: !Text
   , deployIgnoreSSL :: !Bool
   , deployStartVMID :: !Int
   } deriving Show

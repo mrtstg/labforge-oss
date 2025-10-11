@@ -1,16 +1,16 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
 name:           proxmox-compose
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/mrtstg/proxmox-compose#readme>
-homepage:       https://github.com/mrtstg/proxmox-compose#readme
-bug-reports:    https://github.com/mrtstg/proxmox-compose/issues
+description:    Please see the README on GitHub at <https://github.com/learnew2/proxmox-compose#readme>
+homepage:       https://github.com/learnew2/proxmox-compose#readme
+bug-reports:    https://github.com/learnew2/proxmox-compose/issues
 author:         Ilya Zamaratskikh
-maintainer:     mrtstgdev@gmail.com
+maintainer:     mrtstg@yandex.ru
 copyright:      2025 Ilya Zamaratskikh
 license:        BSD-3-Clause
 license-file:   LICENSE
@@ -20,24 +20,10 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/mrtstg/proxmox-compose
+  location: https://github.com/learnew2/proxmox-compose
 
 library
   exposed-modules:
-      Api.Proxmox
-      Api.Proxmox.Client
-      Api.Proxmox.Models
-      Api.Proxmox.Models.Network
-      Api.Proxmox.Models.NetworkInterface
-      Api.Proxmox.Models.Node
-      Api.Proxmox.Models.SDNNetwork
-      Api.Proxmox.Models.SDNZone
-      Api.Proxmox.Models.Version
-      Api.Proxmox.Models.VM
-      Api.Proxmox.Models.VMClone
-      Api.Proxmox.Models.VMConfig
-      Api.Retry
-      Api.Ssl
       App.Commands
       App.Commands.Common
       App.Commands.Down
@@ -46,6 +32,7 @@ library
       App.Types
       Data.Models.Config
       Data.Models.Config.Deploy
+      Data.Models.Config.DeployAgent
       Data.Models.Config.Network
       Data.Models.Config.Template
       Data.Models.Config.VM
@@ -53,8 +40,6 @@ library
       Deploy.Transaction
       Deploy.Types
       Deploy.VM
-      Parsers
-      Parsers.Network
       Utils
   other-modules:
       Paths_proxmox_compose
@@ -65,7 +50,6 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson ==2.1.2.1
-    , attoparsec ==0.14.4
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , case-insensitive ==1.2.1.0
@@ -77,9 +61,12 @@ library
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
     , http-types ==0.12.3
+    , monad-logger ==0.3.40
     , mtl ==2.2.2
     , optparse-applicative ==0.17.1.0
-    , scientific ==0.3.7.0
+    , proxmox-api
+    , proxmox-deploy-toolkit
+    , proxmox-fs-agent-api
     , servant ==0.19.1
     , servant-client ==0.19
     , text ==2.0.2
@@ -87,7 +74,7 @@ library
     , yaml ==0.11.11.2
   default-language: Haskell2010
 
-executable proxmox-compose-exe
+executable proxmox-compose
   main-is: Main.hs
   other-modules:
       Paths_proxmox_compose
@@ -98,7 +85,6 @@ executable proxmox-compose-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson ==2.1.2.1
-    , attoparsec ==0.14.4
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , case-insensitive ==1.2.1.0
@@ -110,10 +96,13 @@ executable proxmox-compose-exe
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
     , http-types ==0.12.3
+    , monad-logger ==0.3.40
     , mtl ==2.2.2
     , optparse-applicative ==0.17.1.0
+    , proxmox-api
     , proxmox-compose
-    , scientific ==0.3.7.0
+    , proxmox-deploy-toolkit
+    , proxmox-fs-agent-api
     , servant ==0.19.1
     , servant-client ==0.19
     , text ==2.0.2
@@ -135,7 +124,6 @@ test-suite proxmox-compose-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson ==2.1.2.1
-    , attoparsec ==0.14.4
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , case-insensitive ==1.2.1.0
@@ -149,10 +137,13 @@ test-suite proxmox-compose-test
     , http-client ==0.7.14
     , http-conduit ==2.3.8.1
     , http-types ==0.12.3
+    , monad-logger ==0.3.40
     , mtl ==2.2.2
     , optparse-applicative ==0.17.1.0
+    , proxmox-api
     , proxmox-compose
-    , scientific ==0.3.7.0
+    , proxmox-deploy-toolkit
+    , proxmox-fs-agent-api
     , servant ==0.19.1
     , servant-client ==0.19
     , text ==2.0.2

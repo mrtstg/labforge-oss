@@ -1,19 +1,15 @@
 name:                proxmox-compose
 version:             0.1.0.0
-github:              "mrtstg/proxmox-compose"
+github:              "learnew2/proxmox-compose"
 license:             BSD-3-Clause
 author:              "Ilya Zamaratskikh"
-maintainer:          "mrtstgdev@gmail.com"
+maintainer:          "mrtstg@yandex.ru"
 copyright:           "2025 Ilya Zamaratskikh"
 
 extra-source-files:
 - README.md
 
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
-
-description:         Please see the README on GitHub at <https://github.com/mrtstg/proxmox-compose#readme>
+description:         Please see the README on GitHub at <https://github.com/learnew2/proxmox-compose#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -33,10 +29,12 @@ dependencies:
 - case-insensitive == 1.2.1.0
 - bytestring == 0.11.5.2
 - filepath == 1.4.2.2
-- scientific == 0.3.7.0
-- attoparsec == 0.14.4
 - mtl == 2.2.2
 - http-types == 0.12.3
+- monad-logger == 0.3.40
+- proxmox-fs-agent-api
+- proxmox-api
+- proxmox-deploy-toolkit
 
 ghc-options:
 - -Wall
@@ -53,7 +51,7 @@ library:
   source-dirs: src
 
 executables:
-  proxmox-compose-exe:
+  proxmox-compose:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

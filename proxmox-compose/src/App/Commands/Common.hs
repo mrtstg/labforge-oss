@@ -19,6 +19,7 @@ import           Api.Proxmox.Models
 import           Api.Proxmox.Models.Network
 import           Api.Proxmox.Models.SDNNetwork
 import           Api.Proxmox.Models.SDNZone
+import           Api.Proxmox.Models.Storage
 import           Api.Proxmox.Models.VM
 import           Api.Retry
 import           Control.Exception
@@ -69,11 +70,12 @@ genericTransactionBuilder statePath proxmoxState deployConfig@(DeployConfig
   bridges <- getBridges' proxmoxState nodeName
   sdnNetworks <- getSDNNetworks' proxmoxState
   sdnZones <- getSDNZones' proxmoxState
+  storages <- getNodeStorage' proxmoxState nodeName
 
   infoM loggerName "Building transaction..."
   let stages = planTransactionStages deployConfig target
   debugM loggerName $ "First stages: " <> show stages
-  transactionRes <- planTransactionActions stages bridges sdnZones sdnNetworks vmMap (defaultROTransactionState target statePath proxmoxState deployConfig)
+  transactionRes <- planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap (defaultROTransactionState target statePath proxmoxState deployConfig)
   case transactionRes of
     (Left e) -> do
       errorM loggerName ("Failed to build transaction: " <> show e)
@@ -84,6 +86,11 @@ genericTransactionBuilder statePath proxmoxState deployConfig@(DeployConfig
     (Right actions) -> do
       mapM_ print actions
       return actions
+
+getNodeStorage' :: ProxmoxState -> Text -> IO [ProxmoxStorage]
+getNodeStorage' proxmoxState nodeName = do
+  infoM loggerName "Getting target node storages..."
+  commonErrorStdoutHandler loggerName (defaultRetryClient' proxmoxState $ C.getNodeStorage nodeName (ProxmoxStorageFilter { storageTarget = Just nodeName, storageEnabled = Just True })) (\err -> "Failed to get node VMs: " <> displayException err)
 
 getActiveNodesVMMap' :: ProxmoxState -> IO (Map Int ProxmoxVM)
 getActiveNodesVMMap' proxmoxState = do

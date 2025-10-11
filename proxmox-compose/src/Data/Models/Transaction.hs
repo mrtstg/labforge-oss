@@ -1,20 +1,22 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
 module Data.Models.Transaction
   ( TransactionStage(..)
   , TransactionAction(..)
   , TransactionException(..)
-  , TransactionM
   , TransactionState(..)
-  , StatefulTransactionM
-  , StatelessTransactionM
+  , StatefulTransactionT(..)
   , DeployTarget(..)
   , defaultClientErrorWrapper
   , defaultTransactionDelayAfter
   ) where
 
-import           Api.Proxmox
-import           Api.Proxmox.Models.SDNNetwork
-import           Api.Proxmox.Models.VMClone
+import           Control.Monad.Except        (MonadError, throwError)
+import           Control.Monad.IO.Class
+import           Control.Monad.Logger
+import           Control.Monad.State         (MonadState)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.State
 import           Data.Models.Config
@@ -22,6 +24,9 @@ import           Data.Models.Config.Network
 import           Data.Models.Config.Template
 import           Data.Models.Config.VM
 import           Deploy.Types
+import           Proxmox.Models.SDNNetwork
+import           Proxmox.Models.VMClone
+import           Proxmox.Schema
 import           Servant.Client
 
 data TransactionStage
@@ -42,6 +47,7 @@ data TransactionAction
   | UnassignVMID String
   | AssignVMID String
   | CloneVM ProxmoxVMCloneParams
+  | SetVMDisplay String Int
   | CreateVM ConfigVM -- replace
   | DestroyVM String
   | StopVM String
@@ -69,27 +75,25 @@ data TransactionException = BridgeNotFound String
   | UnknownError String
   | VMIDTaken Int
   | NetworkIsNotDeclared String
-  | VMConfigIsNotFound String deriving Show
+  | VMConfigIsNotFound String
+  | StorageNotFound String deriving Show
 
 defaultTransactionDelayAfter :: TransactionAction -> TransactionAction
 defaultTransactionDelayAfter = TransactionDelayAfter 5
 
 data TransactionState = TransactionState
-  { transactionAllocateVMIDF :: StatefulTransactionM Int
-  , transactionDataGetF      :: StatefulTransactionM TransactionData
-  , transactionDataSetF      :: TransactionData -> StatefulTransactionM ()
+  { transactionAllocateVMIDF :: StatefulTransactionT Int
+  , transactionDataGetF      :: StatefulTransactionT TransactionData
+  , transactionDataSetF      :: TransactionData -> StatefulTransactionT ()
   , transactionActions       :: ![TransactionAction]
   , transactionDeployConfig  :: !DeployConfig
   , transactionProxmoxState  :: !ProxmoxState
   , transactionTarget        :: !DeployTarget
   }
 
-type StatelessTransactionM a = TransactionM IO a
+newtype StatefulTransactionT a = StatefulTransactionT { unTransaction :: ExceptT TransactionException (StateT TransactionState (LoggingT IO)) a }
+  deriving (Functor, Applicative, Monad, MonadIO, MonadState TransactionState, MonadError TransactionException)
 
-type StatefulTransactionM a = TransactionM (StateT TransactionState IO) a
-
-type TransactionM m a = ExceptT TransactionException m a
-
-defaultClientErrorWrapper :: Either ClientError a -> StatefulTransactionM a
-defaultClientErrorWrapper (Left e)  = throwE (ClientError e)
+defaultClientErrorWrapper :: Either ClientError a -> StatefulTransactionT a
+defaultClientErrorWrapper (Left e)  = throwError (ClientError e)
 defaultClientErrorWrapper (Right v) = pure v

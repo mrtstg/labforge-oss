@@ -7,13 +7,13 @@ module Data.Models.Config.VM
   , formatConfigVMNetwork
   ) where
 
-import           Api.Proxmox.Models.NetworkInterface
 import           Data.Aeson
-import qualified Data.Aeson.KeyMap                   as KM
-import           Data.List                           (intercalate)
+import qualified Data.Aeson.KeyMap               as KM
+import           Data.List                       (intercalate)
 import           Data.Maybe
-import qualified Data.Text                           as T
+import qualified Data.Text                       as T
 import           Parsers
+import           Proxmox.Models.NetworkInterface
 
 data ConfigVMNetwork = ConfigVMNetwork
   { configVMNetworkName     :: !String
@@ -51,6 +51,8 @@ data ConfigVM = TemplatedConfigVM
   , configVMNetworks       :: !(Maybe [ConfigVMNetwork])
   , configVMCleanNetworks  :: !Bool
   , configVMRunning        :: !Bool
+  , configVMStorage        :: !(Maybe String)
+  , configVMDisplay        :: !(Maybe Int)
   } | RawVM
   { configVMName    :: !String
   , configVMID      :: !(Maybe Int)
@@ -73,6 +75,8 @@ instance FromJSON ConfigVM where
       <*> v .:? "networks" .!= Nothing
       <*> nullDefaultWrapper (KM.lookup "clean_networks" v) False variableBooleanParser
       <*> nullDefaultWrapper (KM.lookup "running" v) True variableBooleanParser
+      <*> v .:? "storage"
+      <*> v .:? "display"
     _anyOtherType -> fail "clone_from field has incorrect value type!"
 
 isTemplateVM :: ConfigVM -> Bool
