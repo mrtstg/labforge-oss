@@ -41,6 +41,7 @@ import           Control.Monad.Except      (throwError)
 import           Control.Monad.IO.Class    (liftIO)
 import           Control.Monad.Reader      (ask)
 import           Data.Aeson
+import qualified Data.ByteString.Char8     as BS
 import           Data.List                 (intercalate)
 import qualified Data.Map                  as M
 import           Data.Proxy
@@ -111,11 +112,15 @@ getVMPower nodeName vmid = do
     (Left exception@(FailureResponse _ (Response { responseStatusCode = status, responseBody = body }))) -> do
       case statusCode status of
         500          -> do
-          case decode body of
-            (Just (ProxmoxResponse { proxmoxData = (), proxmoxMessage = (Just (String msg)) })) ->
-              if "Configuration file" `isInfixOf` msg && "does not exist" `isInfixOf` msg then
-                pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing }) else throwError exception
-            _anyOther -> throwError exception
+          let checkF v = "Configuration file" `isInfixOf` v && "does not exist" `isInfixOf` v
+          if (checkF . pack . BS.unpack . statusMessage) status then
+            pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing })
+          else do
+            case decode body of
+              (Just (ProxmoxResponse { proxmoxData = (), proxmoxMessage = (Just (String msg)) })) ->
+                if checkF msg then
+                  pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing }) else throwError exception
+              _anyOther -> throwError exception
         _otherStatus -> throwError exception
     (Left otherError)               -> throwError otherError
 
@@ -128,11 +133,15 @@ getVMConfig nodeName vmid = do
     (Left exception@(FailureResponse _ (Response { responseStatusCode = status, responseBody = body }))) -> do
       case statusCode status of
         500          -> do
-          case decode body of
-            (Just (ProxmoxResponse { proxmoxData = (), proxmoxMessage = (Just (String msg)) })) ->
-              if "Configuration file" `isInfixOf` msg && "does not exist" `isInfixOf` msg then
-                pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing }) else throwError exception
-            _anyOther -> throwError exception
+          let checkF v = "Configuration file" `isInfixOf` v && "does not exist" `isInfixOf` v
+          if (checkF . pack . BS.unpack . statusMessage) status then
+            pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing })
+          else do
+            case decode body of
+              (Just (ProxmoxResponse { proxmoxData = (), proxmoxMessage = (Just (String msg)) })) ->
+                if checkF msg then
+                  pure (ProxmoxResponse { proxmoxData = Nothing, proxmoxMessage = Nothing }) else throwError exception
+              _anyOther -> throwError exception
         _otherStatus -> throwError exception
     (Left otherError)               -> throwError otherError
 
