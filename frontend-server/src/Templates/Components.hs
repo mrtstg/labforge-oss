@@ -263,7 +263,7 @@ genericDeploymentForm = let
               <template x-if="cloud_opts == 'manual' && vms[index]['networks'][netIndex]['number'] != null">
                 <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
                   <input .input type="text" placeholder="IP-адрес" x-model.string="vms[index]['networks'][netIndex]['cloudinit_address']" minlength="7">
-                  <input .input type="text" placeholder="Шлюз" x-model="vms[index]['networks'][netIndex]['cloudinit_gateway']" minlength="7">
+                  <input .input type="text" placeholder="Шлюз" x-model.string="vms[index]['networks'][netIndex]['cloudinit_gateway']" minlength="7">
           <div .is-flex.is-flex-direction-row.is-align-items-center>
             <div .p-3>
               <button .button.is-danger @click="deleteVM(index)"> Удалить VM

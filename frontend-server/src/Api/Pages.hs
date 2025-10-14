@@ -465,7 +465,9 @@ deploymentEditPage tid t = do
            if (vmData.networks[netIndex]['cloudinit_address'] == 'dhcp') {
               vmData.networks[netIndex]['cloudinit_address'] = null
            }
-           vmData.networks[netIndex]['cloudinit_gateway'] = null
+           if (this.cloud_opts == "") {
+              vmData.networks[netIndex]['cloudinit_gateway'] = null
+           }
         }
       },
       addNetwork(vm) { if (this.netname.length > 0) { vm.networks.push({name: this.netname, type: this.nettype, number: null, cloudinit_address: null, cloudinit_gateway: null}); this.netname = ''; this.nettype = this.interfaces[0]; } },
