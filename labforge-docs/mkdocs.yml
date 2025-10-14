@@ -47,12 +47,14 @@ nav:
   - Руководство установки:
     - Требования к окружению: install-guide/requirements.md
     - Установка из установщика: install-guide/installer.md
-    - Установка из репозитория: install-guide/repository.md
     - Пост-установочные шаги: install-guide/postinstall.md
   - Работа с Keycloak:
     - Вход в Realm: keycloak/entering-realm.md
     - Создание локальных пользователей: keycloak/local-users.md
     - Присвоение ролей пользователям: keycloak/users-role.md
+
+draft_docs: |
+  install-guide/repository.md
 
 markdown_extensions:
   - attr_list
