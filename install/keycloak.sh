@@ -17,6 +17,7 @@ REALM_ROLES=(
     "realm-manager"
     "full-admin"
     "jobservice-send"
+    "creator-minimal"
 )
 REALM_CLIENTS=(
     "cluster-manager"
@@ -140,6 +141,20 @@ for role in "${REALM_ROLES[@]}"; do
         else
             ./kcadm.sh create -r ln2 roles/full-admin/composites -b "[{\"id\":\"$ROLE_ID\"}]"
         fi
+    fi
+done
+CREATOR_ROLES=(
+    "image-view"
+    "group-read"
+    "user-read"
+    "deployment-create"
+)
+for role in "${CREATOR_ROLES[@]}"; do
+    ROLE_ID=$(cat /tmp/realm_roles.json | jq ".[] | select(.name==\"$role\")" | jq .id -r)
+    if [[ -z "$ROLE_ID" ]]; then
+        echo "Role not found"
+    else
+        ./kcadm.sh create -r ln2 roles/creator-minimal/composites -b "[{\"id\":\"$ROLE_ID\"}]"
     fi
 done
 rm -f /tmp/realm_roles.json
