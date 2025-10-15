@@ -35,7 +35,8 @@ import           Control.Monad.Trans.Writer
 import           Data.Aeson                               (Value (..))
 import           Data.Functor                             ((<&>))
 import           Data.Functor.Identity
-import           Data.List                                (nub, sortOn)
+import           Data.List                                (isInfixOf, nub,
+                                                           sortOn)
 import           Data.Map                                 (Map)
 import qualified Data.Map                                 as M
 import           Data.Maybe
@@ -113,6 +114,39 @@ getVMID vmName (TransactionData vmIDMap) (DeployConfig {deployVMs=vms }) = do
     Nothing -> case filter ((==vmName) . configVMName) vms of
       []     -> Nothing
       (vm:_) -> configVMID vm
+
+-- qmconfig
+waitTaskCompletion :: Int -> Int -> String -> Text -> StatefulTransactionT (Maybe Bool)
+waitTaskCompletion maxTries ts taskId taskType = helper 0 where
+  helper :: Int -> StatefulTransactionT (Maybe Bool)
+  helper n = do
+    $(logDebug) $ "Waiting for task " <> (T.pack taskId) <> ", attempt " <> (T.pack . show) n
+    if n >= maxTries then pure Nothing else do
+      (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+      tasks' <- defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName (Just 1) Nothing (Just ts) Nothing (Just ArchiveTasks) Nothing (Just taskType) Nothing Nothing
+      case tasks' of
+        (Left e) -> do
+          $(logError) $ (T.pack . show) e
+          liftIO $ threadDelay 5_000_000
+          helper (n + 1)
+        (Right (ProxmoxResponse tasks _)) -> do
+          let taskId' = T.pack taskId
+          case filter ((==) taskId' . taskUpid) tasks of
+            [] -> do
+              goodTasks' <- defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) Nothing (Just taskType) Nothing Nothing
+              case goodTasks' of
+                (Left e) -> do
+                  $(logError) $ (T.pack . show) e
+                  liftIO $ threadDelay 5_000_000
+                  helper (n + 1)
+                (Right (ProxmoxResponse goodTasks _)) -> do
+                  case filter ((==) taskId' . taskUpid) goodTasks of
+                    [] -> do
+                      liftIO $ threadDelay 5_000_000
+                      helper (n + 1)
+                    _foundFinish -> pure (Just True)
+            _foundError -> do
+              pure (Just False)
 
 powerVMWrapper :: Int -> Int -> StatefulTransactionT ()
 powerVMWrapper ts vmid = do
@@ -418,7 +452,51 @@ executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneN
                     (Left e)      -> throwError (ClientError e)
                     (Right False) -> throwError (VMLocked proxmoxVMCloneNewID)
                     _             -> pure ()
-executeTransactionAction (ConfigureVM vmName payload) = do
+executeTransactionAction (AllocateDisk vmName diskConfig) = do
+  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}),.. }) <- get
+  data' <- transactionDataGetF
+  case getVMID vmName data' deployConfig of
+    Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
+    (Just vmid) -> do
+      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
+      case M.lookup vmid vmMap of
+        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
+        _ -> do
+          let payload = configVMDiskToRequest vmid diskConfig
+          let p = configVMDiskPath vmid diskConfig
+          _ <- defaultRetryClient' transactionProxmoxState (allocateStorageContent nodeName (T.pack . diskStorage $ diskConfig) payload) >>= defaultClientErrorWrapper
+          allocResult <- waitForClient
+            10_000_000
+            "Waiting for allocating disk"
+            60
+            1_000_000
+            (defaultRetryClient' transactionProxmoxState $ getStorageContent nodeName (T.pack . diskStorage $ diskConfig) Nothing (Just vmid))
+            (\(ProxmoxResponse { proxmoxData = disks }) -> any (\(ProxmoxStorageContent { proxmoxContentVolID = volid }) -> p `isInfixOf` volid) disks)
+          case allocResult of
+            (Left e)      -> throwError (ClientError e)
+            (Right False) -> throwError (AllocationFailed vmName diskConfig)
+            _             -> pure ()
+executeTransactionAction (ConfigureVM vmName vmConfig) = do
+  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}),.. }) <- get
+  data' <- transactionDataGetF
+  case getVMID vmName data' deployConfig of
+    Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
+    (Just vmid) -> do
+      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
+      case M.lookup vmid vmMap of
+        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
+        _ -> do
+          case formatConfigVMPatch vmid vmConfig of
+            Nothing -> $(logError) "Failed to create VM patch payload"
+            (Just p) -> do
+              callTime <- getUnixIntTime
+              (ProxmoxResponse { proxmoxData = taskId }) <- defaultRetryClient' transactionProxmoxState (asyncPutVMConfig nodeName vmid p) >>= defaultClientErrorWrapper
+              r <- waitTaskCompletion 60 callTime taskId "qmconfig"
+              case r of
+                (Just True)  -> $(logInfo) "Successfully configured VM"
+                (Just False) -> throwError (ConfigurationError vmName)
+                Nothing      -> throwError (ConfigurationError vmName)
+executeTransactionAction (ConfigureVMRaw vmName payload) = do
   (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}),.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
@@ -582,7 +660,7 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
           (Just _) -> helper ts acc -- TODO: reconfig VM (and unify vm check, wtf)
           Nothing -> do
             helper ts (CreateVM vm:acc)
-  helper ((VMExists vm@(TemplatedConfigVM { configVMParentTemplate = parentTemplateName, configVMName = vmName, configVMID = vmID, configVMStorage = vmStorage, configVMDisplay = vmDisplay })):ts) acc = do
+  helper ((VMExists vm@(TemplatedConfigVM { configVMParentTemplate = parentTemplateName, configVMName = vmName, configVMID = vmID, configVMStorage = vmStorage, configVMDisplay = vmDisplay, configVMDisks = vmDisks })):ts) acc = do
     (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName }, deployAgent = deployAgent }), .. }) <- get
     data' <- transactionDataGetF
     case filter ((==) parentTemplateName . configTemplateName) vmTemplates of
@@ -594,8 +672,7 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
             (Just storage) -> unless (any ((==storage) . proxmoxStorage) storages) $ throwError (StorageNotFound storage)
         -- if isJust deployAgent && isJust vmDisplay then [SetVMDisplay vmName (fromJust vmDisplay)] else []
         let agentStage = (if isJust deployAgent && isJust vmDisplay then [SetVMDisplay vmName (fromJust vmDisplay)] else [])
-        let patchParams = formatConfigVMPatch vm
-        let cloneStage = agentStage ++ if isNothing patchParams then [] else [ConfigureVM vmName (fromJust patchParams)] ++ [CloneVM (ProxmoxVMCloneParams {proxmoxVMCloneVMID = templateID, proxmoxVMCloneStorage = fmap T.pack vmStorage, proxmoxVMCloneSnapname = Nothing, proxmoxVMCloneTarget = Just deployNodeName, proxmoxVMCloneNewID = fromMaybe (-1) vmID, proxmoxVMCloneName = (Just . T.pack) vmName, proxmoxVMCloneDescription=Nothing})]
+        let cloneStage = agentStage ++ [ConfigureVM vmName vm] ++ map (AllocateDisk vmName) vmDisks ++ [CloneVM (ProxmoxVMCloneParams {proxmoxVMCloneVMID = templateID, proxmoxVMCloneStorage = fmap T.pack vmStorage, proxmoxVMCloneSnapname = Nothing, proxmoxVMCloneTarget = Just deployNodeName, proxmoxVMCloneNewID = fromMaybe (-1) vmID, proxmoxVMCloneName = (Just . T.pack) vmName, proxmoxVMCloneDescription=Nothing})]
         case getVMID vmName data' deployConfig of
           Nothing -> helper ts (cloneStage ++ (AssignVMID vmName:acc))
           (Just vmID') -> do

@@ -70,7 +70,8 @@ data TransactionAction
   | UnassignVMID String
   | AssignVMID String
   | CloneVM ProxmoxVMCloneParams
-  | ConfigureVM String (M.Map String Value)
+  | ConfigureVM String ConfigVM
+  | ConfigureVMRaw String (M.Map String Value)
   | SetVMDisplay String Int
   | CreateVM ConfigVM -- replace
   | DestroyVM String
@@ -84,6 +85,7 @@ data TransactionAction
   | DeleteSnapshot String ProxmoxSnapshotCreate
   | RollbackVM String String
   | ApplySDNNetworks
+  | AllocateDisk String ConfigVMDisk
   deriving (Show, Eq)
 
 data DeployTarget = Deploy | Destroy deriving (Show, Eq)
@@ -104,7 +106,9 @@ data TransactionException = BridgeNotFound String
   | VMIDTaken Int
   | NetworkIsNotDeclared String
   | VMConfigIsNotFound String
-  | StorageNotFound String deriving Show
+  | StorageNotFound String
+  | ConfigurationError String
+  | AllocationFailed String ConfigVMDisk deriving Show
 
 defaultTransactionDelayAfter :: TransactionAction -> TransactionAction
 defaultTransactionDelayAfter = TransactionDelayAfter 5

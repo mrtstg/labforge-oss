@@ -12,6 +12,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TupleSections     #-}
@@ -22,6 +23,10 @@ module Proxmox.Deploy.Models.Config.VM
   , isTemplateVM
   , formatConfigVMNetwork
   , formatConfigVMPatch
+  , ConfigVMStorageType(..)
+  , configVMDiskPath
+  , configVMDiskToRequest
+  , ConfigVMDisk(..)
   ) where
 
 import           Data.Aeson
@@ -33,7 +38,67 @@ import qualified Data.Text                       as T
 import           Network.URI.Encode
 import           Parsers
 import           Proxmox.Models.NetworkInterface
+import           Proxmox.Models.Storage
 import           Utils
+
+data ConfigVMStorageType = IdeDisk | SataDisk | ScsiDisk | VirtIODisk deriving (Eq, Ord, Enum)
+
+instance Show ConfigVMStorageType where
+  show IdeDisk    = "ide"
+  show SataDisk   = "sata"
+  show ScsiDisk   = "scsi"
+  show VirtIODisk = "virtio"
+
+instance ToJSON ConfigVMStorageType where
+  toJSON IdeDisk    = String "ide"
+  toJSON SataDisk   = String "sata"
+  toJSON ScsiDisk   = String "scsi"
+  toJSON VirtIODisk = String "virtio"
+
+instance FromJSON ConfigVMStorageType where
+  parseJSON = withText "ConfigVMStorageType" $ \case
+    "ide" -> pure IdeDisk
+    "sata" -> pure SataDisk
+    "scsi" -> pure ScsiDisk
+    "virtio" -> pure VirtIODisk
+    _anyOther -> fail "Invalid disk type"
+
+data ConfigVMDisk = ConfigVMDisk
+  { diskNumber  :: !Int
+  , diskType    :: !ConfigVMStorageType
+  , diskSize    :: !String
+  , diskStorage :: !String
+  , diskFormat  :: !(Maybe ProxmoxAllocateFormat)
+  } deriving (Show, Eq, Ord)
+
+instance FromJSON ConfigVMDisk where
+  parseJSON = withObject "ConfigVMDisk" $ \v -> ConfigVMDisk
+    <$> v .: "number"
+    <*> v .: "type"
+    <*> v .: "size"
+    <*> v .: "storage"
+    <*> v .:? "format"
+
+instance ToJSON ConfigVMDisk where
+  toJSON (ConfigVMDisk { .. }) = object
+    [ "number" .= diskNumber
+    , "type" .= diskType
+    , "size" .= diskSize
+    , "storage" .= diskStorage
+    , "format" .= diskFormat
+    ]
+
+configVMDiskPath :: Int -> ConfigVMDisk -> String
+configVMDiskPath vmid (ConfigVMDisk { .. }) = do
+  "generated-vm-" <> show vmid <> "-disk-" <> show diskType <> "-" <> show diskNumber <> "." <> show (fromMaybe Qcow2 diskFormat)
+
+configVMDiskToRequest :: Int -> ConfigVMDisk -> ProxmoxAllocateRequest
+configVMDiskToRequest vmid d@(ConfigVMDisk { .. }) = ProxmoxAllocateRequest
+  { allocVMID=vmid
+  , allocSize=diskSize
+  , allocFormat=diskFormat
+  , allocFilename=configVMDiskPath vmid d
+  }
 
 data CloudinitAddress = DHCP | Manual String deriving (Show, Eq, Ord)
 
@@ -109,6 +174,7 @@ data ConfigVM = TemplatedConfigVM
   , configVMInitDNS        :: !(Maybe String)
   , configVMInitDomain     :: !(Maybe String)
   , configVMInitSSHKeys    :: !(Maybe String)
+  , configVMDisks          :: ![ConfigVMDisk]
   } | RawVM
   { configVMName         :: !String
   , configVMID           :: !(Maybe Int)
@@ -123,10 +189,9 @@ data ConfigVM = TemplatedConfigVM
   , configVMInitSSHKeys  :: !(Maybe String)
   } deriving (Show, Eq, Ord)
 
-formatConfigVMPatch :: ConfigVM -> Maybe (M.Map String Value)
-formatConfigVMPatch RawVM {} = Nothing
-formatConfigVMPatch TemplatedConfigVM { configVMCores = Nothing, configVMCPULimit = Nothing, configVMMemory = Nothing } = Nothing
-formatConfigVMPatch TemplatedConfigVM { .. } = (Just . M.fromList) $
+formatConfigVMPatch :: Int -> ConfigVM -> Maybe (M.Map String Value)
+formatConfigVMPatch _ RawVM {} = Nothing
+formatConfigVMPatch vmid TemplatedConfigVM { .. } = (Just . M.fromList) $
     cores ++
     limit ++
     memory ++
@@ -137,7 +202,8 @@ formatConfigVMPatch TemplatedConfigVM { .. } = (Just . M.fromList) $
     initUpgrade ++
     initDNS ++
     initDomain ++
-    initSSHKeys
+    initSSHKeys ++
+    vmdisks
     where
   initSSHKeys = maybe [] ((:[]) . ("sshkeys",) . String . encodeText . T.pack) configVMInitSSHKeys
   initDomain = maybe [] ((:[]) . ("searchdomain",) . String . T.pack) configVMInitDomain
@@ -145,6 +211,9 @@ formatConfigVMPatch TemplatedConfigVM { .. } = (Just . M.fromList) $
   initDNS = maybe [] ((:[]) . ("nameserver",) . String . T.pack) configVMInitDNS
   initUser = maybe [] ((:[]) . ("ciuser",) . String . T.pack) configVMInitUser
   initPassword = maybe [] ((:[]) . ("cipassword",) . String . T.pack) configVMInitPassword
+  vmdisks = foldMap diskF configVMDisks
+  diskF :: ConfigVMDisk -> [(String, Value)]
+  diskF d@(ConfigVMDisk { .. }) = [(show diskType <> show diskNumber, (String . T.pack) $ diskStorage <> ":" <> show vmid <> "/" <> configVMDiskPath vmid d <> ",iothread=1,size=" <> diskSize)]
   networksInit = foldMap networkInitF (fromMaybe [] configVMNetworks)
   networkInitF :: ConfigVMNetwork -> [(String, Value)]
   networkInitF (ConfigVMNetwork { configVMNetworkNumber = Nothing }) = []
@@ -203,6 +272,7 @@ instance ToJSON ConfigVM where
     , "cloudinit_dns" .= configVMInitDNS
     , "cloudinit_domain" .= configVMInitDomain
     , "cloudinit_sshkeys" .= configVMInitSSHKeys
+    , "disks" .= configVMDisks
     ]
 
 instance FromJSON ConfigVM where
@@ -239,6 +309,7 @@ instance FromJSON ConfigVM where
       <*> nonEmptyStringParser (KM.lookup "cloudinit_dns" v)
       <*> nonEmptyStringParser (KM.lookup "cloudinit_domain" v)
       <*> nonEmptyStringParser (KM.lookup "cloudinit_sshkeys" v)
+      <*> v .:? "disks" .!= []
     _anyOtherType -> fail "clone_from field has incorrect value type!"
 
 isTemplateVM :: ConfigVM -> Bool
