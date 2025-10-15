@@ -88,9 +88,7 @@ instance FromJSON ProxmoxAllocateFormat where
 
 data ProxmoxAllocateRequest = ProxmoxAllocateRequest
   { allocFilename :: !String
-  , allocNode     :: !String
   , allocSize     :: !String
-  , allocStorage  :: !String
   , allocVMID     :: !Int
   , allocFormat   :: !(Maybe ProxmoxAllocateFormat)
   } deriving (Show, Eq, Ord)
@@ -98,9 +96,7 @@ data ProxmoxAllocateRequest = ProxmoxAllocateRequest
 instance ToJSON ProxmoxAllocateRequest where
   toJSON (ProxmoxAllocateRequest { .. }) = object
     [ "filename" .= allocFilename
-    , "node" .= allocNode
     , "size" .= allocSize
-    , "storage" .= allocStorage
     , "vmid" .= allocVMID
     , "format" .= allocFormat
     ]
@@ -108,8 +104,6 @@ instance ToJSON ProxmoxAllocateRequest where
 instance FromJSON ProxmoxAllocateRequest where
   parseJSON = withObject "ProxmoxAllocateRequest" $ \v -> ProxmoxAllocateRequest
     <$> v .: "filename"
-    <*> v .: "node"
     <*> v .: "size"
-    <*> v .: "storage"
     <*> v .: "vmid"
     <*> v .: "format"
