@@ -34,6 +34,8 @@ module Proxmox.Client
   , createSnapshot
   , getNodeTasks'
   , getActiveNodeTasks
+  , getStorageContent
+  , allocateStorageContent
   ) where
 
 
@@ -88,7 +90,9 @@ getVersion
   :<|> deleteVMSnapshot
   :<|> rollbackVM
   :<|> createSnapshot
-  :<|> getNodeTasks' = client api
+  :<|> getNodeTasks'
+  :<|> getStorageContent
+  :<|> allocateStorageContent = client api
 
 getActiveNodeTasks :: Text -> Maybe Text -> Maybe Int -> ClientM [ProxmoxTask]
 getActiveNodeTasks node tasktype limit = do

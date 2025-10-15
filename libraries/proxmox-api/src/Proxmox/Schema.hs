@@ -40,6 +40,7 @@ type ProxmoxM m = ReaderT ProxmoxState IO m
 type NodeNameCapture = Capture "nodename" Text
 type SnapshotNameCapture = Capture "snapname" Text
 type VMIDCapture = Capture "vmid" Int
+type StorageCapture = Capture "storage" Text
 
 type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "cluster" :> "sdn" :> "zones" :> Get '[JSON] (ProxmoxResponse [ProxmoxSDNZone])
@@ -63,6 +64,8 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "snapshot" :> SnapshotNameCapture :> "rollback" :> ReqBody '[JSON] ProxmoxRollbackParams :> Post '[JSON] ()
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "snapshot" :> ReqBody '[JSON] ProxmoxSnapshotCreate :> Post '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "tasks" :> QueryParam "errors" Int :> QueryParam "limit" Int :> QueryParam "since" Int :> QueryParam "until" Int :> QueryParam "source" ProxmoxTaskSource :> QueryParam "statusfilter" Text :> QueryParam "typefilter" Text :> QueryParam "userfilter" Text :> QueryParam "vmid" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxTask])
+  :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> QueryParam "content" Text :> QueryParam "vmid" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxStorageContent])
+  :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> ReqBody '[JSON] ProxmoxAllocateRequest :> Get '[JSON] (ProxmoxResponse String)
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT
