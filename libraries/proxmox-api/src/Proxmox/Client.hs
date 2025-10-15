@@ -36,6 +36,7 @@ module Proxmox.Client
   , getActiveNodeTasks
   , getStorageContent
   , allocateStorageContent
+  , asyncPutVMConfig
   ) where
 
 
@@ -92,7 +93,8 @@ getVersion
   :<|> createSnapshot
   :<|> getNodeTasks'
   :<|> getStorageContent
-  :<|> allocateStorageContent = client api
+  :<|> allocateStorageContent
+  :<|> asyncPutVMConfig = client api
 
 getActiveNodeTasks :: Text -> Maybe Text -> Maybe Int -> ClientM [ProxmoxTask]
 getActiveNodeTasks node tasktype limit = do
