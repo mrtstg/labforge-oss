@@ -210,6 +210,11 @@ genericDeploymentForm = let
             <label .label> Лимит нагрузки CPU (в ядрах)
             <div .control>
               <input .input type=number x-model.number="vms[index]['cpu_limit']">
+          <div .field>
+            <label .label> Хранилище для копирования
+            <div .control>
+              <input .input type=text x-model="vms[index]['storage']">
+            <p .help> При пустом значении выполняется Linked Clone
           <div .control>
             <label .checkbox>
               <input .checkbox type=checkbox x-model="vms[index]['available']">
@@ -227,6 +232,11 @@ genericDeploymentForm = let
             <label .label> (cloud-init) Пароль пользователя
             <div .control>
               <input .input type=text x-model="vms[index]['cloudinit_password']">
+            <p .help> Опциальное поле, требует поддержки cloudinit
+          <div .field>
+            <label .label> (cloud-init) DNS-резолвер
+            <div .control>
+              <input .input type=text x-model="vms[index]['cloudinit_dns']">
             <p .help> Опциальное поле, требует поддержки cloudinit
           <div .field>
             <label .label> (cloud-init) SSH ключи

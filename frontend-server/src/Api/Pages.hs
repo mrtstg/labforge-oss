@@ -407,7 +407,7 @@ deploymentEditPage tid t = do
       templates: #{preEscapedToMarkup names},
       title: "#{preEscapedToMarkup templateTitle}",
       vms: #{preEscapedToMarkup vms},
-      addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: ""}) },
+      addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
       existingNetworks: #{preEscapedToMarkup $ (LBS.unpack . encode) templateExistingNetworks},
       removeENet(i) { this.existingNetworks.splice(i, 1) },
@@ -492,7 +492,7 @@ deploymentCreatePage t = do
       templates: #{preEscapedToMarkup names},
       title: "",
       vms: [],
-      addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: ""}) },
+      addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
       moveVM(index, delta) {
         if (this.vms.length < 2 || index + delta < 0 || index + delta >= this.vms.length - 1) {
