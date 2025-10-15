@@ -227,7 +227,7 @@ instance FromJSON ConfigVM where
       <*> v .:? "networks" .!= Nothing
       <*> nullDefaultWrapper (KM.lookup "clean_networks" v) False variableBooleanParser
       <*> nullDefaultWrapper (KM.lookup "running" v) True variableBooleanParser
-      <*> v .:? "storage"
+      <*> nonEmptyStringParser (KM.lookup "storage" v)
       <*> v .:? "display"
       <*> v .:? "cores"
       <*> nullMaybeWrapper (KM.lookup "cpu_limit" v) (limitedNumberParser (`elem` [0..128]) "CPU limit must be in range of 0..128")
