@@ -243,6 +243,30 @@ genericDeploymentForm = let
             <div .control>
               <textarea .textarea placeholder="Публичные SSH-ключи" rows=5 x-model="vms[index]['cloudinit_sshkeys']">
             <p .help> Опциальное поле, требует поддержки cloudinit
+          <p .label> Подключение дополнительных дисков
+          <div x-data="diskForm(obj)">
+            <p x-text="JSON.stringify(obj.disks)">
+            <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
+              <input .input type=number x-model.number="number" placeholder="Номер диска">
+              <div .select>
+                <select x-model="selectedType">
+                  <template x-for="avtype in allowedDiskTypes">
+                    <option x-text="avtype">
+              <input .input type=text x-model="size" placeholder="Размер диска">
+              <input .input type=text x-model="storage" placeholder="Целевое хранилище">
+            <button .button @click="addDisk"> Добавить диск
+            <p .label x-show="obj.disks.length > 0"> Добавленные диски
+            <template x-for="(diskData, diskIndex) in vms[index]['disks']">
+              <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
+                <div .is-size-5>
+                  <span x-text="diskData.type">
+                  <span x-text="diskData.number">
+                  <span> размером
+                  <span x-text="diskData.size">
+                  <span> на хранилище
+                  <span x-text="diskData.storage">
+                <button .button.is-danger.ml-5 @click="removeDisk(diskIndex)"> Удалить
+          <p .label> Добавление сетей
           <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth x-data="netForm(undefined, undefined)">
             <input .input type="text" x-model="netname">
             <div .select>

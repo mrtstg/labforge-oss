@@ -441,6 +441,19 @@ deploymentEditPage tid t = do
       }
     }))
 
+    Alpine.data("diskForm", (vmData) => ({
+      number: 0,
+      allowedDiskTypes: ['ide', 'sata', 'scsi', 'virtio'],
+      selectedType: "ide",
+      size: "",
+      storage: "",
+      addDisk() { if (this.number >= 0 && this.size.length > 0 && this.storage.length > 0)
+        { vmData.disks.push({number: this.number, type: this.selectedType, size: this.size, storage: this.storage })
+        }
+      },
+      removeDisk(index) { vmData.disks.splice(index, 1) }
+    }))
+
     Alpine.data("netForm", (vmData, netIndex) => ({
       init() {
         if (vmData == undefined) { return; }
@@ -492,7 +505,7 @@ deploymentCreatePage t = do
       templates: #{preEscapedToMarkup names},
       title: "",
       vms: [],
-      addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
+      addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: "", disks: []}) },
       deleteVM(i) { this.vms.splice(i, 1) },
       moveVM(index, delta) {
         if (this.vms.length < 2 || index + delta < 0 || index + delta >= this.vms.length - 1) {
@@ -524,6 +537,19 @@ deploymentCreatePage t = do
           console.log(err);
         })
       }
+    }))
+
+    Alpine.data("diskForm", (vmData) => ({
+      number: 0,
+      allowedDiskTypes: ['ide', 'sata', 'scsi', 'virtio'],
+      selectedType: "ide",
+      size: "",
+      storage: "",
+      addDisk() { if (this.number >= 0 && this.size.length > 0 && this.storage.length > 0)
+        { vmData.disks.push({number: this.number, type: this.selectedType, size: this.size, storage: this.storage })
+        }
+      },
+      removeDisk(index) { vmData.disks.splice(index, 1) }
     }))
 
     Alpine.data("netForm", (vmData, netIndex) => ({
