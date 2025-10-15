@@ -65,7 +65,7 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "snapshot" :> ReqBody '[JSON] ProxmoxSnapshotCreate :> Post '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "tasks" :> QueryParam "errors" Int :> QueryParam "limit" Int :> QueryParam "since" Int :> QueryParam "until" Int :> QueryParam "source" ProxmoxTaskSource :> QueryParam "statusfilter" Text :> QueryParam "typefilter" Text :> QueryParam "userfilter" Text :> QueryParam "vmid" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxTask])
   :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> QueryParam "content" Text :> QueryParam "vmid" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxStorageContent])
-  :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> ReqBody '[JSON] ProxmoxAllocateRequest :> Get '[JSON] (ProxmoxResponse String)
+  :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> ReqBody '[JSON] ProxmoxAllocateRequest :> Post '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "config" :> ReqBody '[JSON] (M.Map String Value) :> Post '[JSON] (ProxmoxResponse String)
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a

@@ -70,13 +70,19 @@ instance ToJSON ProxmoxStorageContent where
     , "volid" .= proxmoxContentVolID
     ]
 
-data ProxmoxAllocateFormat = Raw | Qcow2 | SubVol | VMDK deriving (Show, Eq, Enum, Ord)
+data ProxmoxAllocateFormat = Raw | Qcow2 | SubVol | VMDK deriving (Eq, Enum, Ord)
 
 instance ToJSON ProxmoxAllocateFormat where
   toJSON Raw    = String "raw"
   toJSON Qcow2  = String "qcow2"
   toJSON SubVol = String "subvol"
   toJSON VMDK   = String "vmdk"
+
+instance Show ProxmoxAllocateFormat where
+  show Raw    = "raw"
+  show Qcow2  = "qcow2"
+  show SubVol = "subvol"
+  show VMDK   = "vmdk"
 
 instance FromJSON ProxmoxAllocateFormat where
   parseJSON = withText "ProxmoxAllocateFormat" $ \case
