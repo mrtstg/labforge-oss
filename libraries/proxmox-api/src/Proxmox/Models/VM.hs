@@ -27,7 +27,7 @@ instance ToJSON ProxmoxVMDeleteRequest where
     ]
 
 defaultProxmoxVMDeleteRequest :: ProxmoxVMDeleteRequest
-defaultProxmoxVMDeleteRequest = ProxmoxVMDeleteRequest True False False
+defaultProxmoxVMDeleteRequest = ProxmoxVMDeleteRequest {proxmoxPurgeVM=True, proxmoxSkipLock=False, proxmoxDestroyUnrefferenced=True}
 
 newtype ProxmoxVMStatusWrapper = ProxmoxVMStatusWrapper ProxmoxVMStatus deriving Show
 
