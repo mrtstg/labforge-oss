@@ -96,6 +96,7 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "image" :> "create" :> QueryParam "name" Text :> QueryParam "id" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "deploy" :> QueryParam "action" Text :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "instances" :> QueryParam "page" Int :> QueryParam "refresh" Int :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
+  :<|> "deployment" :> Capture "deploymentId" Int :> "copy" :> AuthHeader' :> Get '[HTML] Html
 
 globalDecoder' :: AppT (Either ClientError a) -> AppT a
 globalDecoder' v = do
@@ -134,6 +135,7 @@ pagesServer = indexPage
   :<|> createImagePage
   :<|> deploymentDeployPage
   :<|> deploymentInstancesPage
+  :<|> copyDeploymentPage
 
 deploymentInstancesPage :: Int -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe BearerWrapper -> AppT Html
 deploymentInstancesPage did pageN refreshFlag groupFlag t = do
@@ -378,6 +380,15 @@ deleteImagePage id' t = do
     env <- asks $ getEnvFor DeploymentService
     _ <- globalDecoder' $ defaultRetryClientC env (C.deleteTemplate id' userToken)
     tempRedirectTo "/image/my"
+
+copyDeploymentPage :: Int -> Maybe BearerWrapper -> AppT Html
+copyDeploymentPage did t = do
+  _ <- canCreateDeployments t
+  let ~(Just userToken) = t
+  env <- asks $ getEnvFor DeploymentService
+  (DeploymentTemplate { .. }) <- globalDecoder' (defaultRetryClientC env $ C.getDeploymentTemplate did userToken)
+  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия", reqExistingNetworks=templateExistingNetworks, reqAvailableVMs=templateAvaiableVMs}) userToken)
+  tempRedirectTo "/deployment/my"
 
 deleteDeploymentPage :: Int -> Maybe BearerWrapper -> AppT Html
 deleteDeploymentPage did t = do
@@ -708,6 +719,7 @@ deploymentListPage pageN t = do
             <a .card-footer-item href=/deployment/#{templateId}/instances> Стенды
             <a .card-footer-item href=/deployment/#{templateId}/edit> Редактировать
             <a .card-footer-item href=/deployment/#{templateId}/delete> Удалить
+            <a .card-footer-item href=/deployment/#{templateId}/copy> Создать копию
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1
