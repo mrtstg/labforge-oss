@@ -15,3 +15,50 @@ make create-admin
 
 Вы можете зайти по данным из `docker.env` (поля `KC_BOOTSTRAP_ADMIN_USERNAME` и `KC_BOOTSTRAP_ADMIN_PASSWORD`). Далее, воспользуйтесь
 [руководством по созданию локальных пользователей](../keycloak/local-users.md).
+
+## Установка файловых агентов Proxmox
+
+Файловый агент - это компонент Labforge, который нужно установить на все планируемые к использованию гипервизоры. Он позволяет 
+системе корректировать ряд параметров, закрытых для редактирования по API PVE.
+
+Исполняемый файл и скрипт установки находятся в директории `fs-agent` установщика.
+
+### Подготовка установщика
+
+Для осуществления установки, в директорию требуется положить pem-сертификаты на Common Name в виде имени сервера.
+Сертификаты могут быть выпущены на IP-адрес гипервизора. Поместите их в папку под именами `crt.pem` и `crt-key.pem`
+
+TODO: выпуск сертов местным CA
+
+Также для файловых агентов нужно придумать токен доступа. **Зная его, можно редактировать параметры виртуальных машин,
+держите его в тайне!** Можете его создать при помощи команды `openssl rand -hex 30`.
+
+Создайте копию файла `proxmox-fs-agent.service.template` под названием `proxmox-fs-agent.service` и замените
+`${PROXMOX_AGENT_ACCESS_TOKEN}` на ваш токен доступа. Также, можете заменить `8000` на любой удобный вам порт. Итог должен быть примерно
+следующий:
+
+```
+[Unit]
+Description=Proxmox FS agent
+After=pve-guests.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+OOMScoreAdjust=-500
+ExecStart=/usr/local/bin/proxmox-fs-agent -p 3000 --crt /var/lib/proxmox-fs-agent/crt.pem --crt-key /var/lib/proxmox-fs-agent/crt-key.pem run
+Environment="PROXMOX_AGENT_ACCESS_TOKEN=MEGASECRETTOKEN"
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+После завершения всех приготовлений, скопируйте получившуюся директорию на гипервизор и выполните, находясь в ней, скрипт install.sh от имени
+суперпользователя. В случае успеха, в /var/lib/proxmox-fs-agent вы найдете сертификаты, а при помощи команды `systemctl start proxmox-fs-agent` запустить агента.
+Можете обратиться на адрес `https://<адрес гипервизора>:<указанный порт>` для проверки доступности.
+
+### Добавление серверов в базу данных
+
+
