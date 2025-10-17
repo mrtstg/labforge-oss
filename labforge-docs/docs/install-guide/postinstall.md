@@ -124,3 +124,9 @@ Node created!
 Successful response!
 ~ ➤ lnmgr delete --node example
 ```
+
+## Заполнение токен-файла
+
+Для проксирования трафика до виртуальных машин используется сервис, использующий конфигурационный файл `tokens.cfg`. После добавления
+серверов Proxmox в базу данных (см. пункт выше) его можно получить по адресу `https://<домен UI системы>/api/cluster/websockify/config`.
+Сохраните его и поместите в директорию `deployment/websockify/tokens.cfg` и выполните команду `docker restart labforge-websockify`.
