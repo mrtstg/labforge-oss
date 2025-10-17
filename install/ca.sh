@@ -10,3 +10,7 @@ cd ca
 [ -f "keycloak.crt" ] && echo "Found keycloak crt" || openssl x509 -req -days 365000 -set_serial "0x`openssl rand -hex 8`" -in keycloak-req.pem -out keycloak.crt -CA ca-crt.pem -CAkey ca-key.pem
 [ -f "labforge.key" ] && echo "Found labforge key" || openssl req -newkey rsa:2048 -nodes -days 365000 -subj "/CN=$FRONT_DOMAIN" -keyout labforge.key -out labforge-req.pem
 [ -f "labforge.crt" ] && echo "Found keycloak crt" || openssl x509 -req -days 365000 -set_serial "0x`openssl rand -hex 8`" -in labforge-req.pem -out labforge.crt -CA ca-crt.pem -CAkey ca-key.pem
+if [ "$#" -gt 0 ]; then
+    [ -f "$1.key" ] && echo "Found $1 key" || openssl req -newkey rsa:2048 -nodes -days 365000 -subj "/CN=$1" -keyout $1.key -out $1-req.pem
+    [ -f "$1.crt" ] && echo "Found $1 crt" || openssl x509 -req -days 365000 -set_serial "0x`openssl rand -hex 8`" -in $1-req.pem -out $1.crt -CA ca-crt.pem -CAkey ca-key.pem
+fi
