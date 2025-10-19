@@ -22,7 +22,7 @@ build-ca: docker.env install/ca.sh
 
 copy-nginx-prod: $(PROD_CONFIGS)
 	@for n in $(CA_CERTIFICATES); do \
-		(sudo docker cp deployment/nginx/ssl-prod/$$n labforge-nginx:/etc/nginx/ssl/$$n); \
+		(docker cp deployment/nginx/ssl-prod/$$n labforge-nginx:/etc/nginx/ssl/$$n); \
 	done
 	@for n in $(PROD_CONFIGS); do \
 		(docker cp $$n labforge-nginx:/etc/nginx/conf.d/); \
