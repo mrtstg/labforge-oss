@@ -676,7 +676,7 @@ deploymentListPage pageN t = do
   d@(PagedResponse {responseTotal=totalDeployments, responseObjects=deployments}) <- globalDecoder' $ defaultRetryClientC env (C.getPagedDeploymentTemplates (Just page) userToken)
   let hasNext = hasNextPages page d
   let totallyEmpty = page == 1 && totalDeployments == 0
-  (\v -> baseTemplate token Nothing (Just "Развертывания") v (Just $ genericGroupActionFormData (head allRoles))) [shamlet|
+  (\v -> baseTemplate token Nothing (Just "Развертывания") v (Just $ genericGroupActionFormData (if null allRoles then Nothing else (Just $ head allRoles)))) [shamlet|
 <div .container>
   $if totallyEmpty
     <h1 .title.is-3> Нет доступных развертываний!

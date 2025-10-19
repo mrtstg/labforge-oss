@@ -41,8 +41,8 @@ genericInstanceActionFormData = [shamlet|
   })
 |]
 
-genericGroupActionFormData :: FoundGroup -> Html
-genericGroupActionFormData (FoundGroup { groupName=defaultGroup }) = [shamlet|
+genericGroupActionFormData :: Maybe FoundGroup -> Html
+genericGroupActionFormData group = [shamlet|
 <script>
   document.addEventListener('alpine:init', () => {
     Alpine.data("groupDeploymentFormData", (deploymentId) => ({
@@ -93,7 +93,10 @@ genericGroupActionFormData (FoundGroup { groupName=defaultGroup }) = [shamlet|
       }
     }))
   })
-|]
+|] where
+  defaultGroup = case group of
+    Nothing                                        -> ""
+    (Just (FoundGroup { groupName = groupName' })) -> T.unpack groupName'
 
 genericInstanceActionForm :: Text -> Html
 genericInstanceActionForm instanceKey = [shamlet|
