@@ -43,7 +43,8 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port _ } = do
   authClient <- lookupEnv "AUTH_KEYCLOAK_CLIENT" <&> T.pack . fromMaybe "ln2"
   callbackUrl <- lookupEnv "AUTH_CALLBACK_URL" <&> T.pack . fromMaybe ""
   cookieAge <- lookupEnv "AUTH_COOKIE_AGE" <&> read . fromMaybe "86400"
-  let logFunction = if debug then defaultLogF else filterLogF LevelInfo
+  debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
+  let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
   (keycloakUrl, keycloakManager) <- runLoggingT (requireServiceEnv "KEYCLOAK") logFunction
   redisConn <- redisConnectionFromEnv
   when (isNothing redisConn) $ do
