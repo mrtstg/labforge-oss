@@ -35,7 +35,7 @@ USERS_ROLES=(
     "validate-users,group-read,user-read"
     "validate-users,deployment-admin"
     ""
-    "validate-users,role-read,group-read,role-manage,user-read"
+    "validate-users,role-read,group-read,role-manage,user-read,realm-management.manage-realm,realm-management.view-realm,realm-management.query-realms,realm-management.realm-admin"
     "deployment-admin,image-view"
     "jobservice-send,validate-users"
 )
@@ -102,7 +102,13 @@ for (( i = 0; i <${#REALM_CLIENTS[@]}; i++)); do
     else
         IFS=',' read -ra roles_row <<< "${USERS_ROLES[$i]}"
         for role in "${roles_row[@]}"; do
-            ./kcadm.sh add-roles -r $KEYCLOAK_REALM --uusername service-account-$clientName --rolename $role
+            if [[ $role == *"."* ]]; then
+                CLIENT_ID=$(echo $role | cut -d '.' -f1)
+                ROLE_NAME=$(echo $role | cut -d '.' -f2)
+                ./kcadm.sh add-roles -r $KEYCLOAK_REALM --uusername service-account-$clientName --rolename $ROLE_NAME --cclientid $CLIENT_ID
+            else
+                ./kcadm.sh add-roles -r $KEYCLOAK_REALM --uusername service-account-$clientName --rolename $role
+            fi
         done
     fi
 done
