@@ -149,7 +149,8 @@ getDeployNode token = do
           let nodesList = map entityVal allNodes
           let nodesNamesList = map (T.unpack . Database.deployNodeName) nodesList
           case find ((`elem` nodesNamesList) . Node.nodeName . fst) nodeMetrics of
-            Nothing -> sendJSONError err500 (JSONError "noAvailableNodes" "No nodes available!" Null)
+            Nothing -> do
+              sendJSONError err500 (JSONError "noAvailableNodes" "No nodes available: suggested deploy node, but cant find node by name!" Null)
             (Just (Node.ProxmoxNode { .. }, v)) -> do
               $(logInfo) $ T.pack $ "Chosen " <> nodeName <> " with value " <> show v
               case find ((== nodeName) . T.unpack . Database.deployNodeName) nodesList of
