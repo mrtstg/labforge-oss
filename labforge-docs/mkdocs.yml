@@ -52,6 +52,7 @@ nav:
     - Вход в Realm: keycloak/entering-realm.md
     - Создание локальных пользователей: keycloak/local-users.md
     - Присвоение ролей пользователям: keycloak/users-role.md
+    - Создание групп пользователей: keycloak/creating-groups.md
 
 draft_docs: |
   install-guide/repository.md
