@@ -248,7 +248,6 @@ genericDeploymentForm = let
             <p .help> Опциальное поле, требует поддержки cloudinit
           <p .label> Подключение дополнительных дисков
           <div x-data="diskForm(obj)">
-            <p x-text="JSON.stringify(obj.disks)">
             <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
               <input .input type=number x-model.number="number" placeholder="Номер диска">
               <div .select>
