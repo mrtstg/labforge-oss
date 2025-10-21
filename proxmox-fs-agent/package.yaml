@@ -47,6 +47,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -optl=-static
     dependencies:
     - proxmox-fs-agent
 
