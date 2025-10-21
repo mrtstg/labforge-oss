@@ -92,6 +92,9 @@ build-images:
 build-lib-image: deployment/Dockerfile
 	docker build --network host -t labforge-haskell -f deployment/Dockerfile .
 
+build-lib-bin-image: deployment/Dockerfile-binaries
+	docker build --network host -t labforge-haskell:binaries -f deployment/Dockerfile-binaries .
+
 deploy-dev: $(DEV_COMPOSE_FILE)
 	$(BASE_COMPOSE_COMMAND) -f $(DEV_COMPOSE_FILE) up -d
 
@@ -137,4 +140,4 @@ restore-images: ./images
 		echo "Restoring $(image)"; docker load -i ./images/$(call escape_image, $(image)).tar;)
 
 bundle:
-	tar -zcvf labforge.tar.gz --exclude={*/tokens.cfg,*/ssl*/*} *-sample.env Makefile images/ deployment/ install/ fs-agent/
+	tar -zcvf labforge.tar.gz --exclude={*/tokens.cfg,*/ssl*/*} *-sample.env Makefile images/ deployment/ install/ fs-agent/ proxmox-compose/proxmox-compose
