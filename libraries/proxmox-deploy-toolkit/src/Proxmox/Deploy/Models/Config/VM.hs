@@ -34,6 +34,7 @@ import qualified Data.Aeson.KeyMap               as KM
 import           Data.List                       (intercalate)
 import qualified Data.Map                        as M
 import           Data.Maybe
+import           Data.Scientific                 (fromFloatDigits)
 import qualified Data.Text                       as T
 import           Network.URI.Encode
 import           Parsers
@@ -165,7 +166,7 @@ data ConfigVM = TemplatedConfigVM
   , configVMStorage        :: !(Maybe String)
   , configVMDisplay        :: !(Maybe Int)
   , configVMCores          :: !(Maybe Int)
-  , configVMCPULimit       :: !(Maybe Int)
+  , configVMCPULimit       :: !(Maybe Float)
   , configVMMemory         :: !(Maybe Int)
   , configVMTags           :: ![String]
   , configVMInitUser       :: !(Maybe String)
@@ -226,7 +227,7 @@ formatConfigVMPatch vmid TemplatedConfigVM { .. } = (Just . M.fromList) $
     (Just v) -> [("cores", (Number . fromIntegral) v)]
   limit = case configVMCPULimit of
     Nothing  -> []
-    (Just v) -> [("cpulimit", (Number . fromIntegral) v)]
+    (Just v) -> [("cpulimit", Number $ fromFloatDigits v)]
   memory = case configVMMemory of
     Nothing  -> []
     (Just v) -> [("memory", (Number . fromIntegral) v)]
@@ -300,7 +301,7 @@ instance FromJSON ConfigVM where
       <*> nonEmptyStringParser (KM.lookup "storage" v)
       <*> v .:? "display"
       <*> v .:? "cores"
-      <*> nullMaybeWrapper (KM.lookup "cpu_limit" v) (limitedNumberParser (`elem` [0..128]) "CPU limit must be in range of 0..128")
+      <*> nullMaybeWrapper (KM.lookup "cpu_limit" v) (limitedFloatParser (\el -> el >= 0 && 128 >= el) "CPU limit must be in range of 0..128")
       <*> v .:? "memory"
       <*> v .:? "tags" .!= []
       <*> nonEmptyStringParser (KM.lookup "cloudinit_user" v)

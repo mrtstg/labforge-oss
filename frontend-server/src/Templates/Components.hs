@@ -212,7 +212,7 @@ genericDeploymentForm = let
           <div .field>
             <label .label> Лимит нагрузки CPU (в ядрах)
             <div .control>
-              <input .input type=number x-model.number="vms[index]['cpu_limit']">
+              <input .input type=number step=0.1 x-model.number="vms[index]['cpu_limit']">
           <div .field>
             <label .label> Хранилище для копирования
             <div .control>
