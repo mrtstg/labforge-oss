@@ -53,6 +53,8 @@ nav:
     - Создание локальных пользователей: keycloak/local-users.md
     - Присвоение ролей пользователям: keycloak/users-role.md
     - Создание групп пользователей: keycloak/creating-groups.md
+  - proxmox-compose:
+    - Основы использования: proxmox-compose/index.md
 
 draft_docs: |
   install-guide/repository.md
