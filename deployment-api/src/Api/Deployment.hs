@@ -23,6 +23,7 @@ module Api.Deployment
   ) where
 
 import           Api
+import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect
 import           Api.Keycloak.Models.User
@@ -31,7 +32,10 @@ import           Api.Retry
 import           Auth
 import           Auth.Client
 import           Auth.Token
+import           Cluster.Client
+import           Cluster.Models.Node
 import           Config
+import           Control.Monad                            (when)
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
@@ -50,6 +54,7 @@ import           Jobservice.Client
 import           Jobservice.Models
 import           Models
 import           Models.JSONError
+import           Network.HTTP.Types
 import           Pool
 import qualified Proxmox.Client                           as P
 import           Proxmox.Deploy.Models.Config
@@ -60,9 +65,11 @@ import           Proxmox.Deploy.Models.Config.Template
 import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Ssl
 import           Proxmox.Models
+import           Proxmox.Models.Network
 import           Proxmox.Models.VM
 import           Proxmox.Models.VMConfig
-import           Proxmox.Retry                            (defaultRetryClient')
+import           Proxmox.Retry                            (defaultRetryClient',
+                                                           defaultRetryClientC')
 import           Proxmox.Schema
 import           Redis.Common
 import           Servant
@@ -112,6 +119,7 @@ createTemplate (ConfigTemplate { .. }) (BearerWrapper token) = do
 
 deployTemplatesAdmin = "deployment-admin"
 deployTemplatesCreator = "deployment-create"
+deployTemplateAlloc = "deployment-alloc"
 
 templateSearchFilter :: IntrospectResponse -> [Filter DeploymentTemplateData]
 templateSearchFilter InactiveToken = error "Unreachable"
@@ -213,8 +221,124 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
           _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
           pure ()
 
-requestDeploymentVMID = undefined
-requestDeploymentDisplay = undefined
+requestDeploymentVMID :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
+requestDeploymentVMID _ _ Nothing (BearerWrapper token) = do
+  _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+  sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
+requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) = let
+  allocateVMID :: DeploymentInstanceDataId -> Int -> [Int] -> AppT (Maybe [Int])
+  allocateVMID dId amount = helper [] where
+    helper :: [Int] -> [Int] -> AppT (Maybe [Int])
+    helper acc [] | length acc /= amount = pure Nothing
+                  | otherwise = pure $ Just acc
+    helper acc (n:ns) | length acc /= amount = do
+      idHold <- runDB $ exists [ UsedVMIDNum ==. n ]
+      if idHold then helper acc ns else do
+        _ <- runDB $ insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})
+        helper (n:acc) ns
+                      | otherwise = (pure . pure) acc
+  in do
+  when (amount > 100 || amount < 1) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
+  _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+  d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
+  case d of
+    Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
+    (Just _) -> do
+      clusterEnv <- asks $ getEnvFor ClusterManager
+      clusterInfo <- withTokenVariable'' $ \t -> defaultRetryClientC clusterEnv $ getNodeByName nodeName (BearerWrapper t)
+      mgr <- liftIO $ createProxmoxManagerRaw (Just $ nodeApiToken clusterInfo) (nodeIgnoreSSL clusterInfo)
+      nodeUrl' <- liftIO $ tryParseUrl (T.unpack . nodeApiUrl $ clusterInfo)
+      case nodeUrl' of
+        (Left _) -> sendJSONError err500 (JSONError "serverError" "Failed to parse node URL" Null)
+        (Right nodeUrl) -> do
+          let state = ProxmoxState nodeUrl mgr
+          activeNodes <- defaultRetryClientC' state P.getActiveNodeVMNodeMap
+          case activeNodes of
+            (Left e) -> do
+              $(logError) $ T.pack $ "Failed to get nodes: " <> show e
+              sendJSONError err500 (JSONError "serverError" "Failed to get node data" Null)
+            (Right nodeMap) -> do
+              let takenVMIDs = map fst $ M.toList nodeMap
+              let idPool = filter (`notElem` takenVMIDs) [fromMaybe 100 (nodeStartVMID clusterInfo)..9999999]
+              allocRes <- allocateVMID (DeploymentInstanceDataKey deploymentId) amount idPool
+              case allocRes of
+                Nothing -> sendJSONError err400 (JSONError "allocationFailure" "Failed to allocate VMID" Null)
+                (Just vmid) -> pure vmid
+
+requestDeploymentNetworks :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [String]
+requestDeploymentNetworks _ _ Nothing (BearerWrapper token) = do
+  _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+  sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
+requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper token) = let
+  allocateNetworks :: DeploymentInstanceDataId -> Int -> [String] -> AppT (Maybe [String])
+  allocateNetworks dId amount pool = do
+    helper [] pool where
+      helper :: [String] -> [String] -> AppT (Maybe [String])
+      helper acc [] | length acc == amount = (pure . pure) acc
+                    | otherwise = pure Nothing
+      helper acc (n:ns) | length acc == amount = (pure . pure) acc
+                        | otherwise = do
+        nameHold <- runDB $ exists [ UsedBridgesName ==. T.pack n ]
+        if nameHold then helper acc ns else do
+          _ <- runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n})
+          helper (n:acc) ns
+  in do
+  when (amount > 100 || amount < 1) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
+  _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+  d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
+  case d of
+    Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
+    (Just _) -> do
+      clusterEnv <- asks $ getEnvFor ClusterManager
+      clusterInfo <- withTokenVariable'' $ \t -> defaultRetryClientC clusterEnv $ getNodeByName nodeName (BearerWrapper t)
+      mgr <- liftIO $ createProxmoxManagerRaw (Just $ nodeApiToken clusterInfo) (nodeIgnoreSSL clusterInfo)
+      nodeUrl' <- liftIO $ tryParseUrl (T.unpack . nodeApiUrl $ clusterInfo)
+      case nodeUrl' of
+        (Left _) -> sendJSONError err500 (JSONError "serverError" "Failed to parse node URL" Null)
+        (Right nodeUrl) -> do
+          let state = ProxmoxState nodeUrl mgr
+          bridges <- defaultRetryClientC' state $ P.getBridgeNodeNetworks nodeName
+          case bridges of
+            (Left e) -> do
+              $(logError) $ T.pack $ "Failed to get bridges: " <> show e
+              sendJSONError err500 (JSONError "serverError" "Failed to get node data" Null)
+            (Right bridgesList) -> do
+              let bridgesNames = map proxmoxNetworkInterface bridgesList
+              let sdnNamesPool = filter (`notElem` bridgesNames) $ iterLetters 8
+              allocRes <- allocateNetworks (DeploymentInstanceDataKey deploymentId) amount sdnNamesPool
+              case allocRes of
+                Nothing -> sendJSONError err400 (JSONError "allocationFailure" "Failed to allocate networks" Null)
+                (Just networks) -> pure networks
+
+requestDeploymentDisplay :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
+requestDeploymentDisplay _ _ Nothing (BearerWrapper token) = do
+  _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+  sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
+requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper token) = let
+  allocateDisplays :: Text -> DeploymentInstanceDataId -> Int -> [Int] -> AppT (Maybe [Int])
+  allocateDisplays node dId amount = helper [] where
+    helper :: [Int] -> [Int] -> AppT (Maybe [Int])
+    helper acc [] | length acc == amount = (pure . pure) acc
+                  | otherwise = pure Nothing
+    helper acc (n:ns) | length acc == amount = (pure . pure) acc
+                      | otherwise = do
+      displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
+      if displayHold then helper acc ns else do
+        _ <- runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node})
+        helper (n:acc) ns
+  in do
+    when (amount > 100 || amount < 1) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
+    _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+    d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
+    case d of
+      Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
+      (Just _) -> do
+        clusterEnv <- asks $ getEnvFor ClusterManager
+        clusterInfo <- withTokenVariable'' $ \t -> defaultRetryClientC clusterEnv $ getNodeByName nodeName (BearerWrapper t)
+        allocRes <- allocateDisplays nodeName (DeploymentInstanceDataKey deploymentId) amount [x | x <- [nodeMinDisplay clusterInfo..nodeMaxDisplay clusterInfo], 5900 + x `notElem` nodeExcludedPorts clusterInfo]
+        case allocRes of
+          Nothing -> sendJSONError err400 (JSONError "allocationFailure" "Failed to allocate displays" Null)
+          (Just displays) -> pure displays
 
 callGroupDeployment :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDeployment tID groupName (BearerWrapper token) = do
@@ -234,7 +358,7 @@ callGroupDeployment tID groupName (BearerWrapper token) = do
             r <- withTokenVariable' $ \t -> do
               defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
             case r of
-              (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
+              (Left _)  -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
               (Right _) -> do
                 $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
                 putTask tasksPool (GroupDeployment tID group)
@@ -597,3 +721,4 @@ deploymentServer = getPagedTemplates
   :<|> getDeploymentInstancesStats
   :<|> callInstanceDestroy
   :<|> callInstanceSnapshot
+  :<|> requestDeploymentNetworks
