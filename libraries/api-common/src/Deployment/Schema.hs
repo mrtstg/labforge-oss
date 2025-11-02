@@ -43,3 +43,4 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> "stats" :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] DeploymentStats
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "destroy" :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "snapshot" :> QueryParam "snapname" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "network" :> NodeNameCapture :> Capture "DeploymentInstanceID" Text :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [String]
