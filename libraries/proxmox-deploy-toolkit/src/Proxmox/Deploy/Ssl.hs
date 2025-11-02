@@ -16,11 +16,12 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 module Proxmox.Deploy.Ssl
   ( createProxmoxManager
   , createSSLManager
+  , createProxmoxManagerRaw
   ) where
 
 import qualified Data.ByteString.Char8               as BS
 import           Data.CaseInsensitive
-import           Data.Text                           (unpack)
+import           Data.Text                           (Text, unpack)
 import           Network.Connection
 import           Network.HTTP.Client
 import           Network.HTTP.Conduit
@@ -57,3 +58,6 @@ createProxmoxManager (DeployConfig { deployParameters=DeployParams {deployToken=
   in do
   let settings = mkManagerSettings tlsSettings Nothing
   newManager (settings { managerModifyRequest = f })
+
+createProxmoxManagerRaw :: Maybe Text -> Bool -> IO Manager
+createProxmoxManagerRaw token ignoreSSL = createProxmoxManager (DeployConfig { deployVMs=[], deployNetworks=[], deployTemplates=[], deployAgent=Nothing, deployParameters=DeployParams{deployToken=token, deployIgnoreSSL=ignoreSSL, deployNodeName="", deployUrl="", deployStartVMID=1}})
