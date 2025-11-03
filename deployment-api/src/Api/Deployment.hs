@@ -120,6 +120,7 @@ createTemplate (ConfigTemplate { .. }) (BearerWrapper token) = do
 deployTemplatesAdmin = "deployment-admin"
 deployTemplatesCreator = "deployment-create"
 deployTemplateAlloc = "deployment-alloc"
+deployInstanceAdmin = "deployment-instance-admin"
 
 templateSearchFilter :: IntrospectResponse -> [Filter DeploymentTemplateData]
 templateSearchFilter InactiveToken = error "Unreachable"
@@ -490,6 +491,23 @@ generateGroupDeploymentFilter (Just group) = do
     (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
     (Right users) -> pure [DeploymentInstanceDataOwnerId <-. map userID users]
 
+patchDeploymentInstance :: Text -> DeploymentPatch -> BearerWrapper -> AppT ()
+patchDeploymentInstance dId patch (BearerWrapper token) = let
+  generatePatch :: DeploymentPatch -> [Update DeploymentInstanceData]
+  generatePatch (DeploymentPatch { .. }) =
+    [DeploymentInstanceDataDeployConfig =. patchInstanceDeployConfig | isJust patchInstanceDeployConfig] <>
+    [DeploymentInstanceDataNetworkNamesMap =. fromJust patchInstanceNetworkMap | isJust patchInstanceNetworkMap] <>
+    [DeploymentInstanceDataState =. fromJust patchInstanceState | isJust patchInstanceState] <>
+    [DeploymentInstanceDataVmLinks =. fromJust patchInstanceVMLinks | isJust patchInstanceVMLinks]
+  in do
+  _ <- requireManyRealmRoles token [[deployInstanceAdmin]]
+  let instanceKey = DeploymentInstanceDataKey dId
+  instanceExists <- runDB $ exists [ DeploymentInstanceDataId ==. instanceKey ]
+  if not instanceExists then sendJSONError err404 (JSONError "notFound" "Instance not found" Null) else do
+    let ts = generatePatch patch
+    _ <- runDB $ updateWhere [ DeploymentInstanceDataId ==. instanceKey ] ts
+    pure ()
+
 getDeploymentInstancesStats :: Int -> Maybe Text -> BearerWrapper -> AppT DeploymentStats
 getDeploymentInstancesStats tID targetGroup (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
@@ -724,3 +742,4 @@ deploymentServer = getPagedTemplates
   :<|> callInstanceDestroy
   :<|> callInstanceSnapshot
   :<|> requestDeploymentNetworks
+  :<|> patchDeploymentInstance
