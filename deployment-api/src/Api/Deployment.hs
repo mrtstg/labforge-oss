@@ -193,10 +193,12 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
       if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
         sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
-        runDB $ delete (DeploymentTemplateDataKey . fromIntegral $ tID)
-        jobEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
-        pure ()
+        instancesExist <- runDB $ exists [ DeploymentInstanceDataParent ==. (DeploymentTemplateDataKey . fromIntegral $ tID)]
+        if instancesExist then sendJSONError err400 (JSONError "badRequest" "There is left instances of this deployment" Null) else do
+          runDB $ delete (DeploymentTemplateDataKey . fromIntegral $ tID)
+          jobEnv <- asks $ getEnvFor JobserviceAPI
+          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
+          pure ()
 
 patchDeploymentTemplate :: Int -> DeploymentCreate -> BearerWrapper -> AppT ()
 patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
