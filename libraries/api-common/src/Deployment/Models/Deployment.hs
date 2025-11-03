@@ -7,6 +7,7 @@ module Deployment.Models.Deployment
   , DeploymentInstanceBrief(..)
   , PowerState(..)
   , DeploymentStatus(..)
+  , DeploymentPatch(..)
   ) where
 
 import           Data.Aeson
@@ -111,6 +112,28 @@ instance FromJSON DeploymentInstanceBrief where
     <*> v .: "id"
     <*> v .: "status"
     <*> v .: "userId"
+
+data DeploymentPatch = DeploymentPatch
+  { patchInstanceDeployConfig :: !(Maybe DeployConfig)
+  , patchInstanceNetworkMap   :: !(Maybe (M.Map String String))
+  , patchInstanceState        :: !(Maybe DeploymentStatus)
+  , patchInstanceVMLinks      :: !(Maybe (M.Map String String))
+  } deriving (Show, Eq)
+
+instance ToJSON DeploymentPatch where
+  toJSON (DeploymentPatch { .. }) = object
+    [ "deployConfig" .= patchInstanceDeployConfig
+    , "networkMap" .= patchInstanceNetworkMap
+    , "vmLinks" .= patchInstanceVMLinks
+    , "state" .= patchInstanceState
+    ]
+
+instance FromJSON DeploymentPatch where
+  parseJSON = withObject "DeploymentPatch" $ \v -> DeploymentPatch
+    <$> v .:? "deployConfig"
+    <*> v .:? "networkMap"
+    <*> v .:? "vmLinks"
+    <*> v .:? "state"
 
 data DeploymentInstance = DeploymentInstance
   { instanceTitle        :: !Text
