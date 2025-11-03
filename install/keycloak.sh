@@ -19,6 +19,7 @@ REALM_ROLES=(
     "jobservice-send"
     "creator-minimal"
     "deployment-alloc"
+    "deployment-instance-admin"
 )
 REALM_CLIENTS=(
     "cluster-manager"
@@ -37,7 +38,7 @@ USERS_ROLES=(
     "validate-users,deployment-admin"
     ""
     "validate-users,role-read,group-read,role-manage,user-read,realm-management.manage-realm,realm-management.view-realm,realm-management.query-realms,realm-management.realm-admin"
-    "deployment-admin,image-view,deployment-alloc"
+    "deployment-admin,image-view,deployment-alloc,deployment-instance-admin"
     "jobservice-send,validate-users"
 )
 
