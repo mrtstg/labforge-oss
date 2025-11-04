@@ -38,6 +38,7 @@ import           Data.Text                       (pack)
 import           Deployment.Client
 import           Deployment.Models.Deployment
 import           Handler.AllocateNode
+import           Handler.Deployment
 import           Jobservice.Models
 import           Network.AMQP
 import           Pool
@@ -89,11 +90,27 @@ f (env, msg) = do
           cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just 600)
           $(logInfo) "Value updated!"
     (Right (JobserviceAllocateNode deploymentId)) -> do
-      allocateNode (env, msg) deploymentId
+      let lockKey = "allocate_node_lock"
+      v <- getValue' lockKey
+      case v of
+        Nothing -> do
+          cacheValue' lockKey "lock" (Just 600)
+          allocateNode (env, msg) deploymentId
+          deleteValue' lockKey
+        (Just _) -> do
+          $(logInfo) "Task is locked. Recreating message"
+          liftIO $ ackEnv env
+          r <- asks rabbitConnection
+          chan <- liftIO $ openChannel r
+          _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+          pure ()
     (Right (JobserviceDeployInstance deploymentId)) -> do
       $(logInfo) $ "Deploying " <> deploymentId
+      deployInstance env deploymentId
     (Right (JobserviceDestroyInstance deploymentId)) -> do
       $(logInfo) $ "Destroying " <> deploymentId
+      destroyInstance env deploymentId
+    _ -> pure ()
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = do
@@ -132,6 +149,7 @@ runCommand AppOpts { debugOn=debug } = do
     , deploySDNZone=pack deployZone
     , jobserviceApiEnv=mkClientEnv jobserviceManager jobserviceUrl
     , clusterEnv=mkClientEnv clusterManager clusterUrl
+    , rabbitConnection=amqpConn
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   pool <- createPool f (`appTIO` config) 4

@@ -31,6 +31,7 @@ import           Control.Monad.Reader
 import           Data.ByteString.Char8  (unpack)
 import           Data.Text              (Text)
 import           Database.Redis
+import qualified Network.AMQP           as R
 import           Redis.Common
 import           Servant
 import           Servant.Client
@@ -63,6 +64,7 @@ data Config = Config
   , jobserviceApiEnv   :: !ClientEnv
   , clusterEnv         :: !ClientEnv
   , deploySDNZone      :: !Text
+  , rabbitConnection   :: !R.Connection
   }
 
 instance ServiceEnvironment Config where

@@ -30,6 +30,7 @@ library
       App.Types
       Config
       Handler.AllocateNode
+      Handler.Deployment
       Handler.Utils
       Init
       Pool
