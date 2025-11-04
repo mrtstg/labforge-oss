@@ -1,0 +1,7 @@
+system-ghc: true
+
+casa:
+  enable: false
+
+package-index:
+  download-prefix: http://hackage.mrtstg.ru/

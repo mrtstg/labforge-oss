@@ -7,8 +7,8 @@ RUN ghcup -v install cabal latest
 RUN ghcup -v install stack latest
 ENV PATH=${PATH}:/root/.local/bin
 ENV PATH=${PATH}:/root/.ghcup/bin
+COPY deployment/stack.yaml /root/.stack/config.yaml
 RUN stack update
 WORKDIR /ln2
-RUN echo "system-ghc: true" >> /root/.stack/config.yaml
 COPY libraries ./libraries/
 COPY proxmox-fs-agent ./proxmox-fs-agent
