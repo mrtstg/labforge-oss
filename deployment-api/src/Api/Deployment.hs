@@ -75,12 +75,17 @@ import           Redis.Common
 import           Servant
 import           Servant.Client
 import           Service.Environment
-import           Text.Read                                (read, readMaybe)
 import           Utils
 
 templateAdminRole = "image-admin"
 templateReadRole = "image-view"
 pageSize = 20
+
+getTemplateNameList :: [Text] -> BearerWrapper -> AppT [ConfigTemplate]
+getTemplateNameList names (BearerWrapper token) = do
+  _ <- requireManyRealmRoles token [[templateAdminRole], [templateReadRole]]
+  templates <- runDB $ selectList [MachineTemplateDataName <-. names] []
+  return $ map (\(Entity k (MachineTemplateData { .. })) -> ConfigTemplate {configTemplateID=(fromIntegral . fromSqlKey) k, configTemplateName=T.unpack machineTemplateDataName}) templates
 
 getPagedTemplates :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [ConfigTemplate])
 getPagedTemplates pageN (BearerWrapper token) = do
@@ -743,3 +748,4 @@ deploymentServer = getPagedTemplates
   :<|> callInstanceSnapshot
   :<|> requestDeploymentNetworks
   :<|> patchDeploymentInstance
+  :<|> getTemplateNameList
