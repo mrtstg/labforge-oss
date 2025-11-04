@@ -132,8 +132,8 @@ instance FromJSON DeploymentPatch where
   parseJSON = withObject "DeploymentPatch" $ \v -> DeploymentPatch
     <$> v .:? "deployConfig"
     <*> v .:? "networkMap"
-    <*> v .:? "vmLinks"
     <*> v .:? "state"
+    <*> v .:? "vmLinks"
 
 data DeploymentInstance = DeploymentInstance
   { instanceTitle        :: !Text
