@@ -23,7 +23,7 @@ setDeploymentInstanceStatus :: Text -> DeploymentStatus -> AppT (Either String (
 setDeploymentInstanceStatus dId status = do
   deploymentEnv <- asks $ getEnvFor DeploymentService
   res <- withTokenVariable $ \token -> do
-    defaultRetryClientC deploymentEnv (patchDeploymentInstance dId
+    defaultRetryClient deploymentEnv (patchDeploymentInstance dId
       (DeploymentPatch {patchInstanceVMLinks=Nothing, patchInstanceState=Just status, patchInstanceNetworkMap=Nothing, patchInstanceDeployConfig=Nothing}) (BearerWrapper token))
   case res of
     (Left tokenError)          -> pure $ Left tokenError
