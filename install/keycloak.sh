@@ -38,7 +38,7 @@ USERS_ROLES=(
     "validate-users,deployment-admin"
     ""
     "validate-users,role-read,group-read,role-manage,user-read,realm-management.manage-realm,realm-management.view-realm,realm-management.query-realms,realm-management.realm-admin"
-    "deployment-admin,image-view,deployment-alloc,deployment-instance-admin,jobservice-send"
+    "deployment-admin,image-view,deployment-alloc,deployment-instance-admin,jobservice-send,user-read,cluster-admin"
     "jobservice-send,validate-users"
 )
 
