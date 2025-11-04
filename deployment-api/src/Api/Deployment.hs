@@ -590,6 +590,19 @@ getMyTemplateInstances pageN (BearerWrapper token) = let
         , responseTotal=instancesCount
         }
 
+deleteDeploymentInstance :: Text -> BearerWrapper -> AppT ()
+deleteDeploymentInstance instanceId (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  instance' <- runDB $ get (DeploymentInstanceDataKey instanceId)
+  case instance' of
+    Nothing -> sendJSONError err400 (JSONError "notFound" "Instance not found" Null)
+    (Just (DeploymentInstanceData { .. })) -> do
+      ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
+      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
+        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      else do
+        runDB $ delete (DeploymentInstanceDataKey instanceId)
+
 getDeploymentInstance :: Text -> BearerWrapper -> AppT DeploymentInstance
 getDeploymentInstance instanceId (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireToken token
@@ -749,3 +762,4 @@ deploymentServer = getPagedTemplates
   :<|> requestDeploymentNetworks
   :<|> patchDeploymentInstance
   :<|> getTemplateNameList
+  :<|> deleteDeploymentInstance
