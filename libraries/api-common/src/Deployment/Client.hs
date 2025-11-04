@@ -28,6 +28,7 @@ module Deployment.Client
   , requestDeploymentNetwork
   , patchDeploymentInstance
   , getTemplatesListByNames
+  , deleteDeploymentInstance
   ) where
 
 import           Data.Proxy
@@ -65,4 +66,5 @@ getPagedTemplates
   :<|> callInstanceSnapshot
   :<|> requestDeploymentNetwork
   :<|> patchDeploymentInstance
-  :<|> getTemplatesListByNames = client api
+  :<|> getTemplatesListByNames
+  :<|> deleteDeploymentInstance = client api
