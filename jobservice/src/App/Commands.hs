@@ -37,6 +37,7 @@ import           Data.Maybe
 import           Data.Text                       (pack)
 import           Deployment.Client
 import           Deployment.Models.Deployment
+import           Handler.AllocateNode
 import           Jobservice.Models
 import           Network.AMQP
 import           Pool
@@ -87,7 +88,12 @@ f (env, msg) = do
           let usedTemplates = nub $ foldMap (map configVMParentTemplate . filter isTemplateVM . templateVMs) d
           cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just 600)
           $(logInfo) "Value updated!"
-      pure ()
+    (Right (JobserviceAllocateNode deploymentId)) -> do
+      allocateNode (env, msg) deploymentId
+    (Right (JobserviceDeployInstance deploymentId)) -> do
+      $(logInfo) $ "Deploying " <> deploymentId
+    (Right (JobserviceDestroyInstance deploymentId)) -> do
+      $(logInfo) $ "Destroying " <> deploymentId
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = do
@@ -101,10 +107,14 @@ runCommand AppOpts { debugOn=debug } = do
   when (isNothing redis) $ do
     flip runLoggingT logFunction $ $(logError) "Failed to build Redis connection"
     exitWith (ExitFailure 1)
+  deployZone <- runLoggingT
+    (requireEnv "DEPLOY_SDN_ZONE" ($(logError) "DEPLOY_SDN_ZONE is not set" >> (liftIO . exitWith) (ExitFailure 1))) logFunction
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
   (depUrl, depManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
+  (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
+  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
 
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
   channel <- openChannel amqpConn
@@ -119,6 +129,9 @@ runCommand AppOpts { debugOn=debug } = do
     , deploymentEnv=mkClientEnv depManager depUrl
     , authFunctions=genericTokenFunctions logFunction creds (mkClientEnv authManager authUrl)
     , redisConnection=fromJust redis
+    , deploySDNZone=pack deployZone
+    , jobserviceApiEnv=mkClientEnv jobserviceManager jobserviceUrl
+    , clusterEnv=mkClientEnv clusterManager clusterUrl
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   pool <- createPool f (`appTIO` config) 4

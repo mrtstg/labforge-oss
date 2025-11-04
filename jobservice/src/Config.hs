@@ -60,11 +60,16 @@ data Config = Config
   , authFunctions      :: TokenVariableFunctions Text
   , redisConnection    :: !Connection
   , deploymentEnv      :: !ClientEnv
+  , jobserviceApiEnv   :: !ClientEnv
+  , clusterEnv         :: !ClientEnv
+  , deploySDNZone      :: !Text
   }
 
 instance ServiceEnvironment Config where
   getEnvFor AuthService       = asks authEnv
   getEnvFor DeploymentService = asks deploymentEnv
+  getEnvFor JobserviceAPI     = asks jobserviceApiEnv
+  getEnvFor ClusterManager    = asks clusterEnv
   getEnvFor _                 = error "Undefined environment"
 
 instance RedisConnection Config where

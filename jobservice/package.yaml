@@ -39,7 +39,9 @@ dependencies:
 - mtl == 2.2.2
 - stm == 2.5.1.0
 - hedis == 0.15.2
+- containers == 0.6.7
 - keycloak-api
+- proxmox-api
 - api-common
 - redis-utils
 - proxmox-deploy-toolkit
