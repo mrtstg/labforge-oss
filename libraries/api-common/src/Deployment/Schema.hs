@@ -45,4 +45,4 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> "snapshot" :> QueryParam "snapname" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "network" :> NodeNameCapture :> Capture "DeploymentInstanceID" Text :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [String]
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> ReqBody '[JSON] DeploymentPatch :> AuthHeader :> Patch '[JSON] ()
-  :<|> "api" :> "deployment" :> "templates" :> "names" :> "list" :> ReqBody '[JSON] [Text] :> AuthHeader :> Post '[JSON] [DeploymentTemplate]
+  :<|> "api" :> "deployment" :> "templates" :> "names" :> "list" :> ReqBody '[JSON] [Text] :> AuthHeader :> Post '[JSON] [ConfigTemplate]
