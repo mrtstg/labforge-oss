@@ -41,6 +41,8 @@ import           Database
 import           Database.Persist
 import           Database.Persist.Postgresql
 import           Deployment.Models.Deployment
+import qualified Jobservice.Client                        as J
+import           Jobservice.Models
 import           Models
 import qualified Proxmox.Client                           as P
 import           Proxmox.Deploy.Models.Config
@@ -238,112 +240,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
                   pure True
 
 handleTask :: TQueue QueryRequest -> QueryRequest -> AppT ()
-handleTask taskQuery (AllocateNode dID) = do
-  let instanceKey = (DeploymentInstanceDataKey dID)
-  let logInstance = addLogToDeploymentInstance instanceKey
-  let setStatus = setDeploymentInstanceStatus instanceKey
-
-  $(logDebug) $ "Got AllocateNode request for " <> dID
-  deployment <- runDB $ get instanceKey
-  case deployment of
-    Nothing -> $(logError) $ "Failed to find deployment with ID " <> dID
-    (Just inst@(DeploymentInstanceData { .. })) -> do
-      authEnv <- asks $ getEnvFor AuthService
-      ownerData'' <- withTokenVariable $ \t -> do
-        defaultRetryClientC authEnv $ getUserBriefInfo deploymentInstanceDataOwnerId (BearerWrapper t)
-      case ownerData'' of
-        (Left e) -> do
-          logInstance $ "Failed to allocate token: " <> pack e
-          setStatus Failed
-        (Right (Left e)) -> do
-          logInstance $ "Error response from auth: " <> (pack . show) e
-          setStatus Failed
-        (Right (Right (BriefUser { .. }))) -> do
-          logInstance "Allocating deploy node"
-          ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-          let vmTags = map unpack [deploymentTemplateDataTitle, fromMaybe "" userFirstName <> " " <> fromMaybe "" userLastName]
-          clusterEnv <- asks $ getEnvFor ClusterManager
-          nodeRequest <- withTokenVariable' $ \t -> do
-            runClientApp clusterEnv $ Cluster.getDeployNode (BearerWrapper t)
-          case nodeRequest of
-            (Left e) -> do
-              $(logError) $ "Error response from cluster manager: " <> (pack . show) e
-              logInstance $ "Cluster manager error: " <> (pack . show) e
-              setStatus Failed
-            (Right (ClusterNode { .. })) -> do
-              logInstance "Allocated node"
-              let deployNode = DeployParams { deployUrl = nodeApiUrl
-                , deployToken = Just nodeApiToken
-                , deployStartVMID = fromMaybe 100 nodeStartVMID
-                , deployNodeName = nodeName
-                , deployIgnoreSSL = nodeIgnoreSSL
-                }
-              let agentConfig = DeployAgentConfig { configAgentURL = nodeAgentUrl
-                , configAgentToken = nodeAgentToken
-                , configAgentDisplayNetwork = nodeDisplayNetwork
-                }
-              pveUrl' <- liftIO $ tryParseUrl (unpack nodeApiUrl)
-              case pveUrl' of
-                (Left e) -> do
-                  $(logError) $ "Failed to parse base URL: " <> pack e
-                  logInstance $ "Failed to base node URL: " <> pack e
-                  setStatus Failed
-                (Right pveUrl) -> do
-                  mgr <- liftIO $ createProxmoxManager (DeployConfig { deployParameters = deployNode, deployTemplates = [], deployNetworks = [], deployVMs = [], deployAgent = Nothing })
-                  let state = ProxmoxState pveUrl mgr
-                  ~(Right takenIds) <- getTakenVMID state
-                  allocRes <- allocateVMID instanceKey (length deploymentTemplateDataVms) (filter (`notElem` takenIds) [fromMaybe 100 nodeStartVMID..9999999])
-                  case allocRes of
-                    Nothing -> do
-                      $(logError) $ "Failed to allocate VMIDs!"
-                      logInstance $ "Failed to allocate VMID"
-                      setStatus Failed
-                    (Just vmid) -> do
-                      sdnZone <- asks (unpack . deploySDNZone)
-                      let sdnNetworksNames = filter (`notElem` deploymentTemplateDataExistingNetworks) $ map (pack . configVMNetworkName) $ foldMap (fromMaybe [] . configVMNetworks) deploymentTemplateDataVms
-                      nodeBridges' <- defaultRetryClient' state $ P.getBridgeNodeNetworks nodeName
-                      case nodeBridges' of
-                        (Left e) -> do
-                          $(logError) $ "Failed to get node bridges: " <> (pack . show) e
-                          logInstance $ "Failed to get node bridges: " <> (pack . show) e
-                          setStatus Failed
-                        (Right nodeBridges) -> do
-                          let bridgesNames = map proxmoxNetworkInterface nodeBridges
-                          let sdnNamesPool = filter (`notElem` bridgesNames) $ iterLetters 8
-                          sdnAllocRes <- allocateNetworks instanceKey (length sdnNetworksNames) sdnNamesPool
-                          case sdnAllocRes of
-                            Nothing -> do
-                              $(logError) $ "Failed to allocate nets!"
-                              logInstance $ "Failed to allocate networks"
-                              setStatus Failed
-                            (Just sdnNames) -> do
-                              let namesMap = M.mapKeys unpack . M.fromList $ zip sdnNetworksNames sdnNames
-                              let networks = map (ExistingNetwork . unpack) deploymentTemplateDataExistingNetworks ++ map (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) sdnNames
-                              let replacedNetworksVM = map (renameNet namesMap) deploymentTemplateDataVms
-                              displayAllocRes <- allocateDisplays nodeName instanceKey (length deploymentTemplateDataVms) [x | x <- [nodeMinDisplay..nodeMaxDisplay], 5900 + x `notElem` nodeExcludedPorts]
-                              case displayAllocRes of
-                                Nothing -> do
-                                  $(logError) $ "Failed to allocate displays!"
-                                  logInstance $ "Failed to allocate displays"
-                                  setStatus Failed
-                                (Just vmDisplays) -> do
-                                  let zippedDisplays = zip replacedNetworksVM vmDisplays
-                                  let linksMap = M.mapKeys configVMName $ M.map (\d -> unpack nodeName <> "-" <> show d) $ M.fromList zippedDisplays
-                                  let configuredVMs = zipWith (\d v -> v {configVMID = Just d, configVMTags = vmTags}) vmid (map (\ (v, d) -> v {configVMDisplay = Just d}) zippedDisplays)
-                                  templates <- runDB $ selectList [ MachineTemplateDataName <-. map (pack . configVMParentTemplate) configuredVMs ] []
-                                  let deployConfig = DeployConfig { deployAgent=Just agentConfig
-                                    , deployVMs=configuredVMs
-                                    , deployNetworks=networks
-                                    , deployTemplates=map (\e -> ConfigTemplate {configTemplateName=(unpack . machineTemplateDataName . entityVal) e, configTemplateID=(fromIntegral . fromSqlKey . entityKey) e}) templates
-                                    , deployParameters=deployNode
-                                    }
-                                  runDB $ updateWhere [ DeploymentInstanceDataId ==. instanceKey ]
-                                    [ DeploymentInstanceDataDeployConfig =. Just deployConfig
-                                    , DeploymentInstanceDataNetworkNamesMap =. namesMap
-                                    , DeploymentInstanceDataVmLinks =. linksMap
-                                    ]
-                                  (liftIO . atomically) $ writeTQueue taskQuery (DeployInstance dID)
-handleTask taskQuery (GroupDeployment tID groupName) = do
+handleTask _ (GroupDeployment tID groupName) = do
   $(logDebug) $ "Creating group deployment for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -357,10 +254,11 @@ handleTask taskQuery (GroupDeployment tID groupName) = do
         DeploymentInstanceDataState ==. Created,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
-      mapM_ (\(DeploymentInstanceDataKey t) -> (liftIO . atomically) $ writeTQueue taskQuery (DeployInstance t)) existingDeployments
+      jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceDeployInstance t) (BearerWrapper token)) existingDeployments
       newDeployments <- createMissingDeployments (DeploymentTemplateDataKey $ fromIntegral tID) tID users
-      mapM_ (\t -> (liftIO . atomically) $ writeTQueue taskQuery (AllocateNode t)) newDeployments
-handleTask taskQuery (GroupDestroy tID groupName) = do
+      mapM_ (\t -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv (J.insertJobserviceMessage (JobserviceAllocateNode t) (BearerWrapper token))) newDeployments
+handleTask _ (GroupDestroy tID groupName) = do
   $(logDebug) $ "Creating group destroy for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -376,7 +274,8 @@ handleTask taskQuery (GroupDestroy tID groupName) = do
         DeploymentInstanceDataState !=. Deploying,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
-      mapM_ (\(DeploymentInstanceDataKey t) -> (liftIO . atomically) $ writeTQueue taskQuery (DestroyInstance t)) existingDeployments
+      jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceDestroyInstance t) (BearerWrapper token)) existingDeployments
 handleTask taskQuery (GroupRollback tID groupName snapName) = do
   $(logDebug) $ "Creating group rollback for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
@@ -443,45 +342,6 @@ handleTask taskQuery (RollbackInstance dID snapName) = do
         (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
           _ <- deployTransaction (map (`VMRollbacked` unpack snapName) vms) instanceKey deployConfig
           pure ()
-handleTask taskQuery (DeployInstance dID) = do
-  let instanceKey = (DeploymentInstanceDataKey dID)
-  let logInstance = addLogToDeploymentInstance instanceKey
-  let setStatus = setDeploymentInstanceStatus instanceKey
-
-  $(logInfo) $ "Deploying instance " <> (pack . show) dID
-  instance' <- runDB $ get (DeploymentInstanceDataKey dID)
-  case instance' of
-    Nothing -> $(logError) $ "Deploy instance " <> dID <> " not found"
-    (Just (DeploymentInstanceData { .. })) -> do
-      setStatus Deploying
-      case deploymentInstanceDataDeployConfig of
-        Nothing -> do
-          $(logError) $ "Deployment config is not set!"
-          logInstance "Deployment config is not set!"
-          setStatus Failed
-        (Just deployConfig) -> do
-          _ <- generateAndDeployTransaction Deploy instanceKey deployConfig
-          pure ()
-handleTask tasksQueue (DestroyInstance dID) = do
-  let instanceKey = (DeploymentInstanceDataKey dID)
-  let logInstance = addLogToDeploymentInstance instanceKey
-  let setStatus = setDeploymentInstanceStatus instanceKey
-
-  $(logInfo) $ "Destroying instance " <> (pack . show) dID
-  instance' <- runDB $ get (DeploymentInstanceDataKey dID)
-  case instance' of
-    Nothing -> $(logError) $ "Deploy instance " <> dID <> " not found"
-    (Just (DeploymentInstanceData { .. })) -> do
-      setStatus Destroying
-      case deploymentInstanceDataDeployConfig of
-        Nothing -> do
-          $(logError) $ "Deployment config is not set!"
-          logInstance "Deployment config is not set!"
-          setStatus Created
-          runDB $ delete instanceKey
-        (Just deployConfig) -> do
-          deployed <- generateAndDeployTransaction Destroy instanceKey deployConfig
-          if deployed then runDB $ delete instanceKey else pure ()
 handleTask taskQuery (GroupMakeSnapshot tID groupName snapName) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)

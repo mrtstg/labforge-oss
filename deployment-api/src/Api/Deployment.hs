@@ -481,8 +481,8 @@ callInstanceDestroy instanceKey (BearerWrapper token) = do
       if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
         sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
-        Config { .. } <- ask
-        putTask tasksPool (DestroyInstance instanceKey)
+        jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceDestroyInstance instanceKey) (BearerWrapper t))
         pure ()
 
 generateGroupDeploymentFilter :: Maybe Text -> AppT [Filter DeploymentInstanceData]

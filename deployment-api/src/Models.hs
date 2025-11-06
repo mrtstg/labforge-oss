@@ -17,9 +17,6 @@ module Models (QueryRequest(..)) where
 import           Data.Text
 
 data QueryRequest = GroupDeployment Int Text
-  | AllocateNode Text
-  | DeployInstance Text
-  | DestroyInstance Text
   | GroupDestroy Int Text
   | GroupPower Int Text Bool
   | DeploymentMakeSnapshot Text Text
