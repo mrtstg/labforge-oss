@@ -39,6 +39,7 @@ import           Deployment.Client
 import           Deployment.Models.Deployment
 import           Handler.AllocateNode
 import           Handler.Deployment
+import           Handler.Power
 import           Jobservice.Models
 import           Network.AMQP
 import           Pool
@@ -110,6 +111,8 @@ f (env, msg) = do
     (Right (JobserviceDestroyInstance deploymentId)) -> do
       $(logInfo) $ "Destroying " <> deploymentId
       destroyInstance env deploymentId
+    (Right (JobservicePower deploymentId powerOn)) -> do
+      jobservicePower env deploymentId powerOn
     _ -> pure ()
 
 runCommand :: AppOpts -> IO ()

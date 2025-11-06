@@ -377,7 +377,7 @@ handleTask _ (GroupPower tID groupName powerOn) = do
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
       let usersId = map userID users
-      existingDeployments <- runDB $ selectList [
+      existingDeployments <- runDB $ selectKeysList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState !=. Created,
@@ -385,19 +385,8 @@ handleTask _ (GroupPower tID groupName powerOn) = do
         DeploymentInstanceDataState !=. Deploying,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
-      let f = if powerOn then P.startVM else P.stopVM
-      forM_ existingDeployments $ \(Entity dID DeploymentInstanceData { .. }) -> do
-        $(logInfo) $ "Entering deployment " <> (pack . show) dID
-        case deploymentInstanceDataDeployConfig of
-          Nothing -> pure ()
-          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { .. }, .. })) -> do
-            mgr <- liftIO $ createProxmoxManager deployConfig
-            url <- liftIO $ parseBaseUrl (unpack deployUrl)
-            let state = ProxmoxState url mgr
-            forM_ deployVMs $ \vm -> do
-              let vmId = fromMaybe (-1) $ configVMID vm
-              _ <- defaultRetryClient' state (f deployNodeName vmId)
-              $(logInfo) $ "Turned " <> (if powerOn then "on " else "off ") <> (pack . show) vmId
+      jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobservicePower t powerOn) (BearerWrapper token)) existingDeployments
 handleTask _ r = do
   $(logInfo) $ (pack . show) r
   pure ()
