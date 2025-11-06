@@ -15,16 +15,18 @@ data JobserviceMessage = JobserviceUpdateUsedImages {}
                        | JobserviceAllocateNode { deploymentId :: !Text }
                        | JobserviceDeployInstance { deploymentId :: !Text }
                        | JobserviceDestroyInstance { deploymentId :: !Text }
-                       | JobserviceGroupDeployment { deploymentGroup :: !Text, deploymentTemplateId :: !Int }
-                       | JobserviceGroupDestroy { deploymentGroup :: !Text, deploymentTemplateId :: !Int } deriving (Show, Eq)
+                       | JobserviceSnapshot { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentDelete :: !Bool }
+                       | JobserviceRollback { deploymentId :: !Text, deploymentSnapshot :: !Text }
+                       | JobservicePower { deploymentId :: !Text, deploymentPower :: !Bool } deriving (Show, Eq)
 
 instance ToJSON JobserviceMessage where
   toJSON (JobserviceUpdateUsedImages {}) = object ["type" .= String "updateImages"]
   toJSON (JobserviceAllocateNode { .. }) = object ["type" .= String "allocateNode", "deploymentId" .= deploymentId]
   toJSON (JobserviceDeployInstance { .. }) = object ["type" .= String "deployInstance", "deploymentId" .= deploymentId]
   toJSON (JobserviceDestroyInstance { .. }) = object ["type" .= String "destroyInstance", "deploymentId" .= deploymentId]
-  toJSON (JobserviceGroupDeployment { .. }) = object ["type" .= String "groupDeployment", "template" .= deploymentTemplateId, "group" .= deploymentGroup]
-  toJSON (JobserviceGroupDestroy { .. }) = object ["type" .= String "groupDestroy", "template" .= deploymentTemplateId, "group" .= deploymentGroup]
+  toJSON (JobserviceSnapshot { .. }) = object [ "type" .= String "snapshotInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "delete" .= deploymentDelete ]
+  toJSON (JobserviceRollback { .. }) = object [ "type" .= String "rollbackInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot ]
+  toJSON (JobservicePower { .. }) = object [ "type" .= String "powerInstance", "deploymentId" .= deploymentId, "power" .= deploymentPower ]
 
 instance FromJSON JobserviceMessage where
   parseJSON = withObject "JobserviceMessage" $ \v -> case KM.lookup "type" v of
@@ -35,10 +37,14 @@ instance FromJSON JobserviceMessage where
       <$> v .: "deploymentId"
     (Just (String "destroyInstance")) -> JobserviceDestroyInstance
       <$> v .: "deploymentId"
-    (Just (String "groupDeployment")) -> JobserviceGroupDeployment
-      <$> v .: "group"
-      <*> v .: "template"
-    (Just (String "groupDestroy")) -> JobserviceGroupDestroy
-      <$> v .: "group"
-      <*> v .: "template"
+    (Just (String "snapshotInstance")) -> JobserviceSnapshot
+      <$> v .: "deploymentid"
+      <*> v .: "snapshot"
+      <*> v .: "delete"
+    (Just (String "rollbackInstance")) -> JobserviceRollback
+      <$> v .: "deploymentid"
+      <*> v .: "snapshot"
+    (Just (String "powerInstance")) -> JobservicePower
+      <$> v .: "deploymentId"
+      <*> v .: "power"
     _anyOther                      -> fail "Invalid task type!"
