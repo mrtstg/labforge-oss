@@ -12,6 +12,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
+{-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -51,6 +52,7 @@ import           Service.Config
 import           Service.Environment
 import           System.Environment
 import           System.Exit
+import           System.Random
 
 getAllTemplates :: AppT (Maybe [DeploymentTemplate])
 getAllTemplates = let
@@ -75,13 +77,13 @@ getAllTemplates = let
 
 f :: (Envelope, Message) -> AppT ()
 f (env, msg) = do
+  _ <- liftIO $ do
+    randomDelay <- randomRIO (1_000_000, 3_000_000) :: IO Int
+    threadDelay randomDelay
   case eitherDecode (msgBody msg) of
     (Left e) -> do
-      liftIO $ ackEnv env
       $(logError) $ "Decode error: " <> pack e
     (Right (JobserviceUpdateUsedImages {})) -> do
-      liftIO $ ackEnv env
-      $(logInfo) "Updating used images"
       $(logInfo) "Getting templates"
       tmpls <- getAllTemplates
       case tmpls of
@@ -100,15 +102,28 @@ f (env, msg) = do
           deleteValue' lockKey
         (Just _) -> do
           $(logInfo) "Task is locked. Recreating message"
-          liftIO $ ackEnv env
           r <- asks rabbitConnection
           chan <- liftIO $ openChannel r
           _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
           pure ()
     (Right (JobserviceDeployInstance deploymentId)) -> do
-      $(logInfo) $ "Deploying " <> deploymentId
-      deployInstance env deploymentId
+      let lockKey = "deploy_task_lock"
+      v <- getValue' lockKey
+      case v of
+        Nothing -> do
+          cacheValue' lockKey "lock" (Just 10)
+          $(logInfo) $ "Deploying " <> deploymentId
+          deployInstance env deploymentId
+        (Just _) -> do
+          $(logInfo) "Task is locked. Recreating message"
+          r <- asks rabbitConnection
+          chan <- liftIO $ openChannel r
+          _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+          pure ()
     (Right (JobserviceDestroyInstance deploymentId)) -> do
+      _ <- liftIO $ do
+        randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
+        threadDelay randomDelay
       $(logInfo) $ "Destroying " <> deploymentId
       destroyInstance env deploymentId
     (Right (JobservicePower deploymentId powerOn)) -> do
@@ -157,9 +172,9 @@ runCommand AppOpts { debugOn=debug } = do
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   pool <- createPool f (`appTIO` config) 4
   _ <- forever $ do
-    res <- getMsg channel Ack queue
+    res <- getMsg channel NoAck queue
     case res of
-      Nothing -> threadDelay 100000
+      Nothing -> threadDelay 100_000
       (Just (msg, env)) -> do
         putTask pool (env, msg)
   return ()

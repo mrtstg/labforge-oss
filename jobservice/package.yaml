@@ -40,6 +40,7 @@ dependencies:
 - stm == 2.5.1.0
 - hedis == 0.15.2
 - containers == 0.6.7
+- random == 1.2.1.1
 - keycloak-api
 - proxmox-api
 - api-common

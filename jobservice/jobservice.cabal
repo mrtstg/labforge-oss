@@ -62,6 +62,7 @@ library
     , optparse-applicative ==0.17.1.0
     , proxmox-api
     , proxmox-deploy-toolkit
+    , random ==1.2.1.1
     , redis-utils
     , servant-client ==0.19
     , servant-server ==0.19.2
@@ -100,6 +101,7 @@ executable jobservice-exe
     , optparse-applicative ==0.17.1.0
     , proxmox-api
     , proxmox-deploy-toolkit
+    , random ==1.2.1.1
     , redis-utils
     , servant-client ==0.19
     , servant-server ==0.19.2
