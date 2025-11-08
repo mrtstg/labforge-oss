@@ -120,6 +120,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
+  (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
 
   let authEnv = mkClientEnv authManager authUrl
   let config = Config { serviceCredentials=creds
@@ -128,6 +129,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     , authToken=tokenV
     , authEnv=authEnv
     , authFunctions=genericTokenFunctions logFunction creds authEnv
+    , deploymentEnv = mkClientEnv deploymentManager deploymentUrl
     }
   let app' = app config
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"

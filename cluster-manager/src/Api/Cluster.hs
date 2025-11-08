@@ -26,6 +26,7 @@ import           Api
 import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect      (IntrospectResponse (..))
+import           Api.Keycloak.Utils
 import           Auth.Token
 import           Cluster.Models.Node
 import           Cluster.Schema
@@ -33,6 +34,7 @@ import           Config
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
+import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Either
 import           Data.List                           (find, intercalate, sortOn)
@@ -42,6 +44,7 @@ import           Data.Text                           (Text)
 import qualified Data.Text                           as T
 import           Database
 import           Database.Persist
+import qualified Deployment.Client                   as D
 import           Models.JSONError
 import           Proxmox.Client
 import           Proxmox.Deploy.Models.Config
@@ -54,6 +57,7 @@ import           Proxmox.Retry
 import           Proxmox.Schema
 import           Servant
 import           Servant.Client
+import           Service.Environment
 
 measureNode :: ProxmoxNode -> Float
 measureNode (Node.ProxmoxNode { Node.nodeCPU = Just cpu, Node.nodeMemory = Just mem, Node.nodeMaxMemory = Just maxMem }) = do
@@ -141,7 +145,10 @@ getDeployNode token = do
           $(logError) $ "Failure response during getting deploy node: " <> (T.pack . show) e
           sendJSONError err500 (JSONError "noAvailableNodes" "Error response from node" Null)
         (Right nodes) -> do
-          nodeVMAmount <- traverse (\x -> defaultRetryClient' state ((getNodeVMs . T.pack . Node.nodeName) x >>= \(ProxmoxResponse vms _) -> pure (T.pack . Node.nodeName $ x, length vms))) nodes
+          deploymentEnv <- asks $ getEnvFor DeploymentService
+          undeployedMap <- withTokenVariable'' $ \t -> do
+            defaultRetryClientC deploymentEnv (D.getUndeployedVMAmount (BearerWrapper t))
+          nodeVMAmount <- traverse (\x -> defaultRetryClient' state ((getNodeVMs . T.pack . Node.nodeName) x >>= \(ProxmoxResponse vms _) -> pure (T.pack . Node.nodeName $ x, length vms + fromMaybe 0 (M.lookup (T.pack . Node.nodeName $ x) undeployedMap)))) nodes
           let nodeAmountMap = M.fromList $ map (fromRight ("", 0)) nodeVMAmount
           let totalNodes = sum $ map (snd . fromRight ("", 0)) nodeVMAmount
           let nodeMetrics = sortOn snd $ map (\x -> (x,) $ measureNode x + ((fromIntegral .  fromMaybe totalNodes) (M.lookup (T.pack . Node.nodeName $ x) nodeAmountMap)) / fromIntegral totalNodes) nodes

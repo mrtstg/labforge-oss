@@ -56,6 +56,7 @@ data Config = Config
   , authToken          :: !(TokenVariable Text)
   , authFunctions      :: TokenVariableFunctions Text
   , authEnv            :: !ClientEnv
+  , deploymentEnv      :: !ClientEnv
   }
 
 instance HasTokenVariable Config Text where
@@ -63,7 +64,8 @@ instance HasTokenVariable Config Text where
   getTokenFunctions = authFunctions
 
 instance ServiceEnvironment Config where
-  getEnvFor AuthService = authEnv
+  getEnvFor AuthService       = authEnv
+  getEnvFor DeploymentService = deploymentEnv
 
 runClientApp :: ClientEnv -> ClientM a -> AppT (Either ClientError a)
 runClientApp env m = liftIO $ runClientM m env
