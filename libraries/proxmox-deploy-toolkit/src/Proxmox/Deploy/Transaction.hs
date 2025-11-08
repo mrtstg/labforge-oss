@@ -176,14 +176,17 @@ applySDNWrapper = do
     null
   posixTimeInt <- getUnixIntTime
   _ <- defaultRetryClient' transactionProxmoxState applySDNSettings
-  _ <- waitForClient
+  r <- waitForClient
     5_000_000
     "Waiting for completing network reload time"
     120
     2_000_000
     (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just posixTimeInt) Nothing (Just ArchiveTasks) Nothing (Just "srvreload") Nothing Nothing)
     (\(ProxmoxResponse tasks _) -> not . null $ tasks)
-  pure ()
+  case r of
+    (Left _)      -> applySDNWrapper
+    (Right False) -> applySDNWrapper
+    (Right _)     -> pure ()
 
 executeTransactionAction :: TransactionAction -> StatefulTransactionT ()
 executeTransactionAction (AssignVMID vmName) = do
