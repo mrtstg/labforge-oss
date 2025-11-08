@@ -269,7 +269,6 @@ handleTask _ (GroupDestroy tID groupName) = do
       existingDeployments <- runDB $ selectKeysList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
-        DeploymentInstanceDataState !=. Created,
         DeploymentInstanceDataState !=. Destroying,
         DeploymentInstanceDataState !=. Deploying,
         DeploymentInstanceDataDeployConfig !=. Nothing
