@@ -698,6 +698,21 @@ switchVMPortPower vmPort (BearerWrapper token) = do
                       _ <- defaultRetryClient' state $ f nodeName vmid
                       pure (PowerState (vmPower /= VMRunning))
 
+getUndeployedVMAmount :: BearerWrapper -> AppT (M.Map Text Int)
+getUndeployedVMAmount (BearerWrapper token) = let
+  f :: [DeploymentInstanceData] -> M.Map Text Int -> M.Map Text Int
+  f [] acc = acc
+  f ((DeploymentInstanceData { deploymentInstanceDataDeployConfig=Nothing}):ds) acc = f ds acc
+  f ((DeploymentInstanceData { deploymentInstanceDataDeployConfig=Just (DeployConfig {deployParameters=(DeployParams {deployNodeName=deployNodeName}), deployVMs=vms})}):ds) acc = do
+    let vmAmount = length vms
+    case M.lookup deployNodeName acc of
+      Nothing     -> f ds (M.insert deployNodeName vmAmount acc)
+      (Just oldV) -> f ds (M.insert deployNodeName (vmAmount + oldV) acc)
+  in do
+  _ <- requireRealmRoles token ["cluster-admin"]
+  deployments <- runDB $ selectList [ DeploymentInstanceDataState <-. [Created, Deploying], DeploymentInstanceDataDeployConfig !=. Nothing ] []
+  pure (f (map entityVal deployments) M.empty)
+
 getVMPortNetworks :: Text -> BearerWrapper -> AppT (M.Map String String)
 getVMPortNetworks vmPort (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireToken token
@@ -763,3 +778,4 @@ deploymentServer = getPagedTemplates
   :<|> patchDeploymentInstance
   :<|> getTemplateNameList
   :<|> deleteDeploymentInstance
+  :<|> getUndeployedVMAmount
