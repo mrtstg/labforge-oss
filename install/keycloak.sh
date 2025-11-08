@@ -32,7 +32,7 @@ REALM_CLIENTS=(
     "jobservice-api"
 )
 USERS_ROLES=(
-    "validate-users"
+    "validate-users,cluster-admin"
     "validate-users,role-read,group-read,role-manage,cluster-admin,user-read,jobservice-send,image-view"
     "validate-users,group-read,user-read"
     "validate-users,deployment-admin"
