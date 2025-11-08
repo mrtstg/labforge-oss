@@ -59,7 +59,6 @@ defaultErrorFallback :: Text -> Envelope -> String -> AppT (Maybe a)
 defaultErrorFallback deploymentId env err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
   _ <- setDeploymentInstanceStatus deploymentId Failed
-  liftIO $ ackEnv env
   pure Nothing
 
 generateAndDeployTransaction :: DeployTarget -> Text -> DeployConfig -> AppT Bool
@@ -130,7 +129,7 @@ deployInstance env deploymentId = do
   case instance' of
     Nothing -> pure ()
     (Just (DeploymentInstance { .. })) -> do
-      if instanceState `notElem` [Deployed, Deploying, Destroying] then do
+      when (instanceState `notElem` [Deployed, Deploying, Destroying]) $ do
         _ <- setDeploymentInstanceStatus deploymentId Deploying
         case instanceDeployConfig of
           Nothing -> do
@@ -140,9 +139,7 @@ deployInstance env deploymentId = do
             pure ()
           (Just deployConfig) -> do
             _ <- generateAndDeployTransaction Deploy deploymentId deployConfig
-            liftIO $ ackEnv env
             pure ()
-      else liftIO $ ackEnv env
 
 destroyInstance :: Envelope -> Text -> AppT ()
 destroyInstance env deploymentId = do
@@ -163,10 +160,8 @@ destroyInstance env deploymentId = do
           pure ()
         (Just deployConfig) -> do
           deployed <- generateAndDeployTransaction Destroy deploymentId deployConfig
-          if deployed then do
+          when deployed $ do
             deleteRes <- withTokenVariable $ \t -> do
               defaultRetryClient deploymentEnv $ D.deleteDeploymentInstance deploymentId (BearerWrapper t)
             _ <- unpackError deleteRes errorF
-            liftIO $ ackEnv env
             pure ()
-          else liftIO $ ackEnv env

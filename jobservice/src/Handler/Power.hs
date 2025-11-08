@@ -36,7 +36,6 @@ defaultErrorFallback :: Text -> Envelope -> String -> AppT (Maybe a)
 defaultErrorFallback deploymentId env err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
   _ <- setDeploymentInstanceStatus deploymentId Failed
-  liftIO $ ackEnv env
   pure Nothing
 
 jobservicePower :: Envelope -> Text -> Bool -> AppT ()
@@ -51,7 +50,6 @@ jobservicePower env deploymentId powerOn = do
     (Just (DeploymentInstance { .. })) -> do
       case instanceDeployConfig of
         Nothing -> do
-          liftIO $ ackEnv env
           pure ()
         (Just deployConfig@(DeployConfig { deployParameters = DeployParams { .. }, .. })) -> do
           let f = if powerOn then P.startVM else P.stopVM
@@ -59,7 +57,6 @@ jobservicePower env deploymentId powerOn = do
           url' <- liftIO $ tryParseUrl (T.unpack deployUrl)
           case url' of
             (Left _) -> do
-              liftIO $ ackEnv env
               pure ()
             (Right url) -> do
               let state = ProxmoxState url mgr

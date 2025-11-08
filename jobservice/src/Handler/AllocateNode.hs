@@ -39,6 +39,7 @@ import           Proxmox.Models.Snapshot
 import           Proxmox.Models.Storage
 --import           Proxmox.Retry
 import           Api.BaseUrl
+import           Control.Concurrent
 import           Control.Monad.Logger
 import           Proxmox.Schema
 import           Servant.Client
@@ -48,7 +49,6 @@ defaultErrorFallback :: Text -> Envelope -> String -> AppT (Maybe a)
 defaultErrorFallback deploymentId env err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
   _ <- setDeploymentInstanceStatus deploymentId Failed
-  liftIO $ ackEnv env
   pure Nothing
 
 renameNet :: M.Map String String -> ConfigVM -> ConfigVM
@@ -69,7 +69,7 @@ allocateNode (env, msg) deploymentId = do
   case deployment' of
     Nothing                            -> pure ()
     (Just (DeploymentInstance { .. })) -> do
-      if isJust instanceDeployConfig then liftIO $ ackEnv env else do
+      if isJust instanceDeployConfig then pure () else do
         $(logInfo) $ "[" <> deploymentId <> "] Got deployment instance"
         authEnv <- asks $ getEnvFor AuthService
         ownerData'' <- withTokenVariable $ \t -> do
@@ -161,5 +161,4 @@ allocateNode (env, msg) deploymentId = do
                                       defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage (JobserviceDeployInstance deploymentId) (BearerWrapper t))
                                     _ <- unpackError jobRes errorF
                                     $(logInfo) $ "[" <> deploymentId <> "] Sent new deploy job"
-                                    liftIO $ ackEnv env
                                     pure ()
