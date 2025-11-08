@@ -49,3 +49,4 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "templates" :> "names" :> "list" :> ReqBody '[JSON] [Text] :> AuthHeader :> Post '[JSON] [ConfigTemplate]
   :<|> "api" :> "deployment" :> "instances" :> DeploymentInstanceCapture :> AuthHeader :> Delete '[JSON] ()
   :<|> "api" :> "deployment" :> "vm" :> "allocations" :> "amount" :> "undeployed" :> AuthHeader :> Get '[JSON] (M.Map Text Int)
+  :<|> "api" :> "deployment" :> "instances" :> DeploymentInstanceCapture :> "log" :> ReqBody '[JSON] Text :> AuthHeader :> Post '[JSON] ()
