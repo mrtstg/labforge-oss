@@ -155,6 +155,7 @@ runCommand AppOpts { debugOn=debug } = do
   (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
 
+  threadsAmount <- runLoggingT (lookupEnvDefault "THREADS_AMOUNT" 4) logFunction
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
   channel <- openChannel amqpConn
   (queue, _, _) <- declareQueue channel newQueue { queueName = "jobserviceQueue" }
@@ -174,7 +175,7 @@ runCommand AppOpts { debugOn=debug } = do
     , rabbitConnection=amqpConn
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
-  pool <- createPool f (`appTIO` config) 4
+  pool <- createPool f (`appTIO` config) threadsAmount
   _ <- forever $ do
     res <- getMsg channel NoAck queue
     case res of
