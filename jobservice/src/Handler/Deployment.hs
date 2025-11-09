@@ -3,6 +3,7 @@
 {-# LANGUAGE TemplateHaskell   #-}
 module Handler.Deployment (deployInstance, destroyInstance) where
 
+import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.User
 import           Api.Keycloak.Token
@@ -11,7 +12,10 @@ import           Auth.Client
 import qualified Cluster.Client                           as C
 import           Cluster.Models.Node
 import           Config
+import           Control.Monad.Except
+import           Control.Monad.Logger
 import           Control.Monad.Reader
+import           Control.Monad.State
 import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
@@ -37,11 +41,6 @@ import           Proxmox.Models
 import           Proxmox.Models.Network
 import           Proxmox.Models.Snapshot
 import           Proxmox.Models.Storage
---import           Proxmox.Retry
-import           Api.BaseUrl
-import           Control.Monad.Except
-import           Control.Monad.Logger
-import           Control.Monad.State
 import           Proxmox.Schema
 import           Servant.Client
 import           Service.Environment
@@ -77,7 +76,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
       let state = ProxmoxState url m
       let planState = TransactionState { transactionTarget=target
         , transactionProxmoxState=state
-        , transactionLogFunction=(\_ _ _ _ -> pure ()) --instanceLogFunction cfg deploymentKey
+        , transactionLogFunction=sendLogRequest deploymentKey cfg
         , transactionDeployConfig=deployConfig
         , transactionDataSetF=(\_ -> pure ())
         , transactionDataGetF=pure (TransactionData M.empty)

@@ -1,16 +1,43 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Handler.Utils
   ( setDeploymentInstanceStatus
   , unpackError
+  , sendLogRequest
+  , deployTransaction
   ) where
 
+import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Token
 import           Api.Retry
 import           Config
+import           Control.Monad.Except
+import           Control.Monad.Logger
 import           Control.Monad.Reader
-import           Data.Text                    (Text)
+import           Control.Monad.State
+import qualified Data.ByteString.Char8                    as BS
+import qualified Data.Map                                 as M
+import           Data.Text                                (Text)
+import qualified Data.Text                                as T
 import           Deployment.Client
+import qualified Deployment.Client                        as D
 import           Deployment.Models.Deployment
+import qualified Proxmox.Client                           as P
+import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Config.Deploy
+import           Proxmox.Deploy.Models.Config.DeployAgent
+import           Proxmox.Deploy.Models.Config.Network
+import           Proxmox.Deploy.Models.Config.Template
+import           Proxmox.Deploy.Models.Config.VM
+import           Proxmox.Deploy.Models.Transaction
+import           Proxmox.Deploy.Ssl
+import           Proxmox.Deploy.Transaction
+import           Proxmox.Deploy.Types
+import           Proxmox.Models
+import           Proxmox.Models.Snapshot
+import           Proxmox.Models.Storage
+import           Proxmox.Schema
 import           Servant.Client
 import           Service.Environment
 
@@ -18,6 +45,73 @@ unpackError :: Either String (Either ClientError a) -> (String -> AppT (Maybe a)
 unpackError (Left tokenError) handler          = handler tokenError
 unpackError (Right (Left clientError)) handler = handler . show $ clientError
 unpackError (Right (Right res)) _              = (pure . pure) res
+
+deployTransaction :: [TransactionStage] -> Text -> DeployConfig -> AppT Bool
+deployTransaction stages deploymentKey deployConfig@(DeployConfig { deployParameters = DeployParams {deployUrl=deployUrl, deployNodeName=nodeName} }) = do
+  cfg <- ask
+  parseRes <- liftIO $ tryParseUrl (T.unpack deployUrl)
+  case parseRes of
+    (Left e) -> do
+      $(logError) $ "Failed to parse URL: " <> T.pack e
+      --addLogToDeploymentInstance deploymentKey $ "Failed to parse URL: " <> pack e
+      --setDeploymentInstanceStatus deploymentKey Failed
+      pure False
+    (Right url) -> do
+      m <- liftIO $ createProxmoxManager deployConfig
+      let state = ProxmoxState url m
+      let planState = TransactionState { transactionTarget=Deploy
+        , transactionProxmoxState=state
+        , transactionLogFunction=sendLogRequest deploymentKey cfg
+        , transactionDeployConfig=deployConfig
+        , transactionDataSetF=(\_ -> pure ())
+        , transactionDataGetF=pure (TransactionData M.empty)
+        , transactionAllocateVMIDF=throwError (UnknownError "Cant allocate VMID")
+        , transactionActions=[]
+        }
+      v <- liftIO $ runProxmoxClient' state $ do
+        a <- P.getBridgeNodeNetworks nodeName
+        (ProxmoxResponse b _) <- P.getSDNZones
+        (ProxmoxResponse c _) <- P.getSDNNetworks Nothing
+        d <- P.getNodeStorage nodeName defaultProxmoxStorageFilter
+        e <- P.getActiveNodesVMMap
+        pure (a, b, c, d, e)
+      case v of
+        (Left e) -> do
+          $(logError) $ "Failed to get PVE data: " <> (T.pack . show) e
+          --addLogToDeploymentInstance deploymentKey $ "Failed to get PVE data: " <> (pack . show) e
+          --setDeploymentInstanceStatus deploymentKey Failed
+          pure False
+        (Right (a, b, c, d, e)) -> do
+          planRes <- liftIO $ planTransactionActions stages a b c d e planState
+          case planRes of
+            (Left e) -> do
+              $(logError) $ "Failed to plan transaction: " <> (T.pack . show) e
+              --addLogToDeploymentInstance deploymentKey $ "Failed to plan transaction: " <> (pack . show) e
+              --setDeploymentInstanceStatus deploymentKey Failed
+              pure False
+            (Right actions) -> do
+              $(logDebug) $ "Generated actions: " <> (T.pack . show) actions
+              result <- (liftIO . runExceptT) $ (runStateT (unTransaction executeTransaction) (planState { transactionActions = actions }))
+              case result of
+                (Left e) -> do
+                  $(logError) $ "Failed to run transaction: " <> (T.pack . show) e
+                  --addLogToDeploymentInstance deploymentKey $ "Failed to run transaction: " <> (pack . show) e
+                  --setDeploymentInstanceStatus deploymentKey Failed
+                  pure False
+                (Right _) -> do
+                  --setDeploymentInstanceStatus deploymentKey (if target == Deploy then Deployed else Created)
+                  pure True
+
+sendLogRequest :: Text -> Config -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+sendLogRequest deploymentId cfg loc src lvl msg = appTIO f cfg where
+  f :: AppT ()
+  f = do
+    let str = (T.pack . BS.unpack . fromLogStr) $ defaultLogStr loc src lvl msg
+    $(logInfo) str
+    deploymentEnv <- asks $ getEnvFor DeploymentService
+    _ <- withTokenVariable $ \token -> do
+      defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentId str (BearerWrapper token)
+    pure ()
 
 setDeploymentInstanceStatus :: Text -> DeploymentStatus -> AppT (Either String ())
 setDeploymentInstanceStatus dId status = do

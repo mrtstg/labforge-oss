@@ -41,6 +41,7 @@ import           Deployment.Models.Deployment
 import           Handler.AllocateNode
 import           Handler.Deployment
 import           Handler.Power
+import           Handler.Snapshot
 import           Jobservice.Models
 import           Network.AMQP
 import           Pool
@@ -128,7 +129,10 @@ f (env, msg) = do
       destroyInstance env deploymentId
     (Right (JobservicePower deploymentId powerOn)) -> do
       jobservicePower env deploymentId powerOn
-    _ -> pure ()
+    (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId})) -> do
+      jobserviceSnapshot deploymentId snapName delete
+    (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId})) -> do
+      jobserviceRollback deploymentId snapName
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = do
