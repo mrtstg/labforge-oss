@@ -38,11 +38,11 @@ instance FromJSON JobserviceMessage where
     (Just (String "destroyInstance")) -> JobserviceDestroyInstance
       <$> v .: "deploymentId"
     (Just (String "snapshotInstance")) -> JobserviceSnapshot
-      <$> v .: "deploymentid"
+      <$> v .: "deploymentId"
       <*> v .: "snapshot"
       <*> v .: "delete"
     (Just (String "rollbackInstance")) -> JobserviceRollback
-      <$> v .: "deploymentid"
+      <$> v .: "deploymentId"
       <*> v .: "snapshot"
     (Just (String "powerInstance")) -> JobservicePower
       <$> v .: "deploymentId"
