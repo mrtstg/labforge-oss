@@ -275,7 +275,7 @@ handleTask _ (GroupDestroy tID groupName) = do
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
       mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceDestroyInstance t) (BearerWrapper token)) existingDeployments
-handleTask taskQuery (GroupRollback tID groupName snapName) = do
+handleTask _ (GroupRollback tID groupName snapName) = do
   $(logDebug) $ "Creating group rollback for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -289,59 +289,9 @@ handleTask taskQuery (GroupRollback tID groupName snapName) = do
         DeploymentInstanceDataState ==. Deployed,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
-      mapM_ (\(DeploymentInstanceDataKey t) -> (liftIO . atomically) $ writeTQueue taskQuery (RollbackInstance t snapName)) existingDeployments
-handleTask taskQuery (DeploymentMakeSnapshot dID snapName) = do
-  let instanceKey = (DeploymentInstanceDataKey dID)
-  let logInstance = addLogToDeploymentInstance instanceKey
-  let setStatus = setDeploymentInstanceStatus instanceKey
-  $(logInfo) $ "Snapping instance " <> (pack . show) dID
-  instance' <- runDB $ get (DeploymentInstanceDataKey dID)
-  case instance' of
-    Nothing -> $(logError) $ "Deploy instance " <> dID <> " not found"
-    (Just (DeploymentInstanceData { .. })) -> do
-      case deploymentInstanceDataDeployConfig of
-        Nothing -> do
-          $(logError) $ "Deployment config is not set!"
-          logInstance "Deployment config is not set!"
-          setStatus Failed
-        (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
-          _ <- deployTransaction (map (`SnapshotExists` (ProxmoxSnapshotCreate {snapshotCreateStateful=Just True, snapshotCreateName=snapName, snapshotCreateDesc=Nothing})) vms) instanceKey deployConfig
-          pure ()
-handleTask taskQuery (DeploymentDeleteSnapshot dID snapName) = do
-  let instanceKey = (DeploymentInstanceDataKey dID)
-  let logInstance = addLogToDeploymentInstance instanceKey
-  let setStatus = setDeploymentInstanceStatus instanceKey
-  $(logInfo) $ "Removing snapshot of instance " <> (pack . show) dID
-  instance' <- runDB $ get (DeploymentInstanceDataKey dID)
-  case instance' of
-    Nothing -> $(logError) $ "Deploy instance " <> dID <> " not found"
-    (Just (DeploymentInstanceData { .. })) -> do
-      case deploymentInstanceDataDeployConfig of
-        Nothing -> do
-          $(logError) $ "Deployment config is not set!"
-          logInstance "Deployment config is not set!"
-          setStatus Failed
-        (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
-          _ <- deployTransaction (map (`SnapshotNotExists` (ProxmoxSnapshotCreate {snapshotCreateStateful=Just True, snapshotCreateName=snapName, snapshotCreateDesc=Nothing})) vms) instanceKey deployConfig
-          pure ()
-handleTask taskQuery (RollbackInstance dID snapName) = do
-  let instanceKey = (DeploymentInstanceDataKey dID)
-  let logInstance = addLogToDeploymentInstance instanceKey
-  let setStatus = setDeploymentInstanceStatus instanceKey
-  $(logInfo) $ "Rollback of instance " <> (pack . show) dID
-  instance' <- runDB $ get (DeploymentInstanceDataKey dID)
-  case instance' of
-    Nothing -> $(logError) $ "Deploy instance " <> dID <> " not found"
-    (Just (DeploymentInstanceData { .. })) -> do
-      case deploymentInstanceDataDeployConfig of
-        Nothing -> do
-          $(logError) $ "Deployment config is not set!"
-          logInstance "Deployment config is not set!"
-          setStatus Failed
-        (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
-          _ <- deployTransaction (map (`VMRollbacked` unpack snapName) vms) instanceKey deployConfig
-          pure ()
-handleTask taskQuery (GroupMakeSnapshot tID groupName snapName) = do
+      jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceRollback t snapName) (BearerWrapper token)) existingDeployments
+handleTask _ (GroupMakeSnapshot tID groupName snapName) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
   case groupMembersResp of
@@ -354,8 +304,9 @@ handleTask taskQuery (GroupMakeSnapshot tID groupName snapName) = do
         DeploymentInstanceDataState ==. Deployed,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
-      mapM_ (\(DeploymentInstanceDataKey t) -> (liftIO . atomically) $ writeTQueue taskQuery (DeploymentMakeSnapshot t snapName)) existingDeployments
-handleTask taskQuery (GroupDeleteSnapshot tID groupName snapName) = do
+      jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceSnapshot t snapName False) (BearerWrapper token)) existingDeployments
+handleTask _ (GroupDeleteSnapshot tID groupName snapName) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
   case groupMembersResp of
@@ -368,7 +319,8 @@ handleTask taskQuery (GroupDeleteSnapshot tID groupName snapName) = do
         DeploymentInstanceDataState ==. Deployed,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
-      mapM_ (\(DeploymentInstanceDataKey t) -> (liftIO . atomically) $ writeTQueue taskQuery (DeploymentDeleteSnapshot t snapName)) existingDeployments
+      jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceSnapshot t snapName True) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupPower tID groupName powerOn) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -416,11 +368,3 @@ createMissingDeployments tID tIDnum = helper [] where
         }
       _ <- runDB $ insertKey (DeploymentInstanceDataKey key) instanceEntity
       helper (key:acc) users
-
-renameNet :: M.Map String String -> ConfigVM -> ConfigVM
-renameNet _ vmData@(TemplatedConfigVM { configVMNetworks = Nothing }) = vmData
-renameNet namesMap vmData@(TemplatedConfigVM { configVMNetworks = Just nets }) = vmData { configVMNetworks = Just (map f nets) } where
-  f :: ConfigVMNetwork -> ConfigVMNetwork
-  f d@(ConfigVMNetwork { configVMNetworkName = n }) = case M.lookup n namesMap of
-    Nothing  -> d
-    (Just v) -> d { configVMNetworkName = v }

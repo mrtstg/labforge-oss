@@ -51,6 +51,7 @@ import           Deployment.Models.Deployment
 import           Deployment.Models.Stats
 import           Deployment.Schema
 import           Jobservice.Client
+import qualified Jobservice.Client                        as J
 import           Jobservice.Models
 import           Models
 import           Models.JSONError
@@ -385,12 +386,14 @@ callInstanceSnapshot instanceKey (Just snapName) doDelete doRollback (BearerWrap
       if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
         sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
-        Config { .. } <- ask
         if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
-          case (doDelete, doRollback) of
-            (False, False) -> putTask tasksPool (DeploymentMakeSnapshot instanceKey snapName)
-            (True, _) -> putTask tasksPool (DeploymentDeleteSnapshot instanceKey snapName)
-            (False, True) -> putTask tasksPool (RollbackInstance instanceKey snapName)
+          jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+          let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage m (BearerWrapper t)
+          withTokenVariable'' $ \t -> do
+            case (doDelete, doRollback) of
+              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentId=instanceKey})
+              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentId=instanceKey})
+              (False, True) -> taskF t (JobserviceRollback instanceKey snapName)
 
 callGroupSnapshot :: Int -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
 callGroupSnapshot _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
@@ -748,6 +751,19 @@ vmPortAccessCheck vmPort (BearerWrapper token) = do
       hasAccess <- isUserAccessedVMPort uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "" "" Null) else pure ()
 
+postInstanceLog :: Text -> Text -> BearerWrapper -> AppT ()
+postInstanceLog instanceId logLine (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireToken token
+  let isAdmin = deployTemplatesAdmin `elem` tokenRealmRoles
+  instance' <- runDB $ get (DeploymentInstanceDataKey instanceId)
+  case instance' of
+    Nothing -> sendJSONError err404 (JSONError "deploymentNotFound" "Deployment not found" Null)
+    (Just (DeploymentInstanceData { .. })) -> do
+      ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
+      if Just deploymentTemplateDataOwnerId /= tokenUUID && not isAdmin then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
+        runDB $ updateWhere [ DeploymentInstanceDataId ==. DeploymentInstanceDataKey instanceId ] [ DeploymentInstanceDataLogs =. deploymentInstanceDataLogs ++ [logLine] ]
+        pure ()
+
 deploymentServer :: ServerT DeploymentAPI AppT
 deploymentServer = getPagedTemplates
   :<|> deleteTemplate
@@ -779,3 +795,4 @@ deploymentServer = getPagedTemplates
   :<|> getTemplateNameList
   :<|> deleteDeploymentInstance
   :<|> getUndeployedVMAmount
+  :<|> postInstanceLog
