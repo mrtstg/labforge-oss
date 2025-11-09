@@ -9,6 +9,7 @@ module Service.Config
   , lookupEnvDefault
   , requirePostgresString
   , requireRabbitMQCreds
+  , requireEnvRead
   ) where
 
 import           Control.Monad.Catch
