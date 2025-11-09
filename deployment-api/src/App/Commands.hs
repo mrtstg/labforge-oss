@@ -67,8 +67,6 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
   (jobUrl, jobManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
-  deployZone <- runLoggingT
-    (requireEnv "DEPLOY_SDN_ZONE" ($(logError) "DEPLOY_SDN_ZONE is not set" >> (liftIO . exitWith) (ExitFailure 1))) logFunction
 
   redisConn <- redisConnectionFromEnv
   when (isNothing redisConn) $ do
@@ -85,7 +83,6 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     --, rabbitConnection = rmqConn
     , authEnv = mkClientEnv authManager authUrl
     , tasksPool = error "Pool is not created"
-    , deploySDNZone = pack deployZone
     , redisConnection = fromJust redisConn
     , jobserviceEnv = mkClientEnv jobManager jobUrl
     }
@@ -101,7 +98,6 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     --, rabbitConnection = rmqConn
     , authEnv = mkClientEnv authManager authUrl
     , tasksPool = tasksPool
-    , deploySDNZone = pack deployZone
     , redisConnection = fromJust redisConn
     , jobserviceEnv = jobserviceEnv poolConfig
     }

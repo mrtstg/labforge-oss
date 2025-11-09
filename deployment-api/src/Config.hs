@@ -66,7 +66,6 @@ data Config = Config
   , jobserviceEnv      :: !ClientEnv
   , authEnv            :: !ClientEnv
   , tasksPool          :: AsyncPool QueryRequest AppT
-  , deploySDNZone      :: !Text
   , redisConnection    :: !Connection
   }
 
