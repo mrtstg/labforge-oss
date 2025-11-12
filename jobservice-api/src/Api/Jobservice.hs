@@ -49,6 +49,7 @@ sendMessage msgPayload (BearerWrapper token) = do
   chan <- liftIO $ openChannel r
   let msg = newMsg { msgBody = encode msgPayload, msgDeliveryMode = Just NonPersistent }
   _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+  liftIO $ closeChannel chan
   pure ()
 
 getHeldImages :: BearerWrapper -> AppT [String]

@@ -71,6 +71,7 @@ f cfg = forever $ do
         chan <- liftIO $ openChannel r
         let msg = newMsg { msgBody = encode JobserviceUpdateUsedImages {}, msgDeliveryMode = Just NonPersistent }
         _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+        liftIO $ closeChannel chan
         liftIO $ threadDelay 5000000
 
 runCommand :: AppOpts -> IO ()
