@@ -106,6 +106,7 @@ f (env, msg) = do
           r <- asks rabbitConnection
           chan <- liftIO $ openChannel r
           _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+          liftIO $ closeChannel chan
           pure ()
     (Right (JobserviceDeployInstance deploymentId)) -> do
       let lockKey = "deploy_task_lock"
@@ -120,6 +121,7 @@ f (env, msg) = do
           r <- asks rabbitConnection
           chan <- liftIO $ openChannel r
           _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+          liftIO $ closeChannel chan
           pure ()
     (Right (JobserviceDestroyInstance deploymentId)) -> do
       _ <- liftIO $ do
