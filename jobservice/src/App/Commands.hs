@@ -91,7 +91,7 @@ f (env, msg) = do
         Nothing -> $(logError) "Failed to get templates"
         (Just d) -> do
           let usedTemplates = nub $ foldMap (map configVMParentTemplate . filter isTemplateVM . templateVMs) d
-          cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just $ 15 * 60_000_000)
+          cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just $ 15 * 60)
           $(logInfo) "Value updated!"
     (Right (JobserviceAllocateNode deploymentId)) -> do
       let lockKey = "allocate_node_lock"
