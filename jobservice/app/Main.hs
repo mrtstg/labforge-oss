@@ -1,6 +1,9 @@
 module Main (main) where
 
 import           Init
+import           System.IO
 
 main :: IO ()
-main = mainF
+main = do
+  hSetBuffering stdout NoBuffering
+  mainF
