@@ -156,6 +156,9 @@ destroyInstance env deploymentId = do
           -- #TODO: log
           _ <- setDeploymentInstanceStatus deploymentId Created
           errorF "Deployment config is not set"
+          deleteRes <- withTokenVariable $ \t -> do
+            defaultRetryClient deploymentEnv $ D.deleteDeploymentInstance deploymentId (BearerWrapper t)
+          _ <- unpackError deleteRes errorF
           pure ()
         (Just deployConfig) -> do
           deployed <- generateAndDeployTransaction Destroy deploymentId deployConfig
