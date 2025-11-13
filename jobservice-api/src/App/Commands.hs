@@ -12,8 +12,9 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE TemplateHaskell    #-}
 module App.Commands (runCommand) where
 
 import           Api.Keycloak.Token
@@ -54,7 +55,7 @@ createPool debug url = do
 f :: Config -> IO ()
 f cfg = forever $ do
   catch (void $ appTIO inner cfg) err
-  threadDelay 2000000
+  threadDelay 60_000_000
   where
   err :: SomeException -> IO ()
   err _ = pure ()
@@ -72,7 +73,7 @@ f cfg = forever $ do
         let msg = newMsg { msgBody = encode JobserviceUpdateUsedImages {}, msgDeliveryMode = Just NonPersistent }
         _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
         liftIO $ closeChannel chan
-        liftIO $ threadDelay 5000000
+        liftIO $ threadDelay (5 * 60_000_000)
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug, appCommand=MakeMigrations } = do
