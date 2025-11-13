@@ -91,7 +91,7 @@ f (env, msg) = do
         Nothing -> $(logError) "Failed to get templates"
         (Just d) -> do
           let usedTemplates = nub $ foldMap (map configVMParentTemplate . filter isTemplateVM . templateVMs) d
-          cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just 600)
+          cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just $ 15 * 60_000_000)
           $(logInfo) "Value updated!"
     (Right (JobserviceAllocateNode deploymentId)) -> do
       let lockKey = "allocate_node_lock"
@@ -181,7 +181,7 @@ runCommand AppOpts { debugOn=debug } = do
   _ <- forever $ do
     res <- getMsg channel NoAck queue
     case res of
-      Nothing -> threadDelay 100_000
+      Nothing -> threadDelay 1_000_000
       (Just (msg, env)) -> do
         putTask pool (env, msg)
   return ()
