@@ -24,6 +24,7 @@ import           Config
 import           Control.Monad               (when)
 import           Control.Monad.Logger
 import           Data.ByteString.Char8       (ByteString)
+import           Data.Functor                ((<&>))
 import           Data.Pool                   (Pool)
 import           Data.Text                   (pack)
 import           Database.Persist.Postgresql
@@ -40,7 +41,8 @@ import           System.Exit
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug, appCommand=MakeMigrations } = pure ()
 runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = do
-  let logFunction = if debug then defaultLogF else filterLogF LevelInfo
+  debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
+  let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
 
   _ <- do
     e <- getEnvironment
