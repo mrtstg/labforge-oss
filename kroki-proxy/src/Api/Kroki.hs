@@ -21,6 +21,7 @@ module Api.Kroki
   , renderD2
   , DiagramRequest(..)
   , SVG
+  , renderGraphViz
   ) where
 
 import           Data.Aeson
@@ -47,8 +48,9 @@ instance MimeUnrender SVG Text where
   mimeUnrender _ = pure . T.pack . unpack
 
 type KrokiAPI = "d2" :> "svg" :> ReqBody '[JSON] DiagramRequest :> Post '[SVG] Text
+  :<|> "graphviz" :> "svg" :> ReqBody '[JSON] DiagramRequest :> Post '[SVG] Text
 
 krokiProxy :: Proxy KrokiAPI
 krokiProxy = Proxy
 
-renderD2 = client krokiProxy
+renderD2 :<|> renderGraphViz = client krokiProxy

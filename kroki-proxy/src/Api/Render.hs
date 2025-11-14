@@ -54,23 +54,25 @@ import           Service.Environment
 renderServer :: ServerT RenderAPI AppT
 renderServer = renderDeploymentTemplate
 
+filterLetters = ['a'..'z'] <> ['A'..'Z'] <> ['0'..'9']
+
 generateNetworkLink :: M.Map String String -> Text -> Int -> ConfigVMNetwork -> Text
-generateNetworkLink nMap vmName 1 (ConfigVMNetwork { .. }) = do
-  let netName = T.pack $ fromMaybe configVMNetworkName (M.lookup configVMNetworkName nMap)
-  case (configVMInitAdddress, configVMNetworkNumber) of
-    (Just DHCP, Just _) -> do
-      vmName <> "-vm" <> " -- " <> netName <> "-net: dhcp"
-    (Just (Manual ip), Just _) -> do
-      vmName <> "-vm" <> " -- " <> netName <> "-net: " <> T.pack ip
-    _ -> vmName <> "-vm" <> " -- " <> netName <> "-net"
 generateNetworkLink nMap vmName _ (ConfigVMNetwork { .. }) = do
   let netName = T.pack $ fromMaybe configVMNetworkName (M.lookup configVMNetworkName nMap)
   case (configVMInitAdddress, configVMNetworkNumber) of
     (Just DHCP, Just _) -> do
-      netName <> "-net" <> " -- " <> vmName <> "-vm: dhcp"
+      vmName <> "vm" <> " -- " <> T.filter (`elem` filterLetters) netName <> "net[label=\"dhcp\"]"
     (Just (Manual ip), Just _) -> do
-      netName <> "-net" <> " -- " <> vmName <> "-vm: " <> T.pack ip
-    _ -> netName <> "-net" <> " -- " <> vmName <> "-vm"
+      vmName <> "vm" <> " -- " <> T.filter (`elem` filterLetters) netName <> "net[label=\"" <> T.pack ip <> "\"]"
+    _ -> vmName <> "vm" <> " -- " <> T.filter (`elem` filterLetters) netName <> "net"
+--generateNetworkLink nMap vmName _ (ConfigVMNetwork { .. }) = do
+--  let netName = T.pack $ fromMaybe configVMNetworkName (M.lookup configVMNetworkName nMap)
+--  case (configVMInitAdddress, configVMNetworkNumber) of
+--    (Just DHCP, Just _) -> do
+--      netName <> "-net" <> " -- " <> vmName <> "-vm: dhcp"
+--    (Just (Manual ip), Just _) -> do
+--      netName <> "-net" <> " -- " <> vmName <> "-vm: " <> T.pack ip
+--    _ -> netName <> "-net" <> " -- " <> vmName <> "-vm"
 
 renderDeploymentTemplate :: Text -> BearerWrapper -> AppT Text
 renderDeploymentTemplate did (BearerWrapper token) = let
@@ -80,20 +82,22 @@ renderDeploymentTemplate did (BearerWrapper token) = let
     helper :: Text -> [ConfigVM] -> Text
     helper acc [] = acc
     helper acc (vm:vms) = do
+      let screenedName = T.filter (`elem` filterLetters) $ T.pack $ configVMName vm
       let name = T.pack $ configVMName vm
-      case M.lookup name dmap of
-        (Just displayValue) -> do
-          let vmDef = "\n" <> name <> "-vm" <> ": " <> name <> "{\nlink: /vnc/" <> displayValue <> "\n}\n" <> name <> "-vm" <> ".shape: cylinder\n"
-          let vmNetAmount = (length . fromMaybe [] . configVMNetworks) vm
-          let vmNetArr = fromMaybe [] $ configVMNetworks vm
-          let netDef = T.intercalate "\n" $ map (generateNetworkLink nmap name vmNetAmount) vmNetArr
-          helper (acc <> vmDef <> netDef) vms
-        Nothing -> do
-          let vmDef = "\n" <> name <> "-vm" <> ": " <> name <> "\n" <> name <> ".shape: cylinder"
-          let vmNetAmount = (length . configVMNetworks) vm
-          let vmNetArr = fromMaybe [] $ configVMNetworks vm
-          let netDef = T.intercalate "\n" $ map (generateNetworkLink nmap name vmNetAmount) vmNetArr
-          helper (acc <> vmDef <> netDef) vms
+      if T.length screenedName == 0 then helper acc vms else do
+        case M.lookup name dmap of
+          (Just displayValue) -> do
+            let vmDef = "\n" <> screenedName <> "vm" <> "[label=\"" <> name <> "\",URL=\"/vnc/" <> displayValue <> "\",shape=\"hexagon\",fontcolor=\"blue\"]\n"
+            let vmNetAmount = (length . fromMaybe [] . configVMNetworks) vm
+            let vmNetArr = fromMaybe [] $ configVMNetworks vm
+            let netDef = T.intercalate "\n" $ map (generateNetworkLink nmap screenedName vmNetAmount) vmNetArr
+            helper (acc <> vmDef <> netDef) vms
+          Nothing -> do
+            let vmDef = "\n" <> screenedName <> "vm" <> "[label=\"" <> name <> "\",shape=\"hexagon\"]\n"
+            let vmNetAmount = (length . configVMNetworks) vm
+            let vmNetArr = fromMaybe [] $ configVMNetworks vm
+            let netDef = T.intercalate "\n" $ map (generateNetworkLink nmap screenedName vmNetAmount) vmNetArr
+            helper (acc <> vmDef <> netDef) vms
 
   f :: AppT (Maybe Text)
   f = do
@@ -105,11 +109,12 @@ renderDeploymentTemplate did (BearerWrapper token) = let
         let ~(Just netMap) = instanceNetworkMap
         let reverseNetMap = (M.fromList . map (\(k, v) -> (v, k)) . M.toList) netMap
         let allNetworks = map (\x -> T.pack $ fromMaybe x (M.lookup x reverseNetMap)) $ nub $ foldMap (map configVMNetworkName . fromMaybe [] . configVMNetworks) vms
-        let config :: Text = "vars:{d2-config: {layout-engine: elk\ntheme-id: 300}}\ndirection: down\n" <>
-              T.intercalate "\n" (map (\x -> x <> "-net: " <> x) allNetworks) <>
-              vms' reverseNetMap instanceVMLinks vms
+        let config :: Text = "graph{\nlayout=\"neato\"\noverlap=\"vpsc\"\nnode[fontsize=\"20\"]\nbeautify=true\nsplines=curved\nratio=0.6\ndefaultdist=10\n" <>
+              T.intercalate "\n" (map (\x -> T.filter (`elem` filterLetters) x <> "net[label=\"" <> x <> "\"]") allNetworks) <>
+              vms' reverseNetMap instanceVMLinks vms <> "\n}"
         krokiEnv <- asks krokiEnv
-        resp <- runClientApp krokiEnv $ renderD2 (DiagramRequest config)
+        $(logDebug) $ "Rendering schema: " <> config
+        resp <- runClientApp krokiEnv $ renderGraphViz (DiagramRequest config)
         case resp of
           (Left e) -> do
             $(logError) $ "Render error: " <> (T.pack . show) e
