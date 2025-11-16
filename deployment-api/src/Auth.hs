@@ -52,7 +52,7 @@ isUserAccessedVMPort userId vmPort = let
               (vm:[]) -> do
                 ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
                 if userId == deploymentTemplateDataOwnerId then $(logDebug) "Admin access. Allowed." >> pure True else do
-                  if userId /= deploymentInstanceDataOwnerId then $(logDebug) "Not admin and not owner" >> pure False else
+                  if userId /= deploymentInstanceDataOwnerId || deploymentTemplateDataHidden then $(logDebug) "Not admin and not owner" >> pure False else
                     if T.pack (configVMName vm) `elem` deploymentTemplateDataAvailableVMs then $(logDebug) "Stand owner to available VM. Allowed." >> pure True else
                       $(logDebug) "Stand owner to not available VM. Not allowed." >> pure False
               _manyVMs -> do
