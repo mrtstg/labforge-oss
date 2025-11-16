@@ -720,6 +720,11 @@ deploymentListPage pageN t = do
             <a .card-footer-item href=/deployment/#{templateId}/edit> Редактировать
             <a .card-footer-item href=/deployment/#{templateId}/delete> Удалить
             <a .card-footer-item href=/deployment/#{templateId}/copy> Создать копию
+            <a .card-footer-item x-data="{}" x-on:click="fetch('/api/deployment/deployments/#{templateId}/hide').then(_ => window.location.reload())">
+              $if templateHidden
+                Показать
+              $else
+                Скрыть
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1
