@@ -31,6 +31,7 @@ module Deployment.Client
   , deleteDeploymentInstance
   , getUndeployedVMAmount
   , postInstanceLog
+  , hideDeploymentTemplate
   ) where
 
 import           Data.Proxy
@@ -71,4 +72,5 @@ getPagedTemplates
   :<|> getTemplatesListByNames
   :<|> deleteDeploymentInstance
   :<|> getUndeployedVMAmount
-  :<|> postInstanceLog = client api
+  :<|> postInstanceLog
+  :<|> hideDeploymentTemplate = client api
