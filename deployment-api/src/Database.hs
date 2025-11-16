@@ -59,6 +59,7 @@ DeploymentTemplateData
   vms [ConfigVM] sqltype=jsonb
   availableVMs [Text] sqltype=jsonb
   existingNetworks [Text] sqltype=jsonb
+  hidden Bool default=False
   UniqueTitle
   deriving Show Eq
 DeploymentInstanceData

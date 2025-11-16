@@ -148,6 +148,7 @@ getPagedDeploymentTemplates pageN (BearerWrapper token) = do
       , templateId=(fromIntegral . fromSqlKey . entityKey) e
       , templateExistingNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
       , templateAvaiableVMs=(deploymentTemplateDataAvailableVMs . entityVal) e
+      , templateHidden=(deploymentTemplateDataHidden . entityVal) e
       }) templates
     , responsePageSize=pageSize
     , responseTotal=templatesTotal
@@ -166,6 +167,7 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         , deploymentTemplateDataOwnerId=fromJust tokenUUID
         , deploymentTemplateDataExistingNetworks=reqExistingNetworks
         , deploymentTemplateDataAvailableVMs=reqAvailableVMs
+        , deploymentTemplateDataHidden=False
         })
       jobEnv <- asks $ getEnvFor JobserviceAPI
       _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
@@ -188,6 +190,7 @@ getDeploymentTemplate tID (BearerWrapper token) = do
           , templateOwner = deploymentTemplateDataOwnerId
           , templateTitle = deploymentTemplateDataTitle
           , templateVMs = deploymentTemplateDataVms
+          , templateHidden = deploymentTemplateDataHidden
           }
 
 deleteDeploymentTemplate :: Int -> BearerWrapper -> AppT ()
@@ -420,6 +423,20 @@ callGroupSnapshot tID (Just groupName) (Just snapName) doDelete doRollback (Bear
                 (False, True) -> putTask tasksPool (GroupRollback tID groupName snapName)
 callGroupSnapshot _ _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 
+switchTemplateVisibility :: Int -> BearerWrapper -> AppT ()
+switchTemplateVisibility templateId (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ templateId)
+  case template' of
+    Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
+    (Just (DeploymentTemplateData { .. })) -> do
+      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
+        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      else do
+        runDB $ updateWhere [ DeploymentTemplateDataId ==. (DeploymentTemplateDataKey . fromIntegral $ templateId)]
+          [ DeploymentTemplateDataHidden =. not deploymentTemplateDataHidden ]
+        pure ()
+
 -- TODO: unify with function upper
 callGroupDestroy :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDestroy tID groupName (BearerWrapper token) = do
@@ -584,8 +601,10 @@ getMyTemplateInstances pageN (BearerWrapper token) = let
     Nothing -> $(logWarn) "Empty token UUID" >> pure (PagedResponse {responseObjects=[], responsePageSize=0, responseTotal=0})
     (Just userId) -> do
       let page = max 1 $ fromMaybe 1 pageN
-      instancesCount <- runDB $ count [ DeploymentInstanceDataOwnerId ==. userId ]
-      instances <- runDB $ selectList [ DeploymentInstanceDataOwnerId ==. userId ] [LimitTo pageSize, OffsetBy $ pageSize * (page - 1)]
+      hiddenTemplates <- runDB $ selectKeysList [ DeploymentTemplateDataHidden ==. True ] []
+      instancesCount <- runDB $ count [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ]
+      instances <- runDB $ selectList [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ]
+        [LimitTo pageSize, OffsetBy $ pageSize * (page - 1)]
       r <- helper [] instances
       pure $ PagedResponse
         { responseObjects=r
@@ -616,28 +635,30 @@ getDeploymentInstance instanceId (BearerWrapper token) = do
     (Just (DeploymentInstanceData { .. })) -> do
       ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
       if Just deploymentTemplateDataOwnerId /= tokenUUID && Just deploymentInstanceDataOwnerId /= tokenUUID && not isAdmin then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
-        let base = DeploymentInstance { instanceVMLinks=M.mapKeys T.pack $ M.map T.pack (if isAdmin then deploymentInstanceDataVmLinks else M.filterWithKey (\k _ -> T.pack k `elem` deploymentTemplateDataAvailableVMs) deploymentInstanceDataVmLinks)
-          , instanceUser=deploymentInstanceDataOwnerId
-          , instanceTitle=deploymentTemplateDataTitle
-          , instanceState=deploymentInstanceDataState
-          , instanceOf=(fromIntegral . fromSqlKey) deploymentInstanceDataParent
-          , instanceLogs=if not isAdmin then [] else deploymentInstanceDataLogs
-          , instanceDeployConfig=if not isAdmin then Nothing else deploymentInstanceDataDeployConfig
-          , instanceVMPower = M.empty
-          , instanceNetworkMap=if not isAdmin then Nothing else Just deploymentInstanceDataNetworkNamesMap
-          }
-        case deploymentInstanceDataDeployConfig of
-          Nothing -> pure base
-          (Just d@(DeployConfig { deployVMs = vms, deployParameters = DeployParams { deployNodeName = nodeName, deployUrl = nodeUrl } })) -> do
-            url <- liftIO $ parseBaseUrl (T.unpack nodeUrl)
-            mgr <- liftIO $ createProxmoxManager d
-            let state = ProxmoxState url mgr
-            vmMap' <- defaultRetryClient' state $ P.getNodeVMsMap nodeName
-            case vmMap' of
-              (Left _) -> pure base
-              (Right vmMap) -> do
-                let definedVMs = M.fromList $ map (\(p, n) -> (T.pack n, (== VMRunning) . vmStatus $ fromJust p)) $ filter (\(p, _) -> isJust p) $ map (\v-> (M.lookup (fromJust $ configVMID v) vmMap, configVMName v)) $ filter (isJust . configVMID) vms
-                pure $ base { instanceVMPower = definedVMs }
+        if Just deploymentTemplateDataOwnerId /= tokenUUID && not isAdmin && deploymentTemplateDataHidden then do
+          sendJSONError err403 (JSONError "instanceHidden" "Instance is hidden" Null) else do
+            let base = DeploymentInstance { instanceVMLinks=M.mapKeys T.pack $ M.map T.pack (if isAdmin then deploymentInstanceDataVmLinks else M.filterWithKey (\k _ -> T.pack k `elem` deploymentTemplateDataAvailableVMs) deploymentInstanceDataVmLinks)
+              , instanceUser=deploymentInstanceDataOwnerId
+              , instanceTitle=deploymentTemplateDataTitle
+              , instanceState=deploymentInstanceDataState
+              , instanceOf=(fromIntegral . fromSqlKey) deploymentInstanceDataParent
+              , instanceLogs=if not isAdmin then [] else deploymentInstanceDataLogs
+              , instanceDeployConfig=if not isAdmin then Nothing else deploymentInstanceDataDeployConfig
+              , instanceVMPower = M.empty
+              , instanceNetworkMap=if not isAdmin then Nothing else Just deploymentInstanceDataNetworkNamesMap
+              }
+            case deploymentInstanceDataDeployConfig of
+              Nothing -> pure base
+              (Just d@(DeployConfig { deployVMs = vms, deployParameters = DeployParams { deployNodeName = nodeName, deployUrl = nodeUrl } })) -> do
+                url <- liftIO $ parseBaseUrl (T.unpack nodeUrl)
+                mgr <- liftIO $ createProxmoxManager d
+                let state = ProxmoxState url mgr
+                vmMap' <- defaultRetryClient' state $ P.getNodeVMsMap nodeName
+                case vmMap' of
+                  (Left _) -> pure base
+                  (Right vmMap) -> do
+                    let definedVMs = M.fromList $ map (\(p, n) -> (T.pack n, (== VMRunning) . vmStatus $ fromJust p)) $ filter (\(p, _) -> isJust p) $ map (\v-> (M.lookup (fromJust $ configVMID v) vmMap, configVMName v)) $ filter (isJust . configVMID) vms
+                    pure $ base { instanceVMPower = definedVMs }
 
 getVMPortPower :: Text -> BearerWrapper -> AppT PowerState
 getVMPortPower vmPort (BearerWrapper token) = do
@@ -796,3 +817,4 @@ deploymentServer = getPagedTemplates
   :<|> deleteDeploymentInstance
   :<|> getUndeployedVMAmount
   :<|> postInstanceLog
+  :<|> switchTemplateVisibility
