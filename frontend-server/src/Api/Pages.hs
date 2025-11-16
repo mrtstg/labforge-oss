@@ -929,7 +929,8 @@ instancePage dID t Nothing = do
       <div x-show="open">
         <ul>
           $forall logString <- instanceLogs
-            <li> #{logString}
+            $forall line <- T.splitOn "\n" logString
+              <li> #{line}
 |]
     _anyOther -> do
       (\v -> baseTemplate token Nothing (Just . T.unpack $ instanceTitle) v Nothing) [shamlet|
@@ -968,5 +969,6 @@ instancePage dID t Nothing = do
       <div x-show="open">
         <ul>
           $forall logString <- instanceLogs
-            <li> #{logString}
+            $forall line <- T.splitOn "\n" logString
+              <li> #{line}
 |]
