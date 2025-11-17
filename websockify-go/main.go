@@ -61,6 +61,9 @@ func get_tokens() map[string]string {
 func main() {
 	tokens := get_tokens()
 	wsconf := vncproxy.ProxyConfig{
+		InfoLog: func(format string, args ...interface{}) {
+			log.Printf(format, args)
+		},
 		ErrorLog: func(format string, args ...interface{}) {
 			log.Printf(format, args)
 		},
