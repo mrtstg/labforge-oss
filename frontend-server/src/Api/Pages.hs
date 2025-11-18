@@ -411,12 +411,13 @@ deploymentEditPage tid t = do
 
   let vmsEncoded = (LBS.unpack . encode) $ map (\(v, (Object objMap)) -> Object (KM.insert "available" (Bool $ (T.pack . configVMName) v `elem` templateAvaiableVMs template) objMap)) $ map (\x -> (x, toJSON x)) (templateVMs template)
   baseTemplate token Nothing (Just "Редактирование развертывания") genericDeploymentForm (Just $ h names availableInterfaces template vmsEncoded) where
+    title' = T.replace "\"" "\\\""
     h names availableInterfaces template@(DeploymentTemplate { .. }) vms = [shamlet|
 <script>
   document.addEventListener('alpine:init', () => {
     Alpine.data("formData", () => ({
       templates: #{preEscapedToMarkup names},
-      title: #{(preEscapedToMarkup . show) templateTitle},
+      title: "#{preEscapedText $ title' templateTitle}",
       vms: #{preEscapedToMarkup vms},
       addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
