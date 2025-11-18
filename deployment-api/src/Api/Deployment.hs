@@ -666,7 +666,7 @@ getVMPortPower vmPort (BearerWrapper token) = do
   case tokenUUID of
     Nothing -> sendJSONError err401 (JSONError "invalidToken" "" Null)
     (Just uid) -> do
-      hasAccess <- isUserAccessedVMPort uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
         ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
         let vmid = fromJust $ configVMID vmConfig
@@ -696,7 +696,7 @@ switchVMPortPower vmPort (BearerWrapper token) = do
   case tokenUUID of
     Nothing -> sendJSONError err401 (JSONError "invalidToken" "" Null)
     (Just uid) -> do
-      hasAccess <- isUserAccessedVMPort uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
         ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
         let vmid = fromJust $ configVMID vmConfig
@@ -743,7 +743,7 @@ getVMPortNetworks vmPort (BearerWrapper token) = do
   case tokenUUID of
     Nothing -> sendJSONError err401 (JSONError "invalidToken" "" Null)
     (Just uid) -> do
-      hasAccess <- isUserAccessedVMPort uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
         ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
         let vmid = fromJust $ configVMID vmConfig
@@ -769,7 +769,7 @@ vmPortAccessCheck vmPort (BearerWrapper token) = do
     InactiveToken -> sendJSONError err401 (JSONError "" "" Null)
     (ActiveToken { tokenUUID = Nothing }) -> sendJSONError err401 (JSONError "" "" Null)
     (ActiveToken { tokenUUID = Just uid,.. }) -> do
-      hasAccess <- isUserAccessedVMPort uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "" "" Null) else pure ()
 
 postInstanceLog :: Text -> Text -> BearerWrapper -> AppT ()
