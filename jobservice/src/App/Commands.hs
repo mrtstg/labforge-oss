@@ -27,6 +27,8 @@ import           App.Types
 import           Auth.Token
 import           Config
 import           Control.Concurrent
+import           Control.Concurrent.STM
+import           Control.Concurrent.STM.TVar
 import           Control.Monad                   (forever, when)
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
@@ -76,8 +78,8 @@ getAllTemplates = let
                 helper (elems ++ acc) (page + 1)
   in helper [] 1
 
-f :: (Envelope, Message) -> AppT ()
-f (env, msg) = do
+f :: TVar Int -> (Envelope, Message) -> AppT ()
+f deploymentsC (env, msg) = do
   _ <- liftIO $ do
     randomDelay <- randomRIO (1_000_000, 3_000_000) :: IO Int
     threadDelay randomDelay
@@ -113,9 +115,21 @@ f (env, msg) = do
       v <- getValue' lockKey
       case v of
         Nothing -> do
-          cacheValue' lockKey "lock" (Just 10)
-          $(logInfo) $ "Deploying " <> deploymentId
-          deployInstance env deploymentId
+          deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+          deploymentLimit <- asks maxDeployments
+          if deploymentsInProgress >= deploymentLimit then do
+            $(logInfo) "Active deployments limit. Recreating message"
+            r <- asks rabbitConnection
+            chan <- liftIO $ openChannel r
+            _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+            liftIO $ closeChannel chan
+            pure ()
+          else do
+            (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
+            cacheValue' lockKey "lock" (Just 10)
+            $(logInfo) $ "Deploying " <> deploymentId
+            deployInstance env deploymentId
+            (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
         (Just _) -> do
           $(logInfo) "Task is locked. Recreating message"
           r <- asks rabbitConnection
@@ -124,11 +138,23 @@ f (env, msg) = do
           liftIO $ closeChannel chan
           pure ()
     (Right (JobserviceDestroyInstance deploymentId)) -> do
-      _ <- liftIO $ do
-        randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
-        threadDelay randomDelay
-      $(logInfo) $ "Destroying " <> deploymentId
-      destroyInstance env deploymentId
+      deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+      deploymentLimit <- asks maxDeployments
+      if deploymentsInProgress >= deploymentLimit then do
+        $(logInfo) "Active deployments limit. Recreating message"
+        r <- asks rabbitConnection
+        chan <- liftIO $ openChannel r
+        _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+        liftIO $ closeChannel chan
+        pure ()
+      else do
+        (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
+        _ <- liftIO $ do
+          randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
+          threadDelay randomDelay
+        $(logInfo) $ "Destroying " <> deploymentId
+        destroyInstance env deploymentId
+        (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
     (Right (JobservicePower deploymentId powerOn)) -> do
       jobservicePower env deploymentId powerOn
     (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId})) -> do
@@ -158,6 +184,7 @@ runCommand AppOpts { debugOn=debug } = do
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
 
   threadsAmount <- runLoggingT (lookupEnvDefault "THREADS_AMOUNT" 4) logFunction
+  concurrentDeployments <- runLoggingT (lookupEnvDefault "CONCURRENT_DEPLOYMENTS" 2) logFunction
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
   channel <- openChannel amqpConn
   (queue, _, _) <- declareQueue channel newQueue { queueName = "jobserviceQueue" }
@@ -175,9 +202,11 @@ runCommand AppOpts { debugOn=debug } = do
     , jobserviceApiEnv=mkClientEnv jobserviceManager jobserviceUrl
     , clusterEnv=mkClientEnv clusterManager clusterUrl
     , rabbitConnection=amqpConn
+    , maxDeployments = concurrentDeployments
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
-  pool <- createPool f (`appTIO` config) threadsAmount
+  activeDeploymentsCounter <- newTVarIO (0 :: Int)
+  pool <- createPool (f activeDeploymentsCounter) (`appTIO` config) threadsAmount
   _ <- forever $ do
     res <- getMsg channel NoAck queue
     case res of

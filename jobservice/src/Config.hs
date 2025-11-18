@@ -65,6 +65,7 @@ data Config = Config
   , clusterEnv         :: !ClientEnv
   , deploySDNZone      :: !Text
   , rabbitConnection   :: !R.Connection
+  , maxDeployments     :: !Int
   }
 
 instance ServiceEnvironment Config where
