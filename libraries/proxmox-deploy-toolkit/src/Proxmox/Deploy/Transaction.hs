@@ -102,6 +102,9 @@ vmUnlocked :: ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
 vmUnlocked (ProxmoxResponse Nothing _) = False
 vmUnlocked (ProxmoxResponse { proxmoxData = Just ProxmoxVMConfig { vmLock = vmLock }}) = isNothing vmLock
 
+sdnNetworkExistsOrDeleted :: String -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
+sdnNetworkExistsOrDeleted vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isJust (sdnNetworkState x)) networks || all (\x -> sdnNetworkName x /= vnetName) networks
+
 sdnNetworkExists :: String -> Bool -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
 sdnNetworkExists vnetName True (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isJust (sdnNetworkState x)) networks
 sdnNetworkExists vnetName False (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isNothing (sdnNetworkState x)) networks
@@ -548,7 +551,7 @@ executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetwor
       20
       1_000_000
       (defaultRetryClient' transactionProxmoxState $ getSDNNetworks (Just 1))
-      (sdnNetworkExists vnetName True)
+      (sdnNetworkExistsOrDeleted vnetName)
     case bridgeResult of
       (Left e) -> throwError (ClientError e)
       (Right True) -> $(logInfo) $ T.pack $ "Deleted SDN network " <> show vnetName
