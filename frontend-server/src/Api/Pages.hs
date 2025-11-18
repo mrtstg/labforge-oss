@@ -539,7 +539,7 @@ deploymentCreatePage t = do
           }
         }).then(r => {
           if (r.ok) {
-            location.reload();
+            window.location.href = "/deployment/my"
           } else {
             return r.json().then(resp => {throw new Error(resp.error)})
           }
