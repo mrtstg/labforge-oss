@@ -416,7 +416,7 @@ deploymentEditPage tid t = do
   document.addEventListener('alpine:init', () => {
     Alpine.data("formData", () => ({
       templates: #{preEscapedToMarkup names},
-      title: "#{preEscapedToMarkup templateTitle}",
+      title: #{(preEscapedToMarkup . show) templateTitle},
       vms: #{preEscapedToMarkup vms},
       addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
