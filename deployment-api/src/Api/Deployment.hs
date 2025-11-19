@@ -250,7 +250,7 @@ requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) 
         helper (n:acc) ns
                       | otherwise = (pure . pure) acc
   in do
-  when (amount > 100 || amount < 1) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
+  when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
   d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
   case d of
@@ -295,7 +295,7 @@ requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper tok
           _ <- runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n})
           helper (n:acc) ns
   in do
-  when (amount > 100 || amount < 1) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
+  when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
   d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
   case d of
@@ -339,7 +339,7 @@ requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper toke
         _ <- runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node})
         helper (n:acc) ns
   in do
-    when (amount > 100 || amount < 1) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
+    when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
     _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
     d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
     case d of
