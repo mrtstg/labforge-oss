@@ -12,7 +12,7 @@ bug-reports:    https://github.com/learnew2/proxmox-compose/issues
 author:         Ilya Zamaratskikh
 maintainer:     mrtstg@yandex.ru
 copyright:      2025 Ilya Zamaratskikh
-license:        BSD-3-Clause
+license:        GPL-3.0-or-later
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:

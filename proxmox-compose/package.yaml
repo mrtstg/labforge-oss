@@ -1,7 +1,7 @@
 name:                proxmox-compose
 version:             0.1.0.0
 github:              "learnew2/proxmox-compose"
-license:             BSD-3-Clause
+license:             GPL-3.0-or-later
 author:              "Ilya Zamaratskikh"
 maintainer:          "mrtstg@yandex.ru"
 copyright:           "2025 Ilya Zamaratskikh"
