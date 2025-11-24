@@ -124,7 +124,13 @@ $doctype 5
                 <div .navbar-dropdown>
                   <a .navbar-item href=/api/auth/logout>
                     Выйти
-    <div .is-fullheight.is-flex-grow-1>
+    <div .is-fullheight.is-flex-grow-1 x-data="{ notifications: [], deleteNotification(i) { this.notifications.splice(i, 1) }, addNotification(message) {this.notifications.push(message);} }">
+      <div class="is-flex is-flex-direction-column-reverse" style="position:fixed;z-index:9999;bottom:0px;right:0px;">
+        <template x-for="(message, index) in notifications">
+          <div class="my-2 mx-5">
+            <div class="box is-flex is-flex-direction-column">
+              <p x-text="message">
+              <button class="button is-warning" @click="deleteNotification(index)"> Закрыть
       ^{body}
     <footer .class.mt-auto.p-3>
       <div .content.has-text-centered>
