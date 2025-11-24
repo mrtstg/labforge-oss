@@ -414,6 +414,7 @@ deploymentEditPage tid t = do
     title' = T.replace "\"" "\\\""
     h names availableInterfaces template@(DeploymentTemplate { .. }) vms = [shamlet|
 <script>
+  ^{unwrapErrorFunction}
   document.addEventListener('alpine:init', () => {
     Alpine.data("formData", () => ({
       templates: #{preEscapedToMarkup names},
@@ -441,13 +442,8 @@ deploymentEditPage tid t = do
             'Content-Type': 'application/json'
           }
         }).then(r => {
-          if (r.ok) {
-            window.location.href = "/deployment/my"
-          } else {
-            return r.json().then(resp => {throw new Error(resp.error)})
-          }
+          unwrapError(r, () => { window.location.href = "/deployment/my" }, (e) => this.addNotification(e))
         }).catch(err => {
-          alert("Ошибка при создании развертывания: " + err)
           console.log(err);
         })
       }
@@ -512,6 +508,7 @@ deploymentCreatePage t = do
   baseTemplate token Nothing (Just "Создание развертывания") genericDeploymentForm (Just $ h names availableInterfaces) where
     h names availableInterfaces = [shamlet|
 <script>
+  ^{unwrapErrorFunction}
   document.addEventListener('alpine:init', () => {
     Alpine.data("formData", () => ({
       templates: #{preEscapedToMarkup names},
@@ -539,13 +536,8 @@ deploymentCreatePage t = do
             'Content-Type': 'application/json'
           }
         }).then(r => {
-          if (r.ok) {
-            window.location.href = "/deployment/my"
-          } else {
-            return r.json().then(resp => {throw new Error(resp.error)})
-          }
+          unwrapError(r, () => { window.location.href = "/deployment/my" }, (e) => this.addNotification(e))
         }).catch(err => {
-          alert("Ошибка при создании развертывания: " + err)
           console.log(err);
         })
       }

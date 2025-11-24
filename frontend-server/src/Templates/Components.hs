@@ -20,6 +20,7 @@ module Templates.Components
   , genericInstanceActionFormData
   , genericInstanceActionForm
   , genericLargeSelectForm
+  , unwrapErrorFunction
   ) where
 
 import           Api.Keycloak.Models.Group
@@ -27,6 +28,25 @@ import           Data.Text                 (Text)
 import qualified Data.Text                 as T
 import           Text.Blaze.Html
 import           Text.Hamlet
+
+unwrapErrorFunction :: Html
+unwrapErrorFunction = [shamlet|
+const unwrapError = (r, success, error) => {
+  if (r.ok) {
+    success()
+  } else {
+    r.json().then(resp => {
+      if (resp.context) {
+        if (resp.context.message) {
+          error(resp.context.message)
+          return
+        }
+      }
+      error(resp.error)
+    }).catch(err => { error(err) })
+  }
+}
+|]
 
 genericInstanceActionFormData :: Html
 genericInstanceActionFormData = [shamlet|
