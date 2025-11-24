@@ -107,7 +107,7 @@ $doctype 5
             $of ActiveToken { .. }
               $if any (flip elem tokenRealmRoles) [grafanaAdmin, grafanaEditor, grafanaViewer]
                 <a .navbar-item href=/grafana/> Мониторинг
-              $if any (flip elem tokenRealmRoles) [deploymentAdmin, deploymentCreator, imageAdmin, imageAdmin]
+              $if any (flip elem tokenRealmRoles) [deploymentAdmin, deploymentCreator, imageAdmin, imageViewer]
                 <a .navbar-item href=/api/auth/portal> Портал
                 <div .navbar-item.has-dropdown.is-hoverable>
                   <div .navbar-link> Администрирование
