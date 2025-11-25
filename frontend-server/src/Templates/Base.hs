@@ -12,14 +12,24 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
-{-# LANGUAGE QuasiQuotes     #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Templates.Base where
 
 import           Api.Keycloak.Models.Introspect
 import           Config
+import           Control.Concurrent.STM         (atomically)
+import           Control.Concurrent.STM.TVar
+import           Control.Monad.IO.Class
+import           Control.Monad.Reader
+import           Data.Aeson
+import qualified Data.ByteString.Lazy.Char8     as LBS
+import qualified Data.Map                       as M
 import           Data.Maybe
 import           Data.Text                      (Text)
+import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
 import           Models.JSONError
 import           Roles
 import           Text.Blaze.Html
@@ -68,7 +78,18 @@ $doctype 5
 |]
 
 baseTemplate :: IntrospectResponse -> Maybe Html -> Maybe String -> Html -> Maybe Html -> AppT Html
-baseTemplate token head' title' body afterBody = pure [shamlet|
+baseTemplate token head' title' body afterBody = let
+  lookMessages :: IntrospectResponse -> AppT [Text]
+  lookMessages InactiveToken = pure []
+  lookMessages token@(ActiveToken {}) = do
+    messagesMap <- asks sessionMessages >>= liftIO . readTVarIO
+    let res = fromMaybe [] $ M.lookup (fromMaybe "" $ tokenUUID token) messagesMap
+    asks sessionMessages >>= \x -> (liftIO . atomically) $ modifyTVar x (M.insert (fromMaybe "" $ tokenUUID token) [])
+    pure res
+  in do
+  messages <- lookMessages token
+  let xinit = [("x-init" :: Text, T.intercalate ";" (map (\v -> "addNotification(\"" <> T.replace "\"" "\\\"" v <> "\")") messages))]
+  pure [shamlet|
 $doctype 5
 <html>
   <head>
@@ -124,13 +145,18 @@ $doctype 5
                 <div .navbar-dropdown>
                   <a .navbar-item href=/api/auth/logout>
                     Выйти
-    <div .is-fullheight.is-flex-grow-1 x-data="{ notifications: [], deleteNotification(i) { this.notifications.splice(i, 1) }, addNotification(message) {this.notifications.push(message);} }">
-      <div class="is-flex is-flex-direction-column-reverse" style="position:fixed;z-index:9999;bottom:0px;right:0px;">
+    <div .is-fullheight.is-flex-grow-1 x-data="{ notifications: [], deleteNotification(i) { this.notifications.splice(i, 1) }, addNotification(message) {this.notifications.push(message);} }" *{xinit}>
+      <div class="is-flex is-flex-direction-column-reverse" style="position:fixed;z-index:9999;bottom:0px;right:0px;max-width:500px;">
+        <div x-show="notifications.length">
+          <div .my-2.mx-5>
+            <button .button.is-info.is-fullwidth @click="() => { notifications = [] }"> Очистить все
         <template x-for="(message, index) in notifications">
-          <div class="my-2 mx-5">
-            <div class="box is-flex is-flex-direction-column">
-              <p x-text="message">
-              <button class="button is-warning" @click="deleteNotification(index)"> Закрыть
+          <div .my-2.mx-5>
+            <article .message>
+              <div .message-header>
+                <p> Уведомление
+                <button .delete aria-label=delete @click="deleteNotification(index)">
+              <div .message-body x-text=message>
       ^{body}
     <footer .class.mt-auto.p-3>
       <div .content.has-text-centered>

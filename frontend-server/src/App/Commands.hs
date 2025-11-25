@@ -21,9 +21,11 @@ import           App
 import           App.Types
 import           Auth.Token
 import           Config
+import           Control.Concurrent.STM.TVar
 import           Control.Monad               (when)
 import           Control.Monad.Logger
 import           Data.ByteString.Char8       (ByteString)
+import qualified Data.Map                    as M
 import           Data.Pool                   (Pool)
 import           Data.Text                   (pack)
 import           Database.Persist.Postgresql
@@ -49,6 +51,7 @@ runCommand AppOpts { debugOn=debug, port=port } = do
   (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
   (krokiUrl, krokiManager) <- runLoggingT (requireServiceEnv "KROKI") logFunction
 
+  messages <- newTVarIO M.empty
   let config = Config { serviceCredentials=creds
     , logFunction=logFunction
     , authToken=tokenV
@@ -57,6 +60,7 @@ runCommand AppOpts { debugOn=debug, port=port } = do
     , authEnv = mkClientEnv authManager authUrl
     , deploymentEnv = mkClientEnv deploymentManager deploymentUrl
     , krokiEnv = mkClientEnv krokiManager krokiUrl
+    , sessionMessages = messages
     }
   let app' = app config
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"

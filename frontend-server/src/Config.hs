@@ -23,11 +23,13 @@ module Config
   ) where
 
 import           Api.Keycloak.Token
+import           Control.Concurrent.STM.TVar
 import           Control.Monad.Except        (MonadError)
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.ByteString.Char8       (unpack)
+import qualified Data.Map                    as M
 import           Data.Pool                   (Pool)
 import           Data.Text                   (Text)
 import           Database.Persist.Postgresql
@@ -58,6 +60,7 @@ data Config = Config
   , authEnv            :: !ClientEnv
   , deploymentEnv      :: !ClientEnv
   , krokiEnv           :: !ClientEnv
+  , sessionMessages    :: TVar (M.Map Text [Text])
   }
 
 instance HasTokenVariable Config Text where

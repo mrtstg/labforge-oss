@@ -42,6 +42,7 @@ dependencies:
 - aeson-pretty == 0.8.9
 - containers == 0.6.7
 - uri-encode == 1.5.0.7
+- stm == 2.5.1.0
 - proxmox-api
 - proxmox-deploy-toolkit
 - keycloak-api
