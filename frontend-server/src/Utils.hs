@@ -13,13 +13,40 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Utils where
 
 import           Api
+import           Api.Keycloak.Models.Introspect
 import           Config
+import           Control.Concurrent.STM         (atomically)
+import           Control.Concurrent.STM.TVar
+import           Control.Monad.Reader
+import           Data.Aeson
+import qualified Data.ByteString.Lazy.Char8     as LBS
+import qualified Data.Map                       as M
 import           Data.Maybe
-import           Data.Text                    (Text)
+import           Data.Text                      (Text)
+import           Data.Text.Encoding
 import           Deployment.Models.Deployment
+import           Text.Printf
+
+prettyEncode :: (ToJSON a) => a -> String
+prettyEncode = printf "%s" . decodeUtf8 . LBS.toStrict . encode
+
+addMessageToSession :: IntrospectResponse -> Text -> AppT ()
+addMessageToSession InactiveToken _      = pure ()
+addMessageToSession (ActiveToken { .. }) msg = do
+  case tokenUUID of
+    Nothing -> pure ()
+    (Just uuid) -> do
+      messages <- asks sessionMessages >>= liftIO . readTVarIO
+      case M.lookup uuid messages of
+        Nothing -> do
+          asks sessionMessages >>= \x -> liftIO . atomically $ modifyTVar x (M.insert uuid [msg])
+        (Just oldValue) -> do
+          asks sessionMessages >>= \x -> liftIO . atomically $ modifyTVar x (M.insert uuid $ oldValue ++ [msg])
+      pure ()
 
 iteratePagedResponse :: (Int -> AppT (PagedResponse [a])) -> AppT [a]
 iteratePagedResponse f' = helper f' 1 [] where

@@ -35,6 +35,7 @@ import           Api.Retry
 import           Api.Utils
 import qualified Auth.Client                              as Auth
 import           Config
+import           Control.Concurrent.STM.TVar
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
@@ -92,7 +93,7 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "delete" :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "edit" :> AuthHeader' :> Get '[HTML] Html
   :<|> "image" :> Capture "imageId" Int :> "delete" :> AuthHeader' :> Get '[HTML] Html
-  :<|> "image" :> "my" :> QueryParam "page" Int :> QueryParam "failedCreate" Text :> AuthHeader' :> Get '[HTML] Html
+  :<|> "image" :> "my" :> QueryParam "page" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "image" :> "create" :> QueryParam "name" Text :> QueryParam "id" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "deploy" :> QueryParam "action" Text :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "instances" :> QueryParam "page" Int :> QueryParam "refresh" Int :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
@@ -299,8 +300,8 @@ deploymentDeployPage did (Just "turnoff") (Just group) t = do
     (DecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
 deploymentDeployPage _ _ _ _ = tempRedirectTo "/deployment/my"
 
-imagesPage :: Maybe Int -> Maybe Text -> Maybe BearerWrapper -> AppT Html
-imagesPage pageN failedFlag t = do
+imagesPage :: Maybe Int -> Maybe BearerWrapper -> AppT Html
+imagesPage pageN t = do
   token <- canViewImages t
   let canManage = canCreateImages token
   let ~(Just userToken) = t
@@ -312,10 +313,6 @@ imagesPage pageN failedFlag t = do
   (\v -> baseTemplate token Nothing (Just "Образы") v Nothing) [shamlet|
 <div .container>
   $if canManage
-    $if isJust failedFlag
-      <article .message.is-danger>
-        <div .message-body>
-          Не удалось создать шаблон. Проверьте заполненность полей и уникальность значений
     <form .box.block action=/image/create method=GET>
       <div .field>
         <label .label> Название шаблона
@@ -366,7 +363,9 @@ createImagePage (Just name) (Just id') t = do
     case createRes of
       (DecodedResult _)    -> tempRedirectTo "/image/my"
       (OtherError _)       -> sendJSONError err500 (JSONError "" "" Null)
-      (DecodedError 400 _) -> tempRedirectTo "/image/my?failedCreate=1"
+      (DecodedError 400 _) -> do
+        addMessageToSession token "Не удалось создать образ. Проверьте корректность и уникальность данных."
+        tempRedirectTo "/image/my"
       (UndecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
       (DecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
 createImagePage _ _ _ = tempRedirectTo "/image/my"
@@ -406,10 +405,10 @@ deploymentEditPage tid t = do
   env <- asks $ getEnvFor DeploymentService
   templates <- iteratePagedResponse (\p -> globalDecoder' $ defaultRetryClientC env (C.getPagedTemplates (Just p) userToken))
   template <- globalDecoder' $ defaultRetryClientC env (C.getDeploymentTemplate tid userToken)
-  let names = (LBS.unpack . encode) $ map configTemplateName templates
+  let names = prettyEncode $ map configTemplateName templates
   let availableInterfaces = (LBS.unpack . encode) [E1000, E1000E, VIRTIO, VMXNET3]
 
-  let vmsEncoded = (LBS.unpack . encode) $ map (\(v, (Object objMap)) -> Object (KM.insert "available" (Bool $ (T.pack . configVMName) v `elem` templateAvaiableVMs template) objMap)) $ map (\x -> (x, toJSON x)) (templateVMs template)
+  let vmsEncoded = prettyEncode $ map (\(v, (Object objMap)) -> Object (KM.insert "available" (Bool $ (T.pack . configVMName) v `elem` templateAvaiableVMs template) objMap)) $ map (\x -> (x, toJSON x)) (templateVMs template)
   baseTemplate token Nothing (Just "Редактирование развертывания") genericDeploymentForm (Just $ h names availableInterfaces template vmsEncoded) where
     title' = T.replace "\"" "\\\""
     h names availableInterfaces template@(DeploymentTemplate { .. }) vms = [shamlet|
@@ -422,7 +421,7 @@ deploymentEditPage tid t = do
       vms: #{preEscapedToMarkup vms},
       addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
-      existingNetworks: #{preEscapedToMarkup $ (LBS.unpack . encode) templateExistingNetworks},
+      existingNetworks: #{preEscapedToMarkup $ prettyEncode templateExistingNetworks},
       removeENet(i) { this.existingNetworks.splice(i, 1) },
       moveVM(index, delta) {
         if (this.vms.length < 2 || index + delta < 0 || index + delta >= this.vms.length - 1) {
@@ -503,7 +502,7 @@ deploymentCreatePage t = do
   let ~(Just userToken) = t
   env <- asks $ getEnvFor DeploymentService
   (PagedResponse { responseObjects = templates }) <- globalDecoder' $ defaultRetryClientC env (C.getPagedTemplates Nothing userToken)
-  let names = (LBS.unpack . encode) $ map configTemplateName templates
+  let names = prettyEncode $ map configTemplateName templates
   let availableInterfaces = (LBS.unpack . encode) [E1000, E1000E, VIRTIO, VMXNET3]
   baseTemplate token Nothing (Just "Создание развертывания") genericDeploymentForm (Just $ h names availableInterfaces) where
     h names availableInterfaces = [shamlet|
