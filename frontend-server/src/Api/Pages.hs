@@ -95,7 +95,6 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "image" :> Capture "imageId" Int :> "delete" :> AuthHeader' :> Get '[HTML] Html
   :<|> "image" :> "my" :> QueryParam "page" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "image" :> "create" :> QueryParam "name" Text :> QueryParam "id" Int :> AuthHeader' :> Get '[HTML] Html
-  :<|> "deployment" :> Capture "deploymentId" Int :> "deploy" :> QueryParam "action" Text :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "instances" :> QueryParam "page" Int :> QueryParam "refresh" Int :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "copy" :> AuthHeader' :> Get '[HTML] Html
 
@@ -134,7 +133,6 @@ pagesServer = indexPage
   :<|> deleteImagePage
   :<|> imagesPage
   :<|> createImagePage
-  :<|> deploymentDeployPage
   :<|> deploymentInstancesPage
   :<|> copyDeploymentPage
 
@@ -252,53 +250,6 @@ deleteInstancePage did t = do
   (DeploymentInstance { .. }) <- globalDecoder' $ defaultRetryClientC env $ C.getDeploymentInstance did userToken
   _ <- globalDecoder' $ defaultRetryClientC env (C.callInstanceDestroy did userToken)
   tempRedirectTo $ "/deployment/" <> show instanceOf <> "/instances"
-
-deploymentDeployPage :: Int -> Maybe Text -> Maybe Text -> Maybe BearerWrapper -> AppT Html
-deploymentDeployPage did (Just "deploy") (Just group) t = do
-  _ <- requireToken' t
-  let ~(Just userToken) = t
-  env <- asks $ getEnvFor DeploymentService
-  r <- defaultRetryClientC env (C.callGroupDeployment did (Just group) userToken) <&> tryDecodeError
-  case r of
-    (DecodedResult _)    -> tempRedirectTo "/deployment/my?success=1"
-    (OtherError _)       -> sendJSONError err500 (JSONError "" "" Null)
-    (DecodedError 400 _) -> tempRedirectTo "/deployment/my?success=0"
-    (UndecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-    (DecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-deploymentDeployPage did (Just "destroy") (Just group) t = do
-  _ <- requireToken' t
-  let ~(Just userToken) = t
-  env <- asks $ getEnvFor DeploymentService
-  r <- defaultRetryClientC env (C.callGroupDestroy did (Just group) userToken) <&> tryDecodeError
-  case r of
-    (DecodedResult _)    -> tempRedirectTo "/deployment/my?success=2"
-    (OtherError _)       -> sendJSONError err500 (JSONError "" "" Null)
-    (DecodedError 400 _) -> tempRedirectTo "/deployment/my?success=0"
-    (UndecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-    (DecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-deploymentDeployPage did (Just "turnon") (Just group) t = do
-  _ <- requireToken' t
-  let ~(Just userToken) = t
-  env <- asks $ getEnvFor DeploymentService
-  r <- defaultRetryClientC env (C.callGroupPower did (Just group) True userToken) <&> tryDecodeError
-  case r of
-    (DecodedResult _)    -> tempRedirectTo "/deployment/my?success=3"
-    (OtherError _)       -> sendJSONError err500 (JSONError "" "" Null)
-    (DecodedError 400 _) -> tempRedirectTo "/deployment/my?success=0"
-    (UndecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-    (DecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-deploymentDeployPage did (Just "turnoff") (Just group) t = do
-  _ <- requireToken' t
-  let ~(Just userToken) = t
-  env <- asks $ getEnvFor DeploymentService
-  r <- defaultRetryClientC env (C.callGroupPower did (Just group) False userToken) <&> tryDecodeError
-  case r of
-    (DecodedResult _)    -> tempRedirectTo "/deployment/my?success=4"
-    (OtherError _)       -> sendJSONError err500 (JSONError "" "" Null)
-    (DecodedError 400 _) -> tempRedirectTo "/deployment/my?success=0"
-    (UndecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-    (DecodedError status _) -> throwError (ServerError {errBody="", errHTTPCode=status, errHeaders=[], errReasonPhrase=""})
-deploymentDeployPage _ _ _ _ = tempRedirectTo "/deployment/my"
 
 imagesPage :: Maybe Int -> Maybe BearerWrapper -> AppT Html
 imagesPage pageN t = do
