@@ -21,7 +21,7 @@ import           Auth.Client
 import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
-import           Data.Aeson                     (Value (..))
+import           Data.Aeson
 import           Data.Text
 import           Models.JSONError
 import           Servant.Client
@@ -37,7 +37,7 @@ requireToken :: (MonadIO m, MonadLogger m, HasTokenVariable s Text, ServiceEnvir
 requireToken token = do
   r <- lookupToken token
   case r of
-    I.InactiveToken -> sendJSONError err401 (JSONError "unauthorized" "Inactive token" Null)
+    I.InactiveToken -> sendJSONError err401 (JSONError "unauthorized" "Inactive token" $ object [ "message" .= String "Ваша сессия истекла. Обновите страницу или войдите повторно." ])
     d@(I.ActiveToken {}) -> pure d
 
 requireRealmRoles :: (MonadIO m, MonadLogger m, HasTokenVariable s Text, ServiceEnvironment s, MonadReader s m, MonadError ServerError m) => Text -> [Text] -> m I.IntrospectResponse
@@ -50,7 +50,7 @@ requireManyRealmRoles token rolesMap = do
     ~(I.ActiveToken { .. }) -> do
       if Prelude.any (Prelude.all (`Prelude.elem` tokenRealmRoles)) rolesMap then
         pure t
-      else sendJSONError err403 (JSONError "unauthorized" "Insufficent permissions" Null)
+      else sendJSONError err403 (JSONError "unauthorized" "Insufficent permissions" $ object [ "message" .= String "У вас нет прав на выполнение данного действия"])
 
 genericTokenFunctions :: (Loc -> LogSource -> LogLevel -> LogStr -> IO ()) -> (Text, Text) -> ClientEnv -> TokenVariableFunctions Text
 genericTokenFunctions logF (cID, cSecret) env = TokenFunctions
