@@ -159,7 +159,7 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
   if isNothing tokenUUID then sendJSONError err401 (JSONError "invalidToken" "Token has no UUID" Null) else do
     titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle ]
-    if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" Null) else do
+    if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
       _ <- runDB $ insert
         (DeploymentTemplateData
         { deploymentTemplateDataVms=reqVMs
@@ -222,7 +222,7 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
         sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle, DeploymentTemplateDataId !=. instanceKey ]
-        if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" Null) else do
+        if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
           runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
             [ DeploymentTemplateDataTitle =. reqTitle
             , DeploymentTemplateDataVms =. reqVMs
