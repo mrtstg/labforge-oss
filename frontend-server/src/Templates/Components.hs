@@ -51,6 +51,7 @@ const unwrapError = (r, success, error) => {
 genericInstanceActionFormData :: Html
 genericInstanceActionFormData = [shamlet|
 <script>
+  ^{unwrapErrorFunction}
   document.addEventListener('alpine:init', () => {
     Alpine.data("instanceActionFormData", (instanceId) => ({
       instanceId: instanceId,
@@ -60,13 +61,15 @@ genericInstanceActionFormData = [shamlet|
         if (this.snapname.length > 0 && (this.action == "makesnap" || this.action == "delsnap" || this.action == "rollback")) {
           let url = "/api/deployment/instances/" + instanceId + "/snapshot?snapname=" + encodeURIComponent(this.snapname) + (this.action == "delsnap" ? "&delete" : "") + (this.action == "rollback" ? "&rollback" : "")
           fetch(url).then(r => {
-            if (r.ok) {
-              location.reload();
+            if (this.action == "makesnap") {
+              unwrapError(r, () => { this.addNotification("Отправлен запрос на создание снапшота " + this.snapname) }, (e) => this.addNotification(e))
+            } else if (this.action == "delsnap") {
+              unwrapError(r, () => { this.addNotification("Отправлен запрос на удаление снапшота " + this.snapname) }, (e) => this.addNotification(e))
             } else {
-              return r.json().then(resp => {throw new Error(resp.error)})
+              unwrapError(r, () => { this.addNotification("Отправлен запрос на откат до снапшота " + this.snapname) }, (e) => this.addNotification(e))
             }
           }).catch(err => {
-            alert("Ошибка: " + err)
+            this.addNotification("Ошибка: " + err)
             console.log(err);
           });
         }
@@ -78,6 +81,7 @@ genericInstanceActionFormData = [shamlet|
 genericGroupActionFormData :: Maybe FoundGroup -> Html
 genericGroupActionFormData group = [shamlet|
 <script>
+  ^{unwrapErrorFunction}
   document.addEventListener('alpine:init', () => {
     Alpine.data("groupDeploymentFormData", (deploymentId) => ({
       deploymentId: deploymentId,
@@ -88,39 +92,33 @@ genericGroupActionFormData group = [shamlet|
         if (this.action == "deploy" || this.action == "destroy") {
           let url = "/api/deployment/deployments/" + deploymentId + "/" + this.action + "/group?group=" + encodeURIComponent(this.group)
           fetch(url).then(r => {
-            if (r.ok) {
-              location.reload();
-            } else {
-              return r.json().then(resp => {throw new Error(resp.error)})
-            }
+            unwrapError(r, () => { this.addNotification("Отправлен запрос на " + (this.action == "deploy" ? "развертывание" : "свертывание") + " для группы " + this.group) }, (e) => this.addNotification(e))
           }).catch(err => {
-            alert("Ошибка: " + err)
+            this.addNotification("Ошибка: " + err)
             console.log(err);
           });
         }
         if (this.action == "turnon" || this.action == "turnoff") {
           let url = "/api/deployment/deployments/" + deploymentId + "/power/group?group=" + encodeURIComponent(this.group) + (this.action == "turnon" ? "&on" : "")
           fetch(url).then(r => {
-            if (r.ok) {
-              location.reload();
-            } else {
-              return r.json().then(resp => {throw new Error(resp.error)})
-            }
+            unwrapError(r, () => { this.addNotification("Отправлен запрос на " + (this.action == "turnon" ? 'включение' : 'выключение') + " для группы " + this.group) }, (e) => this.addNotification(e))
           }).catch(err => {
-            alert("Ошибка: " + err)
+            this.addNotification("Ошибка: " + err)
             console.log(err);
           });
         }
         if (this.snapname.length > 0 && (this.action == "makesnap" || this.action == "delsnap" || this.action == "rollback")) {
           let url = "/api/deployment/deployments/" + deploymentId + "/snapshot/group?group=" + encodeURIComponent(this.group) + "&snapname=" + encodeURIComponent(this.snapname) + (this.action == "delsnap" ? "&delete" : "") + (this.action == "rollback" ? "&rollback" : "")
           fetch(url).then(r => {
-            if (r.ok) {
-              location.reload();
+            if (this.action == "makesnap") {
+              unwrapError(r, () => { this.addNotification("Отправлен запрос на создание снапшота " + this.snapname + " для группы " + this.group) }, (e) => this.addNotification(e))
+            } else if (this.action == "delsnap") {
+              unwrapError(r, () => { this.addNotification("Отправлен запрос на удаление снапшота " + this.snapname + " для группы " + this.group) }, (e) => this.addNotification(e))
             } else {
-              return r.json().then(resp => {throw new Error(resp.error)})
+              unwrapError(r, () => { this.addNotification("Отправлен запрос на откат до снапшота " + this.snapname + " для группы " + this.group) }, (e) => this.addNotification(e))
             }
           }).catch(err => {
-            alert("Ошибка: " + err)
+            this.addNotification("Ошибка: " + err)
             console.log(err);
           });
         }
