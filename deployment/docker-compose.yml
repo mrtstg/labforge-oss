@@ -5,6 +5,7 @@ x-extra-hosts:
   - "nginx:127.0.0.1"
   - "nginx-exporter:127.0.0.1"
   - "cadvisor:127.0.0.1"
+  - "loki:127.0.0.1"
 
 services:
   postgresql:
@@ -145,3 +146,27 @@ services:
     command:
       - '-port=9092'
     restart: unless-stopped
+  dev-loki:
+    image: grafana/loki:3.4.1
+    container_name: labforge-loki
+    hostname: loki
+    network_mode: host
+    command:
+      - --config.file=/etc/loki/config.yaml
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+    ports:
+      - 3100:3100
+  dev-alloy:
+    image: grafana/alloy:v1.12.0
+    container_name: labforge-alloy
+    hostname: alloy
+    network_mode: host
+    extra_hosts: *default-extra-hosts
+    privileged: true
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run:/var/run:ro
+    command:
+      - run 
+      - /etc/alloy/config.alloy
