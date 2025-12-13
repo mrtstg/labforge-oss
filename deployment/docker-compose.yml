@@ -150,11 +150,13 @@ services:
     image: grafana/loki:3.4.1
     container_name: labforge-loki
     hostname: loki
+    user: root
     network_mode: host
     command:
       - --config.file=/etc/loki/config.yaml
     volumes:
       - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - ../loki-data:/loki
     ports:
       - 3100:3100
   dev-alloy:
