@@ -642,7 +642,7 @@ getDeploymentInstance instanceId (BearerWrapper token) = do
               , instanceTitle=deploymentTemplateDataTitle
               , instanceState=deploymentInstanceDataState
               , instanceOf=(fromIntegral . fromSqlKey) deploymentInstanceDataParent
-              , instanceLogs=if not isAdmin then [] else deploymentInstanceDataLogs
+              , instanceLogs=if not isAdmin && Just deploymentTemplateDataOwnerId /= tokenUUID then [] else deploymentInstanceDataLogs
               , instanceDeployConfig=if not isAdmin then Nothing else deploymentInstanceDataDeployConfig
               , instanceVMPower = M.empty
               , instanceNetworkMap=if not isAdmin then Nothing else Just deploymentInstanceDataNetworkNamesMap
