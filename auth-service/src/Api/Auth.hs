@@ -48,6 +48,7 @@ import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import           Models.JSONError
 import           Network.HTTP.Types.URI         (urlEncode)
+import           Redis.Common
 import           Servant
 import           Servant.Client
 
@@ -141,9 +142,10 @@ loginEndpoint (Just redirectFlag) = do
   tempRedirectTo link
 loginEndpoint Nothing = loginEndpoint (Just "/")
 
-logoutEndpoint :: AppT ()
-logoutEndpoint = do
+logoutEndpoint :: BearerWrapper -> AppT ()
+logoutEndpoint (BearerWrapper token) = do
   Config { .. } <- ask
+  deleteValue' (T.unpack token)
   let url = keycloakUrl { baseUrlPath = baseUrlPath keycloakUrl <> "/realms/" <> T.unpack keycloakRealm <> "/protocol/openid-connect/logout" }
   tempRedirectTo (showBaseUrl url)
 
