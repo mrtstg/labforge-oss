@@ -13,3 +13,4 @@ grafana
 prometheus_data
 ca
 fs-agent
+loki-data
