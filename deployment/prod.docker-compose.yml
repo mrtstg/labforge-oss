@@ -147,6 +147,7 @@ services:
     hostname: prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
     restart: unless-stopped
   cadvisor:
     profiles: ['app']
