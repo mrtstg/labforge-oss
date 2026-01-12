@@ -37,6 +37,7 @@ module Proxmox.Client
   , getStorageContent
   , allocateStorageContent
   , asyncPutVMConfig
+  , getNodesVMMap
   ) where
 
 
@@ -162,6 +163,12 @@ deleteVM' node vmid (ProxmoxVMDeleteRequest { .. }) = deleteVM
   (Just . NumericBoolWrapper $ proxmoxDestroyUnrefferenced)
   (Just . NumericBoolWrapper $ proxmoxPurgeVM)
   (Just . NumericBoolWrapper $ proxmoxSkipLock)
+
+getNodesVMMap :: ClientM (M.Map Int ProxmoxVM)
+getNodesVMMap = do
+  (ProxmoxResponse { proxmoxData = nodes }) <- getNodes
+  nodeMaps <- traverse (getNodeVMsMap . pack . nodeName) nodes
+  return $ foldr (M.unionWith const) M.empty nodeMaps
 
 getActiveNodesVMMap :: ClientM (M.Map Int ProxmoxVM)
 getActiveNodesVMMap = do
