@@ -140,4 +140,4 @@ restore-images: ./images
 		echo "Restoring $(image)"; docker load -i ./images/$(call escape_image, $(image)).tar;)
 
 bundle:
-	tar -zcvf labforge.tar.gz --exclude={*/tokens.cfg,*/ssl*/*} *-sample.env Makefile images/ deployment/ install/ fs-agent/ proxmox-compose/proxmox-compose
+	tar --owner root --group root -zcvf labforge.tar.gz --exclude={*/tokens.cfg,*/ssl*/*} *-sample.env Makefile images/ deployment/ install/ fs-agent/ proxmox-compose/proxmox-compose
