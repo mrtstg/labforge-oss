@@ -264,7 +264,7 @@ requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) 
         (Left _) -> sendJSONError err500 (JSONError "serverError" "Failed to parse node URL" Null)
         (Right nodeUrl) -> do
           let state = ProxmoxState nodeUrl mgr
-          activeNodes <- defaultRetryClientC' state P.getActiveNodeVMNodeMap
+          activeNodes <- defaultRetryClientC' state P.getNodesVMMap
           case activeNodes of
             (Left e) -> do
               $(logError) $ T.pack $ "Failed to get nodes: " <> show e
