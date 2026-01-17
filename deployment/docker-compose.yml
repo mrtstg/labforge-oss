@@ -81,6 +81,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./websockify/tokens.cfg:/tokens.cfg:ro
+    env_file:
+      - ../.env
   dev-kroki:
     image: yuzutech/kroki
     container_name: labforge-kroki

@@ -41,6 +41,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./websockify/tokens.cfg:/tokens.cfg:ro
+    env_file:
+      - ../docker.env
   auth-service:
     profiles: ['app']
     image: auth-service
