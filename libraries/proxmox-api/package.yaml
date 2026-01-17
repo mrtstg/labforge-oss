@@ -1,5 +1,9 @@
 name:                proxmox-api
+<<<<<<< Updated upstream
 version:             0.1.2.1
+=======
+version:             0.1.2.4
+>>>>>>> Stashed changes
 github:              "learnew2/proxmox-api"
 license:             BSD-3-Clause
 author:              "Ilya Zamaratskikh"

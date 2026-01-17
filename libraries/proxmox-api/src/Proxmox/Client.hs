@@ -46,6 +46,7 @@ import           Control.Monad.IO.Class    (liftIO)
 import           Control.Monad.Reader      (ask)
 import           Data.Aeson
 import qualified Data.ByteString.Char8     as BS
+import           Data.Either
 import           Data.List                 (intercalate)
 import qualified Data.Map                  as M
 import           Data.Proxy
@@ -167,8 +168,9 @@ deleteVM' node vmid (ProxmoxVMDeleteRequest { .. }) = deleteVM
 getNodesVMMap :: ClientM (M.Map Int ProxmoxVM)
 getNodesVMMap = do
   (ProxmoxResponse { proxmoxData = nodes }) <- getNodes
-  nodeMaps <- traverse (getNodeVMsMap . pack . nodeName) nodes
-  return $ foldr (M.unionWith const) M.empty nodeMaps
+  state <- ask
+  res <- traverse (liftIO . flip runClientM state . getNodeVMsMap . pack . nodeName) nodes
+  return $ foldr (M.unionWith const . fromRight M.empty) M.empty $ filter isRight res
 
 getActiveNodesVMMap :: ClientM (M.Map Int ProxmoxVM)
 getActiveNodesVMMap = do
