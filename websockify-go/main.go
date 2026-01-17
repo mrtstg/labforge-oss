@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"github.com/xgfone/go-websocket/vncproxy"
 	"crypto/tls"
 	"time"
 )
@@ -60,7 +59,14 @@ func get_tokens() map[string]string {
 
 func main() {
 	tokens := get_tokens()
-	wsconf := vncproxy.ProxyConfig{
+	tokenEndpoint, tokenEndpointSet := os.LookupEnv("DEPLOYMENT_URL")
+	if !tokenEndpointSet {
+		fmt.Println("Token check endpoint is not set")
+		return
+	}
+
+	wsconf := ProxyConfig{
+		TokenEndpoint: fmt.Sprintf("%s/api/deployment/vmport/access", tokenEndpoint),
 		InfoLog: func(format string, args ...interface{}) {
 			log.Printf(format, args)
 		},
@@ -77,7 +83,7 @@ func main() {
 			return true
 		},
 	}
-	handler := vncproxy.NewWebsocketVncProxyHandler(wsconf)
+	handler := NewWebsocketVncProxyHandler(wsconf)
 	http.Handle("/", handler)
 	http.ListenAndServe(":6080", nil)
 }
