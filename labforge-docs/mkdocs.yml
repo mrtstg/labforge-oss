@@ -1,19 +1,20 @@
 site_name: Labforge docs
 site_url: ""
-copyright: "2025, Ilya Zamaratskikh"
+copyright: "2026, Ilya Zamaratskikh"
 site_author: "Ilya Zamaratskikh"
 
-repo_url: https://gitverse.ru/mrtstg/labforge-oss
+repo_url: https://github.ru/mrtstg/labforge-oss
+repo_name: labforge-oss
 
 extra:
   social:
-    - icon: fontawesome/brands/gitlab
-      name: Gitverse mirror
-      link: https://gitverse.ru/mrtstg/labforge-oss
+    - icon: fontawesome/brands/github
+      name: Github
+      link: https://github.ru/mrtstg/labforge-oss
 
 theme:
   icon:
-    repo: fontawesome/brands/git
+    repo: fontawesome/brands/github
   features:
     - navigation.tracking
     - navigation.tabs
