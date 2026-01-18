@@ -22,7 +22,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"encoding/binary"
 	"crypto/tls"
 	"github.com/xgfone/go-websocket"
 )
@@ -191,15 +190,13 @@ func (h *WebsocketVncProxyHandler) tick() {
 					continue
 				}
 				if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
-					fmt.Printf("Bad %s\n", peerData.vm)
+					h.conf.infof("Bad access check on %s\n", peerData.vm)
 					h.lock.RUnlock()
 					h.lock.Lock()
 					peer.Close("", nil)
 					delete(h.peers, peer)
 					h.lock.Unlock()
 					h.lock.RLock()
-				} else {
-					fmt.Printf("Good %s\n", peerData.vm)
 				}
 			}
 			h.lock.RUnlock()
@@ -294,21 +291,21 @@ func (h *WebsocketVncProxyHandler) readSource(p *peer) {
 		}
 
 		for _, msg := range msgs {
-			if msg.Type == websocket.MsgTypeBinary {
-				bytesAmount := len(msg.Data)
-				if bytesAmount >= 2 {
-					messageType, submessageType := int(msg.Data[0]), int(msg.Data[1])
-					if messageType == 255 && submessageType == 0 && bytesAmount >= 12 {
-						downFlag := uint16(msg.Data[2])<<8 | uint16(msg.Data[3])
-						keyCode := binary.BigEndian.Uint32(msg.Data[4:8])
-						if keyCode == 0xff0d && downFlag == 1 {
-							fmt.Println("Pressed down enter!")
-						} else {
-							fmt.Printf("Pressed key %d %x\n", downFlag, keyCode)
-						}
-					}
-				}
-			}
+			//if msg.Type == websocket.MsgTypeBinary {
+			//	bytesAmount := len(msg.Data)
+			//	if bytesAmount >= 2 {
+			//		messageType, submessageType := int(msg.Data[0]), int(msg.Data[1])
+			//		if messageType == 255 && submessageType == 0 && bytesAmount >= 12 {
+			//			downFlag := uint16(msg.Data[2])<<8 | uint16(msg.Data[3])
+			//			keyCode := binary.BigEndian.Uint32(msg.Data[4:8])
+			//			if keyCode == 0xff0d && downFlag == 1 {
+			//				fmt.Println("Pressed down enter!")
+			//			} else {
+			//				fmt.Printf("Pressed key %d %x\n", downFlag, keyCode)
+			//			}
+			//		}
+			//	}
+			//}
 			if _, err = p.target.Write(msg.Data); err != nil {
 				p.Close(p.target.RemoteAddr().String(), err)
 			}
