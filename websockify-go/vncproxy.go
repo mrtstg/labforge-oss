@@ -15,14 +15,16 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"crypto/tls"
+
 	"github.com/xgfone/go-websocket"
 )
 
@@ -101,7 +103,7 @@ type WebsocketVncProxyHandler struct {
 	connection int64
 	peers      map[*peer]ConnectionDetails
 	exit       chan struct{}
-	lock       sync.RWMutex
+	lock       sync.Mutex
 
 	conf     ProxyConfig
 	upgrader websocket.Upgrader
@@ -174,33 +176,38 @@ func (h *WebsocketVncProxyHandler) tick() {
 	for {
 		select {
 		case <-ticker.C:
-			h.lock.RLock()
-			for peer, peerData := range h.peers {
-				_ = peer.source.SendPing(nil)
-				req, err := http.NewRequest("GET", h.conf.TokenEndpoint, nil)
-				if err != nil {
-					h.conf.errorf("Failed to create request for validating token")
-					continue
+			isLocked := h.lock.TryLock()
+			if isLocked {
+				for peer, peerData := range h.peers {
+					if err := peer.source.SendPing(nil); err != nil {
+           		peer.Close(peer.source.RemoteAddr().String(), err)
+          	  continue
+        	}
+
+					req, err := http.NewRequest("GET", h.conf.TokenEndpoint, nil)
+					if err != nil {
+						h.conf.errorf("Failed to create request for validating token")
+						continue
+					}
+					req.Header.Set("Authorization", peerData.header)
+					req.Header.Set("X-VM-PORT", peerData.vm)
+					resp, err := h.httpClient.Do(req)
+					if err != nil {
+						h.conf.errorf("Failed to make check request: %s", err.Error())
+						continue
+					}
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+					if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
+						h.conf.infof("Bad access check on %s\n", peerData.vm)
+						delete(h.peers, peer)
+						peer.Close("", nil)
+					}
 				}
-				req.Header.Set("Authorization", peerData.header)
-				req.Header.Set("X-VM-PORT", peerData.vm)
-				resp, err := h.httpClient.Do(req)
-				if err != nil {
-					h.conf.errorf("Failed to make check request: %s", err.Error())
-					continue
-				}
-				if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
-					h.conf.infof("Bad access check on %s\n", peerData.vm)
-					h.lock.RUnlock()
-					h.lock.Lock()
-					peer.Close("", nil)
-					delete(h.peers, peer)
-					h.lock.Unlock()
-					h.lock.RLock()
-				}
+				h.lock.Unlock()
 			}
-			h.lock.RUnlock()
 		case <-h.exit:
+			ticker.Stop()
 			h.lock.Lock()
 			for peer := range h.peers {
 				peer.Close("", nil)
@@ -263,11 +270,13 @@ func (h *WebsocketVncProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	vmToken := queryParams.Get("token")
 	if vmToken == "" {
 		h.conf.errorf("invalid vm token value")
+		ws.SendClose(websocket.CloseAbnormalClosure, "cannot connect to the backend")
 		return
 	}
 	tokenCookie, err := r.Cookie("token")
 	if err != nil {
 		h.conf.errorf("no token cookie provided")
+		ws.SendClose(websocket.CloseAbnormalClosure, "cannot connect to the backend")
 		return
 	}
 	cookieHeader := fmt.Sprintf("Bearer %s", tokenCookie.Value)
