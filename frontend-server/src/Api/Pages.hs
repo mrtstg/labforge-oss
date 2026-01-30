@@ -452,7 +452,7 @@ deploymentCreatePage t = do
   token <- canCreateDeployments t
   let ~(Just userToken) = t
   env <- asks $ getEnvFor DeploymentService
-  (PagedResponse { responseObjects = templates }) <- globalDecoder' $ defaultRetryClientC env (C.getPagedTemplates Nothing userToken)
+  templates <- iteratePagedResponse (\p -> globalDecoder' $ defaultRetryClientC env (C.getPagedTemplates (Just p) userToken))
   let names = prettyEncode $ map configTemplateName templates
   let availableInterfaces = (LBS.unpack . encode) [E1000, E1000E, VIRTIO, VMXNET3]
   baseTemplate token Nothing (Just "Создание развертывания") genericDeploymentForm (Just $ h names availableInterfaces) where
