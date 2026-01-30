@@ -175,6 +175,24 @@ genericGroupActionForm templateId groups = [shamlet|
   <button .button.is-fullwidth @click="sendRequest"> Выполнить
 |]
 
+genericLargeFrontendSelectForm :: String -> String -> Html
+genericLargeFrontendSelectForm bindTo iterOver = let
+  variantValues = [("@click", bindTo <> "=v; showed = false")]
+  modalValues = [(":class", "showed ? 'is-active' : ''")]
+  in [shamlet|
+<div x-data="{ showed: false, searchText: '' }">
+  <div .control.is-fullwidth>
+    <input .input.is-clickable type=text placeholder="Нажмите для выбора" readonly x-model=#{preEscapedToMarkup bindTo} @click="showed = true">
+  <div .modal *{modalValues}>
+    <div .modal-background>
+    <div .modal-content>
+      <div .card>
+        <input .input.is-clickable type=text placeholder=Поиск x-model=searchText>
+        <template x-for="v in #{preEscapedToMarkup iterOver}">
+          <template x-if="v.includes(searchText)">
+            <button .is-meduim.is-fullwidth.button.py-2.my-2 *{variantValues} x-text=v>
+    <button @click="showed = false" .modal-close.is-large aria-label=close>
+|]
 
 genericLargeSelectForm :: String -> [Text] -> Html
 genericLargeSelectForm bindTo values = let
@@ -223,12 +241,7 @@ genericDeploymentForm = let
               <input .input type="text" x-model="vms[index]['name']">
           <div .field>
             <label .label> Клонировать из
-            <div .control>
-              <div .select>
-                <select x-model="vms[index]['clone_from']">
-                  <option value="" disabled> Выберите шаблон
-                  <template x-for="template in templates">
-                    <option x-text="template" *{templateBind}>
+            #{genericLargeFrontendSelectForm "vms[index]['clone_from']" "templates"}
           <div .field>
             <label .label> Время ожидания после включения (в секундах)
             <div .control>
