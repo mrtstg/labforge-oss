@@ -1,6 +1,7 @@
 module Jobservice.Client
   ( insertJobserviceMessage
   , getHeldImages
+  , getImageUsage
   ) where
 
 import           Jobservice.Schema
