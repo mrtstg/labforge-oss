@@ -50,6 +50,7 @@ runCommand AppOpts { debugOn=debug, port=port } = do
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
   (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
   (krokiUrl, krokiManager) <- runLoggingT (requireServiceEnv "KROKI") logFunction
+  (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
 
   messages <- newTVarIO M.empty
   let config = Config { serviceCredentials=creds
@@ -60,6 +61,7 @@ runCommand AppOpts { debugOn=debug, port=port } = do
     , authEnv = mkClientEnv authManager authUrl
     , deploymentEnv = mkClientEnv deploymentManager deploymentUrl
     , krokiEnv = mkClientEnv krokiManager krokiUrl
+    , jobserviceEnv = mkClientEnv jobserviceManager jobserviceUrl
     , sessionMessages = messages
     }
   let app' = app config

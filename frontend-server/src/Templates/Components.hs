@@ -21,11 +21,13 @@ module Templates.Components
   , genericInstanceActionForm
   , genericLargeSelectForm
   , unwrapErrorFunction
+  , imageUsageModalForm
   ) where
 
 import           Api.Keycloak.Models.Group
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
+import           Jobservice.Models
 import           Text.Blaze.Html
 import           Text.Hamlet
 
@@ -174,6 +176,23 @@ genericGroupActionForm templateId groups = [shamlet|
         <input .input type=text x-model="snapname">
   <button .button.is-fullwidth @click="sendRequest"> Выполнить
 |]
+
+imageUsageModalForm :: Int -> [JobserviceImageUsageData] -> Html
+imageUsageModalForm amount usages = let
+  modalValues = [(":class", "showed ? 'is-active' : ''")]
+  in [shamlet|
+<div x-data="{ showed: false }">
+  <button .button @click="showed = true"> #{amount}
+  <div .modal *{modalValues}>
+    <div .modal-background>
+    <div .modal-content>
+      <div .card.content.p-2>
+        Используется в:
+        <ul>
+          $forall usage <- usages
+            <li> #{ usedImageDeploymentName usage } - #{ usedImageDeploymentUserName usage }
+    <button @click="showed = false" .modal-close.is-large aria-label=close>
+  |]
 
 genericLargeFrontendSelectForm :: String -> String -> Html
 genericLargeFrontendSelectForm bindTo iterOver = let

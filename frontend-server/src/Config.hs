@@ -60,6 +60,7 @@ data Config = Config
   , authEnv            :: !ClientEnv
   , deploymentEnv      :: !ClientEnv
   , krokiEnv           :: !ClientEnv
+  , jobserviceEnv      :: !ClientEnv
   , sessionMessages    :: TVar (M.Map Text [Text])
   }
 
@@ -72,6 +73,7 @@ instance ServiceEnvironment Config where
   getEnvFor DeploymentService = deploymentEnv
   getEnvFor ClusterManager    = clusterEnv
   getEnvFor KrokiProxy        = krokiEnv
+  getEnvFor JobserviceAPI     = jobserviceEnv
 
 runClientApp :: ClientEnv -> ClientM a -> AppT (Either ClientError a)
 runClientApp env m = liftIO $ runClientM m env

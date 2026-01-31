@@ -18,6 +18,7 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeOperators       #-}
 module Api.Pages
   ( pagesServer
@@ -56,6 +57,8 @@ import           Database.Persist
 import qualified Deployment.Client                        as C
 import           Deployment.Models.Deployment
 import           Deployment.Models.Stats
+import qualified Jobservice.Client                        as Jobservice
+import           Jobservice.Models
 import           Kroki.Client
 import           Models.JSONError
 import           Network.URI.Encode                       (encodeText)
@@ -259,6 +262,9 @@ imagesPage pageN t = do
   env <- asks $ getEnvFor DeploymentService
   let page = unpackPage pageN
   i@(PagedResponse { responseTotal=imagesTotal, responseObjects=images }) <- globalDecoder' $ defaultRetryClientC env (C.getPagedTemplates (Just page) userToken)
+  jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+  usageData' <- mapM (\x -> (defaultRetryClientC jobserviceEnv . flip Jobservice.getImageUsage userToken . T.pack . configTemplateName) x >>= \x' -> pure $ fmap (configTemplateName x,) x') images
+  let usageData = (M.fromList . map (fromRight undefined) . filter isRight) usageData'
   let hasNext = hasNextPages page i
   let totallyEmpty = page == 1 && imagesTotal == 0
   (\v -> baseTemplate token Nothing (Just "Образы") v Nothing) [shamlet|
@@ -283,12 +289,19 @@ imagesPage pageN t = do
         <tr>
           <th> Название образа
           <th> VMID
+          <th> Кол-во использований
           <th>
       <tbody>
         $forall (ConfigTemplate { .. }) <- images
           <tr>
             <td> #{configTemplateName}
             <td> #{configTemplateID}
+            <td>
+              $case M.lookup configTemplateName usageData
+                $of Nothing
+                  0
+                $of (Just arr)
+                  #{imageUsageModalForm (length arr) arr}
             <td>
               <a href=/image/#{configTemplateID}/delete> Удалить
     <nav .pagination.is-centered>
