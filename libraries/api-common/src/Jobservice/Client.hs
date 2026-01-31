@@ -11,4 +11,5 @@ api :: Proxy JobserviceAPI
 api = Proxy
 
 insertJobserviceMessage
-  :<|> getHeldImages = client api
+  :<|> getHeldImages
+  :<|> getImageUsage = client api
