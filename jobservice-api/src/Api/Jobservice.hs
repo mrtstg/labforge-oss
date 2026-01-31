@@ -30,6 +30,7 @@ import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import           Jobservice.Models
 import           Jobservice.Schema
@@ -39,7 +40,7 @@ import           Redis.Common
 import           Servant
 
 jobserviceServer :: ServerT JobserviceAPI AppT
-jobserviceServer = sendMessage :<|> getHeldImages
+jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage
 
 sendMessage :: JobserviceMessage -> BearerWrapper -> AppT ()
 sendMessage msgPayload (BearerWrapper token) = do
@@ -51,6 +52,19 @@ sendMessage msgPayload (BearerWrapper token) = do
   _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
   liftIO $ closeChannel chan
   pure ()
+
+getImageUsage :: Text -> BearerWrapper -> AppT [JobserviceImageUsageData]
+getImageUsage imageName (BearerWrapper token) = do
+  _ <- requireManyRealmRoles token [["image-view"], ["image-admin"]]
+  redisV <- getValue' . jobserviceUsedImageKey . T.unpack $ imageName
+  case redisV of
+    Nothing        -> pure []
+    (Just payload) -> do
+      case eitherDecode (LBS.fromStrict payload) of
+        (Left e) -> do
+          $(logError) $ "Image usage decode error: " <> (T.pack . show) e
+          sendJSONError err500 (JSONError "internalError" "Failed to decode data" Null)
+        (Right (usages :: [JobserviceImageUsageData])) -> pure usages
 
 getHeldImages :: BearerWrapper -> AppT [String]
 getHeldImages (BearerWrapper token) = do
