@@ -45,7 +45,7 @@ import qualified Data.ByteString.Char8                    as BS
 import qualified Data.ByteString.Lazy.Char8               as LBS
 import           Data.Either
 import           Data.Functor                             ((<&>))
-import           Data.List                                (intercalate)
+import           Data.List                                (intercalate, nub)
 import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
@@ -151,8 +151,8 @@ deploymentInstancesPage did pageN refreshFlag groupFlag t = do
     globalDecoder' $ defaultRetryClientC authEnv (Auth.getAllGroups (BearerWrapper token'))
   let roleNames = map groupName allRoles
   userData' <- withTokenVariable' $ \t -> do
-    defaultRetryClientC authEnv $ mapM (flip Auth.getUserBriefInfo (BearerWrapper t) . briefDeploymentUser) instances
-  let userData = either (const M.empty) (M.fromList . map (\e -> (userID e, e))) userData'
+     mapM (defaultRetryClientC authEnv . flip Auth.getUserBriefInfo (BearerWrapper t) . briefDeploymentUser) instances
+  let userData = (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) userData'
   let hasNext = hasNextPages page r
   let totallyEmpty = page == 1 && total == 0
   let group = fromMaybe "" groupFlag
@@ -609,7 +609,7 @@ vncPage vmPort t = let
 
 deploymentListPage :: Maybe Int -> Maybe BearerWrapper -> AppT Html
 deploymentListPage pageN t = do
-  token <- canCreateDeployments t
+  ~token@(ActiveToken { .. }) <- canCreateDeployments t
   let ~(Just userToken) = t
   let page = unpackPage pageN
   authEnv <- asks $ getEnvFor AuthService
@@ -617,6 +617,10 @@ deploymentListPage pageN t = do
     globalDecoder' $ defaultRetryClientC authEnv (Auth.getAllGroups (BearerWrapper token'))
   env <- asks $ getEnvFor DeploymentService
   d@(PagedResponse {responseTotal=totalDeployments, responseObjects=deployments}) <- globalDecoder' $ defaultRetryClientC env (C.getPagedDeploymentTemplates (Just page) userToken)
+  let foreignOwners = map templateOwner $ filter (\t -> (Just . templateOwner) t /= tokenUUID) deployments
+  foreignOwners' <- withTokenVariable' $ \t -> do
+     mapM (defaultRetryClientC authEnv . flip Auth.getUserBriefInfo (BearerWrapper t)) foreignOwners
+  let foreignOwnersMap = (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) foreignOwners'
   let hasNext = hasNextPages page d
   let totallyEmpty = page == 1 && totalDeployments == 0
   (\v -> baseTemplate token Nothing (Just "Развертывания") v (Just $ genericGroupActionFormData (if null allRoles then Nothing else (Just $ head allRoles)))) [shamlet|
@@ -632,6 +636,12 @@ deploymentListPage pageN t = do
           <header .card-header>
             <p .card-header-title>
               #{templateTitle}
+              $if tokenUUID /= Just templateOwner
+                $case M.lookup templateOwner foreignOwnersMap
+                  $of Nothing
+                    <span>: Ошибка определения пользователя
+                  $of (Just (BriefUser { .. }))
+                    <span>: #{ fromMaybe "-" userFirstName } #{ fromMaybe "-" userLastName }
           <div .card-content>
             <p> Состав развертывания
             <table .table.is-fullwidth>
