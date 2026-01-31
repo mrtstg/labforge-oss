@@ -301,7 +301,10 @@ imagesPage pageN t = do
                 $of Nothing
                   0
                 $of (Just arr)
-                  #{imageUsageModalForm (length arr) arr}
+                  $if arr /= []
+                    #{imageUsageModalForm (length arr) arr}
+                  $else
+                    0
             <td>
               <a href=/image/#{configTemplateID}/delete> Удалить
     <nav .pagination.is-centered>
