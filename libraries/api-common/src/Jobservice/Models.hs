@@ -2,14 +2,39 @@
 {-# LANGUAGE RecordWildCards   #-}
 module Jobservice.Models
   ( jobserviceUsedImagesKey
+  , jobserviceUsedImageKey
   , JobserviceMessage(..)
+  , JobserviceImageUsageData(..)
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import           Data.Text         (Text)
 
+jobserviceUsedImageKey imageName = "jobservice-used-" <> imageName <> "-at"
 jobserviceUsedImagesKey = "jobservice-used-images"
+
+data JobserviceImageUsageData = JobserviceImageUsageData
+  { usedImageDeploymentName     :: !Text
+  , usedImageDeploymentUserId   :: !Text
+  , usedImageDeploymentUserName :: !Text
+  , usedImageDeploymentId       :: !Int
+  } deriving (Show, Eq)
+
+instance FromJSON JobserviceImageUsageData where
+  parseJSON = withObject "JobserviceImageUsageData" $ \v -> JobserviceImageUsageData
+    <$> v .: "name"
+    <*> v .: "userId"
+    <*> v .: "userName"
+    <*> v .: "deploymentId"
+
+instance ToJSON JobserviceImageUsageData where
+  toJSON (JobserviceImageUsageData { .. }) = object
+    [ "name" .= usedImageDeploymentName
+    , "userId" .= usedImageDeploymentUserId
+    , "userName" .= usedImageDeploymentUserName
+    , "deploymentId" .= usedImageDeploymentId
+    ]
 
 data JobserviceMessage = JobserviceUpdateUsedImages {}
                        | JobserviceAllocateNode { deploymentId :: !Text }
