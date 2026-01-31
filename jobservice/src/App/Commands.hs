@@ -42,6 +42,7 @@ import           Deployment.Client
 import           Deployment.Models.Deployment
 import           Handler.AllocateNode
 import           Handler.Deployment
+import           Handler.ImageUsage
 import           Handler.Power
 import           Handler.Snapshot
 import           Jobservice.Models
@@ -57,27 +58,6 @@ import           System.Environment
 import           System.Exit
 import           System.Random
 
-getAllTemplates :: AppT (Maybe [DeploymentTemplate])
-getAllTemplates = let
-  helper :: [DeploymentTemplate] -> Int -> AppT (Maybe [DeploymentTemplate])
-  helper acc page = do
-    env <- asks $ getEnvFor DeploymentService
-    res <- withTokenVariable $ \token -> do
-      defaultRetryClientC env (getPagedDeploymentTemplates (Just page) (BearerWrapper token))
-    case res of
-      (Left _) -> $(logError) "Token issue error" >> pure Nothing
-      (Right r) -> do
-        case r of
-          (Left e) -> do
-            $(logError) $ "Client error: " <> (pack . show) e
-            pure Nothing
-          (Right (PagedResponse { .. })) -> do
-            case responseObjects of
-              [] -> (pure . Just) acc
-              elems -> do
-                helper (elems ++ acc) (page + 1)
-  in helper [] 1
-
 f :: TVar Int -> (Envelope, Message) -> AppT ()
 f deploymentsC (env, msg) = do
   _ <- liftIO $ do
@@ -87,14 +67,16 @@ f deploymentsC (env, msg) = do
     (Left e) -> do
       $(logError) $ "Decode error: " <> pack e
     (Right (JobserviceUpdateUsedImages {})) -> do
-      $(logInfo) "Getting templates"
-      tmpls <- getAllTemplates
-      case tmpls of
-        Nothing -> $(logError) "Failed to get templates"
-        (Just d) -> do
-          let usedTemplates = nub $ foldMap (map configVMParentTemplate . filter isTemplateVM . templateVMs) d
-          cacheValue' jobserviceUsedImagesKey (LBS.unpack . encode $ usedTemplates) (Just $ 15 * 60)
-          $(logInfo) "Value updated!"
+      let lockKey = "image_usage_lock"
+      v <- getValue' lockKey
+      case v of
+        Nothing -> do
+          cacheValue' lockKey "lock" (Just 600)
+          cacheUsedImages
+          deleteValue' lockKey
+        (Just _) -> do
+          $(logInfo) "Image task is locked. Skipping task."
+          pure ()
     (Right (JobserviceAllocateNode deploymentId)) -> do
       let lockKey = "allocate_node_lock"
       v <- getValue' lockKey
