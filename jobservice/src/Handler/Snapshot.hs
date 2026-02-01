@@ -32,6 +32,7 @@ import qualified Deployment.Client                 as D
 import           Deployment.Models.Deployment
 import           Handler.Utils
 import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Models.Transaction
 import           Proxmox.Models.Snapshot
 import           Service.Environment
@@ -42,8 +43,8 @@ defaultErrorFallback deploymentId err = do
   _ <- setDeploymentInstanceStatus deploymentId Failed
   pure Nothing
 
-jobserviceRollback :: Text -> Text -> AppT ()
-jobserviceRollback deploymentId snapName = do
+jobserviceRollback :: Text -> Text -> Text -> AppT ()
+jobserviceRollback deploymentId snapName mask = do
   $(logInfo) $ "Rollback of instance " <> (T.pack . show) deploymentId
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
@@ -59,11 +60,13 @@ jobserviceRollback deploymentId snapName = do
           _ <- setDeploymentInstanceStatus deploymentId Failed
           pure ()
         (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
-          _ <- deployTransaction (map (`VMRollbacked` T.unpack snapName) vms) deploymentId deployConfig
+          let vmNames = map (T.pack . configVMName) vms
+          let filterF = createMaskFunction vmNames mask
+          _ <- deployTransaction (map (`VMRollbacked` T.unpack snapName) (filter filterF vms)) deploymentId deployConfig
           pure ()
 
-jobserviceSnapshot :: Text -> Text -> Bool -> AppT ()
-jobserviceSnapshot deploymentId snapName delete = do
+jobserviceSnapshot :: Text -> Text -> Bool -> Text -> AppT ()
+jobserviceSnapshot deploymentId snapName delete mask = do
   $(logInfo) $ "Snapping instance " <> (T.pack . show) deploymentId
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
@@ -79,5 +82,7 @@ jobserviceSnapshot deploymentId snapName delete = do
           _ <- setDeploymentInstanceStatus deploymentId Failed
           pure ()
         (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
-          _ <- deployTransaction (map ((\x -> if delete then flip SnapshotNotExists x else flip SnapshotExists x) (ProxmoxSnapshotCreate {snapshotCreateStateful=Just True, snapshotCreateName=snapName, snapshotCreateDesc=Nothing})) vms) deploymentId deployConfig
+          let vmNames = map (T.pack . configVMName) vms
+          let filterF = createMaskFunction vmNames mask
+          _ <- deployTransaction (map ((\x -> if delete then flip SnapshotNotExists x else flip SnapshotExists x) (ProxmoxSnapshotCreate {snapshotCreateStateful=Just True, snapshotCreateName=snapName, snapshotCreateDesc=Nothing})) (filter filterF vms)) deploymentId deployConfig
           pure ()

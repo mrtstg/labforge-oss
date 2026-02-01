@@ -59,9 +59,10 @@ genericInstanceActionFormData = [shamlet|
       instanceId: instanceId,
       action: "makesnap",
       snapname: "",
+      mask: "",
       sendRequest() {
         if (this.snapname.length > 0 && (this.action == "makesnap" || this.action == "delsnap" || this.action == "rollback")) {
-          let url = "/api/deployment/instances/" + instanceId + "/snapshot?snapname=" + encodeURIComponent(this.snapname) + (this.action == "delsnap" ? "&delete" : "") + (this.action == "rollback" ? "&rollback" : "")
+          let url = "/api/deployment/instances/" + instanceId + "/snapshot?snapname=" + encodeURIComponent(this.snapname) + "&mask=" + encodeURIComponent(this.mask) + (this.action == "delsnap" ? "&delete" : "") + (this.action == "rollback" ? "&rollback" : "")
           fetch(url).then(r => {
             if (this.action == "makesnap") {
               unwrapError(r, () => { this.addNotification("Отправлен запрос на создание снапшота " + this.snapname) }, (e) => this.addNotification(e))
@@ -90,6 +91,7 @@ genericGroupActionFormData group = [shamlet|
       action: "deploy",
       group: "#{preEscapedToMarkup defaultGroup}",
       snapname: "",
+      mask: "",
       sendRequest() {
         if (this.action == "deploy" || this.action == "destroy") {
           let url = "/api/deployment/deployments/" + deploymentId + "/" + this.action + "/group?group=" + encodeURIComponent(this.group)
@@ -101,7 +103,7 @@ genericGroupActionFormData group = [shamlet|
           });
         }
         if (this.action == "turnon" || this.action == "turnoff") {
-          let url = "/api/deployment/deployments/" + deploymentId + "/power/group?group=" + encodeURIComponent(this.group) + (this.action == "turnon" ? "&on" : "")
+          let url = "/api/deployment/deployments/" + deploymentId + "/power/group?group=" + encodeURIComponent(this.group) + "&mask=" + encodeURIComponent(this.mask) + (this.action == "turnon" ? "&on" : "")
           fetch(url).then(r => {
             unwrapError(r, () => { this.addNotification("Отправлен запрос на " + (this.action == "turnon" ? 'включение' : 'выключение') + " для группы " + this.group) }, (e) => this.addNotification(e))
           }).catch(err => {
@@ -110,7 +112,7 @@ genericGroupActionFormData group = [shamlet|
           });
         }
         if (this.snapname.length > 0 && (this.action == "makesnap" || this.action == "delsnap" || this.action == "rollback")) {
-          let url = "/api/deployment/deployments/" + deploymentId + "/snapshot/group?group=" + encodeURIComponent(this.group) + "&snapname=" + encodeURIComponent(this.snapname) + (this.action == "delsnap" ? "&delete" : "") + (this.action == "rollback" ? "&rollback" : "")
+          let url = "/api/deployment/deployments/" + deploymentId + "/snapshot/group?group=" + encodeURIComponent(this.group) + "&mask=" + encodeURIComponent(this.mask) + "&snapname=" + encodeURIComponent(this.snapname) + (this.action == "delsnap" ? "&delete" : "") + (this.action == "rollback" ? "&rollback" : "")
           fetch(url).then(r => {
             if (this.action == "makesnap") {
               unwrapError(r, () => { this.addNotification("Отправлен запрос на создание снапшота " + this.snapname + " для группы " + this.group) }, (e) => this.addNotification(e))
@@ -143,6 +145,11 @@ genericInstanceActionForm instanceKey = [shamlet|
         <option value=makesnap> Сделать снапшот
         <option value=delsnap> Удалить снапшот
         <option value=rollback> Откатить стенды
+  <template *{[("x-if", "action == 'rollback' || action == 'makesnap' || action == 'delsnap'")]}>
+    <div>
+      <label .label> Маска действия
+      <div .control>
+        <input .input type=text x-model="mask">
   <template *{[("x-if", "action == 'makesnap' || action == 'delsnap' || action == 'rollback'")]}>
     <div>
       <label .label> Название снапшота
@@ -169,6 +176,11 @@ genericGroupActionForm templateId groups = [shamlet|
         <option value=makesnap> Сделать снапшот
         <option value=delsnap> Удалить снапшот
         <option value=rollback> Откатить стенды
+  <template *{[("x-if", "action == 'turnon' || action == 'turnoff' || action == 'rollback' || action == 'makesnap' || action == 'delsnap'")]}>
+    <div>
+      <label .label> Маска действия
+      <div .control>
+        <input .input type=text x-model="mask">
   <template *{[("x-if", "action == 'makesnap' || action == 'delsnap' || action == 'rollback'")]}>
     <div>
       <label .label> Название снапшота

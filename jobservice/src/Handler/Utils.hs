@@ -19,6 +19,8 @@ module Handler.Utils
   , unpackError
   , sendLogRequest
   , deployTransaction
+  , processMask
+  , createMaskFunction
   ) where
 
 import           Api.BaseUrl
@@ -54,6 +56,22 @@ import           Proxmox.Models.Storage
 import           Proxmox.Schema
 import           Servant.Client
 import           Service.Environment
+
+createMaskFunction :: [Text] -> Text -> (ConfigVM -> Bool)
+createMaskFunction vmNames mask = flip elem maskList . T.pack . configVMName where
+  maskList = processMask vmNames mask
+
+processMask :: [Text] -> Text -> [Text]
+processMask vmNames "" = vmNames
+processMask vmNames "*" = vmNames
+processMask vmNames mask = do
+  let maskParts = T.splitOn " " mask
+  let negativeFilters = filter (\v -> T.isPrefixOf "!" v && v `notElem` vmNames) maskParts
+  let hasNegativeFilters = not . null $ negativeFilters
+  if hasNegativeFilters then do
+    let negativeNames = map T.tail negativeFilters
+    filter (`notElem` negativeNames) vmNames
+  else filter (`elem` maskParts) vmNames
 
 unpackError :: Either String (Either ClientError a) -> (String -> AppT (Maybe a)) -> AppT (Maybe a)
 unpackError (Left tokenError) handler          = handler tokenError

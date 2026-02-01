@@ -29,8 +29,8 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> ReqBody '[JSON] DeploymentCreate :> AuthHeader :> Patch '[JSON] ()
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "deploy" :> "group" :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "destroy" :> "group" :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] ()
-  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "snapshot" :> "group" :> QueryParam "group" Text :> QueryParam "snapname" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
-  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "power" :> "group" :> QueryParam "group" Text :> QueryFlag "on" :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "snapshot" :> "group" :> QueryParam "group" Text :> QueryParam "snapname" Text :> QueryParam "mask" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "power" :> "group" :> QueryParam "group" Text :> QueryParam "mask" Text :> QueryFlag "on" :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "vmid" :> NodeNameCapture :> DeploymentInstanceCapture :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [Int]
   :<|> "api" :> "deployment" :> "display" :> NodeNameCapture :> DeploymentInstanceCapture :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [Int]
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> QueryParam "page" Int :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] (PagedResponse [DeploymentInstanceBrief])
@@ -43,7 +43,7 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "vmport" :> "access" :> Header' '[Required] "X-VM-PORT" Text :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "instances" :> "stats" :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] DeploymentStats
   :<|> "api" :> "deployment" :> "instances" :> DeploymentInstanceCapture :> "destroy" :> AuthHeader :> Get '[JSON] ()
-  :<|> "api" :> "deployment" :> "instances" :> DeploymentInstanceCapture :> "snapshot" :> QueryParam "snapname" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "instances" :> DeploymentInstanceCapture :> "snapshot" :> QueryParam "snapname" Text :> QueryParam "mask" Text :> QueryFlag "delete" :> QueryFlag "rollback" :> AuthHeader :> Get '[JSON] ()
   :<|> "api" :> "deployment" :> "network" :> NodeNameCapture :> Capture "DeploymentInstanceID" Text :> QueryParam "amount" Int :> AuthHeader :> Get '[JSON] [String]
   :<|> "api" :> "deployment" :> "instances" :> Capture "DeploymentInstanceID" Text :> ReqBody '[JSON] DeploymentPatch :> AuthHeader :> Patch '[JSON] ()
   :<|> "api" :> "deployment" :> "templates" :> "names" :> "list" :> ReqBody '[JSON] [Text] :> AuthHeader :> Post '[JSON] [ConfigTemplate]

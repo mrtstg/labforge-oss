@@ -18,8 +18,8 @@ import           Data.Text
 
 data QueryRequest = GroupDeployment Int Text
   | GroupDestroy Int Text
-  | GroupPower Int Text Bool
-  | GroupMakeSnapshot Int Text Text
-  | GroupDeleteSnapshot Int Text Text
-  | GroupRollback Int Text Text
+  | GroupPower Int Text Bool Text
+  | GroupMakeSnapshot Int Text Text Text
+  | GroupDeleteSnapshot Int Text Text Text
+  | GroupRollback Int Text Text Text
   deriving (Show, Eq)

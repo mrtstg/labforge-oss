@@ -137,12 +137,12 @@ f deploymentsC (env, msg) = do
         $(logInfo) $ "Destroying " <> deploymentId
         destroyInstance env deploymentId
         (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
-    (Right (JobservicePower deploymentId powerOn)) -> do
-      jobservicePower env deploymentId powerOn
-    (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId})) -> do
-      jobserviceSnapshot deploymentId snapName delete
-    (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId})) -> do
-      jobserviceRollback deploymentId snapName
+    (Right (JobservicePower deploymentId powerOn mask)) -> do
+      jobservicePower env deploymentId powerOn mask
+    (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId, deploymentMask=mask})) -> do
+      jobserviceSnapshot deploymentId snapName delete mask
+    (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId, deploymentMask=mask})) -> do
+      jobserviceRollback deploymentId snapName mask
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = do

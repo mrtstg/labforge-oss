@@ -40,18 +40,18 @@ data JobserviceMessage = JobserviceUpdateUsedImages {}
                        | JobserviceAllocateNode { deploymentId :: !Text }
                        | JobserviceDeployInstance { deploymentId :: !Text }
                        | JobserviceDestroyInstance { deploymentId :: !Text }
-                       | JobserviceSnapshot { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentDelete :: !Bool }
-                       | JobserviceRollback { deploymentId :: !Text, deploymentSnapshot :: !Text }
-                       | JobservicePower { deploymentId :: !Text, deploymentPower :: !Bool } deriving (Show, Eq)
+                       | JobserviceSnapshot { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentDelete :: !Bool, deploymentMask :: !Text }
+                       | JobserviceRollback { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentMask :: !Text }
+                       | JobservicePower { deploymentId :: !Text, deploymentPower :: !Bool, deploymentMask :: !Text } deriving (Show, Eq)
 
 instance ToJSON JobserviceMessage where
   toJSON (JobserviceUpdateUsedImages {}) = object ["type" .= String "updateImages"]
   toJSON (JobserviceAllocateNode { .. }) = object ["type" .= String "allocateNode", "deploymentId" .= deploymentId]
   toJSON (JobserviceDeployInstance { .. }) = object ["type" .= String "deployInstance", "deploymentId" .= deploymentId]
   toJSON (JobserviceDestroyInstance { .. }) = object ["type" .= String "destroyInstance", "deploymentId" .= deploymentId]
-  toJSON (JobserviceSnapshot { .. }) = object [ "type" .= String "snapshotInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "delete" .= deploymentDelete ]
-  toJSON (JobserviceRollback { .. }) = object [ "type" .= String "rollbackInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot ]
-  toJSON (JobservicePower { .. }) = object [ "type" .= String "powerInstance", "deploymentId" .= deploymentId, "power" .= deploymentPower ]
+  toJSON (JobserviceSnapshot { .. }) = object [ "type" .= String "snapshotInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "delete" .= deploymentDelete, "mask" .= deploymentMask ]
+  toJSON (JobserviceRollback { .. }) = object [ "type" .= String "rollbackInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "mask" .= deploymentMask ]
+  toJSON (JobservicePower { .. }) = object [ "type" .= String "powerInstance", "deploymentId" .= deploymentId, "power" .= deploymentPower, "mask" .= deploymentMask ]
 
 instance FromJSON JobserviceMessage where
   parseJSON = withObject "JobserviceMessage" $ \v -> case KM.lookup "type" v of
@@ -66,10 +66,13 @@ instance FromJSON JobserviceMessage where
       <$> v .: "deploymentId"
       <*> v .: "snapshot"
       <*> v .: "delete"
+      <*> v .: "mask"
     (Just (String "rollbackInstance")) -> JobserviceRollback
       <$> v .: "deploymentId"
       <*> v .: "snapshot"
+      <*> v .: "mask"
     (Just (String "powerInstance")) -> JobservicePower
       <$> v .: "deploymentId"
       <*> v .: "power"
+      <*> v .: "mask"
     _anyOther                      -> fail "Invalid task type!"

@@ -52,8 +52,8 @@ defaultErrorFallback deploymentId env err = do
   _ <- setDeploymentInstanceStatus deploymentId Failed
   pure Nothing
 
-jobservicePower :: Envelope -> Text -> Bool -> AppT ()
-jobservicePower env deploymentId powerOn = do
+jobservicePower :: Envelope -> Text -> Bool -> Text -> AppT ()
+jobservicePower env deploymentId powerOn mask = do
   let errorF = defaultErrorFallback deploymentId env
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
@@ -74,7 +74,8 @@ jobservicePower env deploymentId powerOn = do
               pure ()
             (Right url) -> do
               let state = ProxmoxState url mgr
-              forM_ deployVMs $ \vm -> do
+              let vmNames = map (T.pack . configVMName) deployVMs
+              forM_ (filter (createMaskFunction vmNames mask) deployVMs) $ \vm -> do
                 let vmId = fromMaybe (-1) $ configVMID vm
                 _ <- R.defaultRetryClient' state (f deployNodeName vmId)
                 $(logInfo) $ "Turned " <> (if powerOn then "on " else "off ") <> (T.pack . show) vmId

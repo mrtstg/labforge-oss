@@ -376,10 +376,10 @@ callGroupDeployment tID groupName (BearerWrapper token) = do
                 putTask tasksPool (GroupDeployment tID group)
                 pure ()
 
-callInstanceSnapshot :: Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
-callInstanceSnapshot _ (Just "") _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
-callInstanceSnapshot _ Nothing _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
-callInstanceSnapshot instanceKey (Just snapName) doDelete doRollback (BearerWrapper token) = do
+callInstanceSnapshot :: Text -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
+callInstanceSnapshot _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
+callInstanceSnapshot _ Nothing _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
+callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
   d <- runDB $ get (DeploymentInstanceDataKey instanceKey)
   case d of
@@ -394,14 +394,14 @@ callInstanceSnapshot instanceKey (Just snapName) doDelete doRollback (BearerWrap
           let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage m (BearerWrapper t)
           withTokenVariable'' $ \t -> do
             case (doDelete, doRollback) of
-              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentId=instanceKey})
-              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentId=instanceKey})
-              (False, True) -> taskF t (JobserviceRollback instanceKey snapName)
+              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentId=instanceKey, deploymentMask=fromMaybe "*" mask'})
+              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentId=instanceKey,deploymentMask=fromMaybe "*" mask'})
+              (False, True) -> taskF t (JobserviceRollback instanceKey snapName $ fromMaybe "*" mask')
 
-callGroupSnapshot :: Int -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
-callGroupSnapshot _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
-callGroupSnapshot _ _ (Just "") _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
-callGroupSnapshot tID (Just groupName) (Just snapName) doDelete doRollback (BearerWrapper token) = do
+callGroupSnapshot :: Int -> Maybe Text -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
+callGroupSnapshot _ (Just "") _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
+callGroupSnapshot _ _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
+callGroupSnapshot tID (Just groupName) (Just snapName) mask' doDelete doRollback (BearerWrapper token) = do
   if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
     ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
     template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
@@ -417,11 +417,12 @@ callGroupSnapshot tID (Just groupName) (Just snapName) doDelete doRollback (Bear
           case r of
             (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
             (Right _) -> do
+              let mask = fromMaybe "*" mask'
               case (doDelete, doRollback) of
-                (False, False) -> putTask tasksPool (GroupMakeSnapshot tID groupName snapName)
-                (True, _) -> putTask tasksPool (GroupDeleteSnapshot tID groupName snapName)
-                (False, True) -> putTask tasksPool (GroupRollback tID groupName snapName)
-callGroupSnapshot _ _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
+                (False, False) -> putTask tasksPool (GroupMakeSnapshot tID groupName snapName mask)
+                (True, _) -> putTask tasksPool (GroupDeleteSnapshot tID groupName snapName mask)
+                (False, True) -> putTask tasksPool (GroupRollback tID groupName snapName mask)
+callGroupSnapshot _ _ _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 
 switchTemplateVisibility :: Int -> BearerWrapper -> AppT ()
 switchTemplateVisibility templateId (BearerWrapper token) = do
@@ -462,8 +463,8 @@ callGroupDestroy tID groupName (BearerWrapper token) = do
                 putTask tasksPool (GroupDestroy tID group)
                 pure ()
 
-callGroupPower :: Int -> Maybe Text -> Bool -> BearerWrapper -> AppT ()
-callGroupPower tID (Just group) powerOn (BearerWrapper token) = do
+callGroupPower :: Int -> Maybe Text -> Maybe Text -> Bool -> BearerWrapper -> AppT ()
+callGroupPower tID (Just group) mask' powerOn (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
   let instanceKey = DeploymentTemplateDataKey . fromIntegral $ tID
   template' <- runDB $ get instanceKey
@@ -479,9 +480,9 @@ callGroupPower tID (Just group) powerOn (BearerWrapper token) = do
         case r of
           (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
           (Right _) -> do
-            putTask tasksPool (GroupPower tID group powerOn)
+            putTask tasksPool (GroupPower tID group powerOn (fromMaybe "*" mask'))
             pure ()
-callGroupPower _ _ _ _ = do
+callGroupPower _ _ _ _ _ = do
   sendJSONError err400 (JSONError "badRequest" "Group is not specified!" Null)
 
 setDeploymentInstancePower = undefined
