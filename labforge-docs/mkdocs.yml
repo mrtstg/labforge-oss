@@ -48,6 +48,7 @@ nav:
     - Создание шаблонов развертывания: usage-guide/deployment-templates.md
     - Система мониторинга: usage-guide/monitoring.md
     - Решение проблем при ошибках развертывания: usage-guide/deployment-errors.md
+    - Маски действия: usage-guide/action-mask.md
   - Руководство установки:
     - Требования к окружению: install-guide/requirements.md
     - Установка из установщика: install-guide/installer.md

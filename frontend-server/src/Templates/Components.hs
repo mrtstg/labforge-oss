@@ -150,6 +150,7 @@ genericInstanceActionForm instanceKey = [shamlet|
       <label .label> Маска действия
       <div .control>
         <input .input type=text x-model="mask">
+        <a .help href=/docs/usage-guide/action-mask/> Как использовать маску
   <template *{[("x-if", "action == 'makesnap' || action == 'delsnap' || action == 'rollback'")]}>
     <div>
       <label .label> Название снапшота
@@ -181,6 +182,7 @@ genericGroupActionForm templateId groups = [shamlet|
       <label .label> Маска действия
       <div .control>
         <input .input type=text x-model="mask">
+        <a .help href=/docs/usage-guide/action-mask/> Как использовать маску
   <template *{[("x-if", "action == 'makesnap' || action == 'delsnap' || action == 'rollback'")]}>
     <div>
       <label .label> Название снапшота
