@@ -100,6 +100,7 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "image" :> "create" :> QueryParam "name" Text :> QueryParam "id" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "instances" :> QueryParam "page" Int :> QueryParam "refresh" Int :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "copy" :> AuthHeader' :> Get '[HTML] Html
+  :<|> "instance" :> Capture "instanceID" Text :> "power" :> AuthHeader' :> QueryParam "power" Int :> Get '[HTML] Html
 
 globalDecoder' :: AppT (Either ClientError a) -> AppT a
 globalDecoder' v = do
@@ -138,6 +139,7 @@ pagesServer = indexPage
   :<|> createImagePage
   :<|> deploymentInstancesPage
   :<|> copyDeploymentPage
+  :<|> instancePowerPage
 
 deploymentInstancesPage :: Int -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe BearerWrapper -> AppT Html
 deploymentInstancesPage did pageN refreshFlag groupFlag t = do
@@ -792,6 +794,19 @@ getUserName uid = do
     (Left _)  -> pure Nothing
     (Right u) -> pure (Just u)
 
+instancePowerPage :: Text -> Maybe BearerWrapper -> Maybe Int -> AppT Html
+instancePowerPage dID t powerFlag' = do
+  deploymentEnv <- asks $ getEnvFor DeploymentService
+  token <- requireToken' t
+  let (ActiveToken { .. }) = token
+  let ~(Just userToken) = t
+  (DeploymentInstance { .. }) <- globalDecoder' $ defaultRetryClientC deploymentEnv (C.getDeploymentInstance dID userToken)
+  let powerFlag = fromMaybe 0 powerFlag' == 1
+  let targetVMs = map fst . filter ((/= powerFlag) . snd) $ M.toList instanceVMPower
+  let targetPorts = mapMaybe (`M.lookup` instanceVMLinks) targetVMs
+  _ <- globalDecoder' $ defaultRetryClientC deploymentEnv $ mapM (`C.switchVMPortPower` userToken) targetPorts
+  tempRedirectTo $ "/instance/" <> T.unpack dID
+
 instancePage :: Text -> Maybe BearerWrapper -> Maybe Text -> AppT Html
 instancePage dID t (Just vmPort) = do
   _ <- requireToken' t
@@ -850,6 +865,11 @@ instancePage dID t Nothing = do
         <div .is-max-tablet.container.svg__container x-show="open">
           #{preEscapedToMarkup svg}
     $of Left _
+  <div .is-flex.is-flex-direction-row.is-flex-wrap-wrap.is-align-items-center>
+    <div .mr-2>
+      <a .button.is-danger.is-outlined href=/instance/#{dID}/power?power=0> Выключить все
+    <div .ml-2>
+      <a .button.is-success.is-outlined href=/instance/#{dID}/power?power=1> Включить все
   <table .table.is-fullwidth>
     <thead>
       <tr>
