@@ -154,18 +154,27 @@ waitTaskCompletion maxTries ts taskId taskType = helper 0 where
 powerVMWrapper :: Int -> Int -> StatefulTransactionT ()
 powerVMWrapper ts vmid = do
   (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
-  r <- waitForClient
-    3_000_000
-    "VM power task is not found"
-    6
-    1_000_000
-    (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) (Just "OK") (Just "qmstart") Nothing (Just vmid))
-    (\(ProxmoxResponse tasks _) -> not . null $ tasks)
-  v <- defaultClientErrorWrapper r
-  if v then pure () else do
-    nts <- getUnixIntTime
-    _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
-    powerVMWrapper nts vmid
+  vmState <- defaultRetryClient' transactionProxmoxState $ getVMPower nodeName vmid
+  case vmState of
+    (Left e) -> do
+      $(logError) $ "VM power request failure: " <> (T.pack . show) e
+      powerVMWrapper ts vmid
+    (Right (ProxmoxResponse {proxmoxData=Just (ProxmoxVMStatusWrapper Proxmox.Models.VM.VMRunning)})) -> do
+      $(logError) "VM is already running"
+      pure ()
+    _anyOther -> do
+      r <- waitForClient
+        5_000_000
+        "VM power task is not found"
+        4
+        1_000_000
+        (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) (Just "OK") (Just "qmstart") Nothing (Just vmid))
+        (\(ProxmoxResponse tasks _) -> not . null $ tasks)
+      v <- defaultClientErrorWrapper r
+      if v then pure () else do
+        nts <- getUnixIntTime
+        _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
+        powerVMWrapper nts vmid
 
 applySDNWrapper :: StatefulTransactionT ()
 applySDNWrapper = do
@@ -267,19 +276,9 @@ executeTransactionAction (StartVM vmName) = do
         Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
         _ -> do
           initReqTime <- getUnixIntTime
-          _ <- (defaultRetryClient' transactionProxmoxState) $ startVM nodeName vmid
+          _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
           _ <- powerVMWrapper initReqTime vmid
-          powerResult <- waitForClient
-            5_000_000
-            ("VM " <> (T.pack . show) vmid <> " is not powered on. Waiting...")
-            20
-            1_000_000
-            (defaultRetryClient' transactionProxmoxState (getVMPower nodeName vmid))
-            (`vmStateIs` VM.VMRunning)
-          case powerResult of
-            (Left e) -> throwError (ClientError e)
-            (Right True) -> $(logInfo) $ T.pack $ "Turned on VM " <> vmName <> "(#" <> show vmid <> ")"
-            (Right False) -> $(logWarn) $ T.pack $ "Failed to start VM " <> vmName <> "(#" <> show vmid <> ")"
+          pure ()
 executeTransactionAction (DetachNetwork vmName networkNumber) = do
   (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
   data' <- transactionDataGetF
