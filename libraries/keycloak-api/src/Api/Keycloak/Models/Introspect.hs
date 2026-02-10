@@ -49,6 +49,7 @@ data IntrospectResponse = InactiveToken |
   , tokenEmail             :: !(Maybe Text)
   , tokenUUID              :: !(Maybe Text)
   , tokenSessionID         :: !(Maybe Text)
+  , tokenGroups            :: ![Text]
   } deriving Show
 
 instance FromJSON IntrospectResponse where
@@ -64,6 +65,7 @@ instance FromJSON IntrospectResponse where
       <*> v .:? "email"
       <*> v .:? "sub"
       <*> v .:? "sid"
+      <*> v .:? "groups" .!= []
     _anyOther -> fail $ "IntrospectResponse got invalid active value: " <> show _anyOther
 
 instance ToJSON IntrospectResponse where
@@ -79,4 +81,5 @@ instance ToJSON IntrospectResponse where
     , "email" .= tokenEmail
     , "sub" .= tokenUUID
     , "sid" .= tokenSessionID
+    , "groups" .= tokenGroups
     ]
