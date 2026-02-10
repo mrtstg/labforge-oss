@@ -82,6 +82,35 @@ templateAdminRole = "image-admin"
 templateReadRole = "image-view"
 pageSize = 20
 
+data DeploymentOwnership = TemplateOwner | DeploymentOwner | NotOwner deriving (Show, Eq)
+
+isDeploymentOwner :: IntrospectResponse -> DeploymentInstanceDataId -> AppT DeploymentOwnership
+isDeploymentOwner InactiveToken _ = pure NotOwner
+isDeploymentOwner token@ActiveToken { .. } deploymentId = do
+  v <- runDB $ get deploymentId
+  case v of
+    Nothing -> pure NotOwner
+    (Just (DeploymentInstanceData { .. })) -> do
+      isOwner <- isDeploymentTemplateOwner token deploymentInstanceDataParent
+      pure $ if isOwner then TemplateOwner else if tokenUUID == Just deploymentInstanceDataOwnerId then DeploymentOwner else NotOwner
+
+isDeploymentTemplateOwner :: IntrospectResponse -> DeploymentTemplateDataId -> AppT Bool
+isDeploymentTemplateOwner InactiveToken _      = pure False
+isDeploymentTemplateOwner ActiveToken { .. } templateId = do
+  v <- runDB $ get templateId
+  case v of
+    Nothing -> pure False
+    (Just (DeploymentTemplateData { .. })) -> do
+      pure $ deployTemplatesAdmin `elem` tokenRealmRoles || tokenUUID == Just deploymentTemplateDataOwnerId
+
+isDeploymentTemplateAdministrator :: IntrospectResponse -> DeploymentTemplateDataId -> AppT Bool
+isDeploymentTemplateAdministrator InactiveToken _ = pure False
+isDeploymentTemplateAdministrator token templateId   = isDeploymentTemplateOwner token templateId
+
+isDeploymentTemplateOperator :: IntrospectResponse -> DeploymentTemplateDataId -> AppT Bool
+isDeploymentTemplateOperator InactiveToken _            = pure False
+isDeploymentTemplateOperator token@ActiveToken { .. } templateId = isDeploymentTemplateOwner token templateId
+
 getTemplateNameList :: [Text] -> BearerWrapper -> AppT [ConfigTemplate]
 getTemplateNameList names (BearerWrapper token) = do
   _ <- requireManyRealmRoles token [[templateAdminRole], [templateReadRole]]
@@ -175,13 +204,14 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
 
 getDeploymentTemplate :: Int -> BearerWrapper -> AppT DeploymentTemplate
 getDeploymentTemplate tID (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
+  let templateKey = DeploymentTemplateDataKey . fromIntegral $ tID
   template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
   case template' of
     Nothing -> sendJSONError err400 (JSONError "notFound" "Template not found" Null)
     (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      isOwner <- isDeploymentTemplateOwner t templateKey
+      if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         pure $ DeploymentTemplate
           { templateAvaiableVMs = deploymentTemplateDataAvailableVMs
@@ -195,13 +225,14 @@ getDeploymentTemplate tID (BearerWrapper token) = do
 
 deleteDeploymentTemplate :: Int -> BearerWrapper -> AppT ()
 deleteDeploymentTemplate tID (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
-  template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
+  t <- requireToken token
+  let templateKey = DeploymentTemplateDataKey . fromIntegral $ tID
+  template' <- runDB $ get templateKey
   case template' of
     Nothing -> sendJSONError err400 (JSONError "notFound" "Template not found" Null)
     (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      isOwner <- isDeploymentTemplateOwner t templateKey
+      if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         instancesExist <- runDB $ exists [ DeploymentInstanceDataParent ==. (DeploymentTemplateDataKey . fromIntegral $ tID)]
         if instancesExist then sendJSONError err400 (JSONError "badRequest" "There is left instances of this deployment" Null) else do
@@ -212,26 +243,24 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
 
 patchDeploymentTemplate :: Int -> DeploymentCreate -> BearerWrapper -> AppT ()
 patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
-  let instanceKey = (DeploymentTemplateDataKey . fromIntegral $ tID)
-  template' <- runDB $ get instanceKey
-  case template' of
-    Nothing -> sendJSONError err400 (JSONError "notFound" "Template not found" Null)
-    (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-      else do
-        titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle, DeploymentTemplateDataId !=. instanceKey ]
-        if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
-          runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
-            [ DeploymentTemplateDataTitle =. reqTitle
-            , DeploymentTemplateDataVms =. reqVMs
-            , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
-            , DeploymentTemplateDataExistingNetworks =. reqExistingNetworks
-            ]
-          jobEnv <- asks $ getEnvFor JobserviceAPI
-          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
-          pure ()
+  t <- requireToken token
+  let instanceKey = DeploymentTemplateDataKey . fromIntegral $ tID
+  template' <- runDB $ exists [DeploymentTemplateDataId ==. instanceKey ]
+  if not template' then sendJSONError err400 (JSONError "notFound" "Template not found" Null) else do
+    isOwner <- isDeploymentTemplateOwner t instanceKey
+    if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+    else do
+      titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle, DeploymentTemplateDataId !=. instanceKey ]
+      if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
+        runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
+          [ DeploymentTemplateDataTitle =. reqTitle
+          , DeploymentTemplateDataVms =. reqVMs
+          , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
+          , DeploymentTemplateDataExistingNetworks =. reqExistingNetworks
+          ]
+        jobEnv <- asks $ getEnvFor JobserviceAPI
+        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
+        pure ()
 
 requestDeploymentVMID :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
 requestDeploymentVMID _ _ Nothing (BearerWrapper token) = do
@@ -354,40 +383,38 @@ requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper toke
 
 callGroupDeployment :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDeployment tID groupName (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   case groupName of
     Nothing -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just "") -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just group) -> do
-      template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
-      case template' of
-        Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
-        (Just (DeploymentTemplateData { .. })) -> do
-          if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-            sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-          else do
-            Config { .. } <- ask
-            r <- withTokenVariable' $ \t -> do
-              defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
-            case r of
-              (Left _)  -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
-              (Right _) -> do
-                $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
-                putTask tasksPool (GroupDeployment tID group)
-                pure ()
+      let templateKey = DeploymentTemplateDataKey . fromIntegral $ tID
+      template' <- runDB $ exists [ DeploymentTemplateDataId ==. templateKey ]
+      if not template' then sendJSONError err404 (JSONError "notFound" "Template not found" Null) else do
+        isOwner <- isDeploymentTemplateOperator t templateKey
+        if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not administrator of template!" Null)
+        else do
+          Config { .. } <- ask
+          r <- withTokenVariable' $ \t -> do
+            defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
+          case r of
+            (Left _)  -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
+            (Right _) -> do
+              $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
+              putTask tasksPool (GroupDeployment tID group)
+              pure ()
 
 callInstanceSnapshot :: Text -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
 callInstanceSnapshot _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 callInstanceSnapshot _ Nothing _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   d <- runDB $ get (DeploymentInstanceDataKey instanceKey)
   case d of
     Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
     (Just (DeploymentInstanceData { .. })) -> do
-      ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      isOperator <- isDeploymentTemplateOperator t deploymentInstanceDataParent
+      if not isOperator then sendJSONError err403 (JSONError "notOwner" "You're not operator of template!" Null)
       else do
         if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
           jobserviceEnv <- asks $ getEnvFor JobserviceAPI
@@ -403,36 +430,37 @@ callGroupSnapshot _ (Just "") _ _ _ _ _ = sendJSONError err400 (JSONError "badRe
 callGroupSnapshot _ _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 callGroupSnapshot tID (Just groupName) (Just snapName) mask' doDelete doRollback (BearerWrapper token) = do
   if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
-    ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
-    template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
-    case template' of
-      Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
-      (Just (DeploymentTemplateData { .. })) -> do
-        if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-          sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-        else do
-          Config { .. } <- ask
-          r <- withTokenVariable' $ \t -> do
-            defaultRetryClientC authEnv (getPagedGroupMembers groupName (BearerWrapper t) Nothing)
-          case r of
-            (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
-            (Right _) -> do
-              let mask = fromMaybe "*" mask'
-              case (doDelete, doRollback) of
-                (False, False) -> putTask tasksPool (GroupMakeSnapshot tID groupName snapName mask)
-                (True, _) -> putTask tasksPool (GroupDeleteSnapshot tID groupName snapName mask)
-                (False, True) -> putTask tasksPool (GroupRollback tID groupName snapName mask)
+    t <- requireToken token
+    let templateKey = DeploymentTemplateDataKey . fromIntegral $ tID
+    template' <- runDB $ exists [ DeploymentTemplateDataId ==. templateKey ]
+    if not template' then sendJSONError err404 (JSONError "notFound" "Template not found" Null) else do
+      isOperator <- isDeploymentTemplateOperator t templateKey
+      if not isOperator then sendJSONError err403 (JSONError "notOwner" "You're not operator of template!" Null)
+      else do
+        Config { .. } <- ask
+        r <- withTokenVariable' $ \t -> do
+          defaultRetryClientC authEnv (getPagedGroupMembers groupName (BearerWrapper t) Nothing)
+        case r of
+          (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
+          (Right _) -> do
+            let mask = fromMaybe "*" mask'
+            case (doDelete, doRollback) of
+              (False, False) -> putTask tasksPool (GroupMakeSnapshot tID groupName snapName mask)
+              (True, _) -> putTask tasksPool (GroupDeleteSnapshot tID groupName snapName mask)
+              (False, True) -> putTask tasksPool (GroupRollback tID groupName snapName mask)
 callGroupSnapshot _ _ _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 
 switchTemplateVisibility :: Int -> BearerWrapper -> AppT ()
 switchTemplateVisibility templateId (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
-  template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ templateId)
+  t <- requireToken token
+  let templateKey = DeploymentTemplateDataKey . fromIntegral $ templateId
+  template' <- runDB $ get templateKey
   case template' of
     Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
     (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      -- TODO: optimize
+      isAdmin <- isDeploymentTemplateAdministrator t templateKey
+      if not isAdmin then sendJSONError err403 (JSONError "notOwner" "You're not admin of template!" Null)
       else do
         runDB $ updateWhere [ DeploymentTemplateDataId ==. (DeploymentTemplateDataKey . fromIntegral $ templateId)]
           [ DeploymentTemplateDataHidden =. not deploymentTemplateDataHidden ]
@@ -441,47 +469,44 @@ switchTemplateVisibility templateId (BearerWrapper token) = do
 -- TODO: unify with function upper
 callGroupDestroy :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDestroy tID groupName (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   case groupName of
     Nothing -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just "") -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just group) -> do
-      template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
-      case template' of
-        Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
-        (Just (DeploymentTemplateData { .. })) -> do
-          if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-            sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-          else do
-            Config { .. } <- ask
-            r <- withTokenVariable' $ \t -> do
-              defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
-            case r of
-              (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
-              (Right _) -> do
-                $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
-                putTask tasksPool (GroupDestroy tID group)
-                pure ()
+      let templateKey = DeploymentTemplateDataKey . fromIntegral $ tID
+      template' <- runDB $ exists [ DeploymentTemplateDataId ==. templateKey ]
+      if not template' then sendJSONError err404 (JSONError "notFound" "Template not found" Null) else do
+        isAdmin <- isDeploymentTemplateAdministrator t templateKey
+        if not isAdmin then sendJSONError err403 (JSONError "notOwner" "You're not admin of template!" Null)
+        else do
+          Config { .. } <- ask
+          r <- withTokenVariable' $ \t -> do
+            defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
+          case r of
+            (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
+            (Right _) -> do
+              $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
+              putTask tasksPool (GroupDestroy tID group)
+              pure ()
 
 callGroupPower :: Int -> Maybe Text -> Maybe Text -> Bool -> BearerWrapper -> AppT ()
 callGroupPower tID (Just group) mask' powerOn (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   let instanceKey = DeploymentTemplateDataKey . fromIntegral $ tID
-  template' <- runDB $ get instanceKey
-  case template' of
-    Nothing -> sendJSONError err400 (JSONError "notFound" "Template not found" Null)
-    (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-      else do
-        Config { .. } <- ask
-        r <- withTokenVariable' $ \t -> do
-          defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
-        case r of
-          (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
-          (Right _) -> do
-            putTask tasksPool (GroupPower tID group powerOn (fromMaybe "*" mask'))
-            pure ()
+  template' <- runDB $ exists [ DeploymentTemplateDataId ==. instanceKey ]
+  if not template' then sendJSONError err400 (JSONError "notFound" "Template not found" Null) else do
+    isOperator <- isDeploymentTemplateOperator t instanceKey
+    if not isOperator then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+    else do
+      Config { .. } <- ask
+      r <- withTokenVariable' $ \t -> do
+        defaultRetryClientC authEnv (getPagedGroupMembers group (BearerWrapper t) Nothing)
+      case r of
+        (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
+        (Right _) -> do
+          putTask tasksPool (GroupPower tID group powerOn (fromMaybe "*" mask'))
+          pure ()
 callGroupPower _ _ _ _ _ = do
   sendJSONError err400 (JSONError "badRequest" "Group is not specified!" Null)
 
@@ -493,14 +518,13 @@ deploymentInstanceKey e = deploymentInstanceDataOwnerId e <> "-" <>
 
 callInstanceDestroy :: Text -> BearerWrapper -> AppT ()
 callInstanceDestroy instanceKey (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   d <- runDB $ get (DeploymentInstanceDataKey instanceKey)
   case d of
     Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
     (Just (DeploymentInstanceData { .. })) -> do
-      ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      isAdministrator <- isDeploymentTemplateAdministrator t deploymentInstanceDataParent
+      if not isAdministrator then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         jobserviceEnv <- asks $ getEnvFor JobserviceAPI
         _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceDestroyInstance instanceKey) (BearerWrapper t))
@@ -536,33 +560,33 @@ patchDeploymentInstance dId patch (BearerWrapper token) = let
 
 getDeploymentInstancesStats :: Int -> Maybe Text -> BearerWrapper -> AppT DeploymentStats
 getDeploymentInstancesStats tID targetGroup (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   let instanceKey = DeploymentTemplateDataKey . fromIntegral $ tID
-  template' <- runDB $ get instanceKey
-  case template' of
-    Nothing -> sendJSONError err400 (JSONError "notFound" "Template not found" Null)
-    (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-      else do
-        f <- generateGroupDeploymentFilter targetGroup
-        (failedAmount, destroyingAmount, deployingAmount, deployedAmount, createdAmount) <- runDB $ do
-          f1 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Failed ] <> f
-          f2 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Destroying ] <> f
-          f3 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Deploying ] <> f
-          f4 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Deployed ] <> f
-          f5 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Created ] <> f
-          pure (f1, f2, f3, f4, f5)
-        pure (DeploymentStats {failedAmount=failedAmount, destroyingAmount=destroyingAmount, deployingAmount=deployingAmount, deployedAmount=deployedAmount, createdAmount=createdAmount})
+  template' <- runDB $ exists [ DeploymentTemplateDataId ==.instanceKey ]
+  if not template' then sendJSONError err400 (JSONError "notFound" "Template not found" Null) else do
+    isOwner <- isDeploymentTemplateOwner t instanceKey
+    if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+    else do
+      f <- generateGroupDeploymentFilter targetGroup
+      (failedAmount, destroyingAmount, deployingAmount, deployedAmount, createdAmount) <- runDB $ do
+        f1 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Failed ] <> f
+        f2 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Destroying ] <> f
+        f3 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Deploying ] <> f
+        f4 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Deployed ] <> f
+        f5 <- count $ [ DeploymentInstanceDataParent ==. instanceKey, DeploymentInstanceDataState ==. Created ] <> f
+        pure (f1, f2, f3, f4, f5)
+      pure (DeploymentStats {failedAmount=failedAmount, destroyingAmount=destroyingAmount, deployingAmount=deployingAmount, deployedAmount=deployedAmount, createdAmount=createdAmount})
 
 getDeploymentTemplateInstances :: Int -> Maybe Int -> Maybe Text -> BearerWrapper -> AppT (PagedResponse [DeploymentInstanceBrief])
 getDeploymentTemplateInstances tID pageN targetGroup (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
-  template' <- runDB $ get (DeploymentTemplateDataKey . fromIntegral $ tID)
+  t <- requireToken token
+  let templateKey = DeploymentTemplateDataKey . fromIntegral $ tID
+  template' <- runDB $ get templateKey
   case template' of
     Nothing -> sendJSONError err400 (JSONError "notFound" "Template not found" Null)
     (Just (DeploymentTemplateData { .. })) -> do
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
+      isOwner <- isDeploymentTemplateOwner t templateKey
+      if not isOwner then
         sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         f <- generateGroupDeploymentFilter targetGroup
@@ -615,38 +639,36 @@ getMyTemplateInstances pageN (BearerWrapper token) = let
 
 deleteDeploymentInstance :: Text -> BearerWrapper -> AppT ()
 deleteDeploymentInstance instanceId (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
+  t <- requireToken token
   instance' <- runDB $ get (DeploymentInstanceDataKey instanceId)
   case instance' of
     Nothing -> sendJSONError err400 (JSONError "notFound" "Instance not found" Null)
     (Just (DeploymentInstanceData { .. })) -> do
-      ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-      if deployTemplatesAdmin `notElem` tokenRealmRoles && tokenUUID /= Just deploymentTemplateDataOwnerId then
-        sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
-      else do
-        runDB $ delete (DeploymentInstanceDataKey instanceId)
+      isOwner <- isDeploymentTemplateOwner t deploymentInstanceDataParent
+      if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
+      else runDB $ delete (DeploymentInstanceDataKey instanceId)
 
 getDeploymentInstance :: Text -> BearerWrapper -> AppT DeploymentInstance
 getDeploymentInstance instanceId (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireToken token
-  let isAdmin = deployTemplatesAdmin `elem` tokenRealmRoles
+  token <- requireToken token
   instance' <- runDB $ get (DeploymentInstanceDataKey instanceId)
   case instance' of
     Nothing -> sendJSONError err404 (JSONError "deploymentNotFound" "Deployment not found" Null)
     (Just (DeploymentInstanceData { .. })) -> do
       ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-      if Just deploymentTemplateDataOwnerId /= tokenUUID && Just deploymentInstanceDataOwnerId /= tokenUUID && not isAdmin then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
-        if Just deploymentTemplateDataOwnerId /= tokenUUID && not isAdmin && deploymentTemplateDataHidden then do
+      deploymentOwnership <- isDeploymentOwner token (DeploymentInstanceDataKey instanceId)
+      if deploymentOwnership == NotOwner then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
+        if deploymentOwnership == DeploymentOwner && deploymentTemplateDataHidden then do
           sendJSONError err403 (JSONError "instanceHidden" "Instance is hidden" Null) else do
-            let base = DeploymentInstance { instanceVMLinks=M.mapKeys T.pack $ M.map T.pack (if isAdmin then deploymentInstanceDataVmLinks else M.filterWithKey (\k _ -> T.pack k `elem` deploymentTemplateDataAvailableVMs) deploymentInstanceDataVmLinks)
+            let base = DeploymentInstance { instanceVMLinks=M.mapKeys T.pack $ M.map T.pack (if deploymentOwnership == TemplateOwner then deploymentInstanceDataVmLinks else M.filterWithKey (\k _ -> T.pack k `elem` deploymentTemplateDataAvailableVMs) deploymentInstanceDataVmLinks)
               , instanceUser=deploymentInstanceDataOwnerId
               , instanceTitle=deploymentTemplateDataTitle
               , instanceState=deploymentInstanceDataState
               , instanceOf=(fromIntegral . fromSqlKey) deploymentInstanceDataParent
-              , instanceLogs=if not isAdmin && Just deploymentTemplateDataOwnerId /= tokenUUID then [] else deploymentInstanceDataLogs
-              , instanceDeployConfig=if not isAdmin then Nothing else deploymentInstanceDataDeployConfig
+              , instanceLogs=if deploymentOwnership == TemplateOwner then [] else deploymentInstanceDataLogs
+              , instanceDeployConfig=if deploymentOwnership /= TemplateOwner then Nothing else deploymentInstanceDataDeployConfig
               , instanceVMPower = M.empty
-              , instanceNetworkMap=if not isAdmin then Nothing else Just deploymentInstanceDataNetworkNamesMap
+              , instanceNetworkMap=if deploymentOwnership /= TemplateOwner then Nothing else Just deploymentInstanceDataNetworkNamesMap
               }
             case deploymentInstanceDataDeployConfig of
               Nothing -> pure base
@@ -775,14 +797,13 @@ vmPortAccessCheck vmPort (BearerWrapper token) = do
 
 postInstanceLog :: Text -> Text -> BearerWrapper -> AppT ()
 postInstanceLog instanceId logLine (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireToken token
-  let isAdmin = deployTemplatesAdmin `elem` tokenRealmRoles
+  t <- requireToken token
   instance' <- runDB $ get (DeploymentInstanceDataKey instanceId)
   case instance' of
     Nothing -> sendJSONError err404 (JSONError "deploymentNotFound" "Deployment not found" Null)
     (Just (DeploymentInstanceData { .. })) -> do
-      ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-      if Just deploymentTemplateDataOwnerId /= tokenUUID && not isAdmin then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
+      isOwner <- isDeploymentTemplateOwner t deploymentInstanceDataParent
+      if not isOwner then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
         runDB $ updateWhere [ DeploymentInstanceDataId ==. DeploymentInstanceDataKey instanceId ] [ DeploymentInstanceDataLogs =. deploymentInstanceDataLogs ++ [logLine] ]
         pure ()
 
