@@ -169,16 +169,17 @@ getPagedDeploymentTemplates pageN (BearerWrapper token) = do
   let filters = templateSearchFilter t
   templatesTotal <- runDB $ count filters
   templates <- runDB $ selectList filters [OffsetBy $ (page - 1) * pageSize, LimitTo pageSize, Desc DeploymentTemplateDataId]
+  hiddenGroups <- runDB $ mapM (\v -> selectList [ DeploymentTemplateHideDeployment ==. entityKey v ] []) templates
   pure $ PagedResponse
-    { responseObjects = map (\e -> DeploymentTemplate
+    { responseObjects = map (\(e, g) -> DeploymentTemplate
       { templateVMs=(deploymentTemplateDataVms . entityVal) e
       , templateTitle=(deploymentTemplateDataTitle . entityVal) e
       , templateOwner=(deploymentTemplateDataOwnerId . entityVal) e
       , templateId=(fromIntegral . fromSqlKey . entityKey) e
       , templateExistingNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
       , templateAvaiableVMs=(deploymentTemplateDataAvailableVMs . entityVal) e
-      , templateHidden=(deploymentTemplateDataHidden . entityVal) e
-      }) templates
+      , templateHiddenFor=map (deploymentTemplateHideGroup . entityVal) g
+      }) (zip templates hiddenGroups)
     , responsePageSize=pageSize
     , responseTotal=templatesTotal
     }
@@ -196,7 +197,6 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         , deploymentTemplateDataOwnerId=fromJust tokenUUID
         , deploymentTemplateDataExistingNetworks=reqExistingNetworks
         , deploymentTemplateDataAvailableVMs=reqAvailableVMs
-        , deploymentTemplateDataHidden=False
         })
       jobEnv <- asks $ getEnvFor JobserviceAPI
       _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
@@ -213,6 +213,7 @@ getDeploymentTemplate tID (BearerWrapper token) = do
       isOwner <- isDeploymentTemplateOwner t templateKey
       if not isOwner then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
+        groups <- runDB $ selectList [ DeploymentTemplateHideDeployment ==. templateKey ] [] <&> map (deploymentTemplateHideGroup . entityVal)
         pure $ DeploymentTemplate
           { templateAvaiableVMs = deploymentTemplateDataAvailableVMs
           , templateExistingNetworks = deploymentTemplateDataExistingNetworks
@@ -220,7 +221,7 @@ getDeploymentTemplate tID (BearerWrapper token) = do
           , templateOwner = deploymentTemplateDataOwnerId
           , templateTitle = deploymentTemplateDataTitle
           , templateVMs = deploymentTemplateDataVms
-          , templateHidden = deploymentTemplateDataHidden
+          , templateHiddenFor=groups
           }
 
 deleteDeploymentTemplate :: Int -> BearerWrapper -> AppT ()
@@ -450,21 +451,21 @@ callGroupSnapshot tID (Just groupName) (Just snapName) mask' doDelete doRollback
               (False, True) -> putTask tasksPool (GroupRollback tID groupName snapName mask)
 callGroupSnapshot _ _ _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 
-switchTemplateVisibility :: Int -> BearerWrapper -> AppT ()
-switchTemplateVisibility templateId (BearerWrapper token) = do
+switchTemplateVisibility :: Int -> Maybe Text -> BearerWrapper -> AppT ()
+switchTemplateVisibility _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Group is not set" Null)
+switchTemplateVisibility templateId (Just group) (BearerWrapper token) = do
   t <- requireToken token
   let templateKey = DeploymentTemplateDataKey . fromIntegral $ templateId
-  template' <- runDB $ get templateKey
-  case template' of
-    Nothing -> sendJSONError err404 (JSONError "notFound" "Template not found" Null)
-    (Just (DeploymentTemplateData { .. })) -> do
-      -- TODO: optimize
-      isAdmin <- isDeploymentTemplateAdministrator t templateKey
-      if not isAdmin then sendJSONError err403 (JSONError "notOwner" "You're not admin of template!" Null)
-      else do
-        runDB $ updateWhere [ DeploymentTemplateDataId ==. (DeploymentTemplateDataKey . fromIntegral $ templateId)]
-          [ DeploymentTemplateDataHidden =. not deploymentTemplateDataHidden ]
-        pure ()
+  isAdmin <- isDeploymentTemplateAdministrator t templateKey
+  if not isAdmin then sendJSONError err403 (JSONError "notOwner" "You're not admin of template!" Null)
+  else do
+    let filter' = [ DeploymentTemplateHideDeployment ==. templateKey, DeploymentTemplateHideGroup ==. group ]
+    ruleExists <- runDB $ exists filter'
+    if ruleExists then do
+      runDB $ deleteWhere filter'
+    else do
+      _ <- runDB $ insert (DeploymentTemplateHide {deploymentTemplateHideGroup=group, deploymentTemplateHideDeployment=templateKey})
+      pure ()
 
 -- TODO: unify with function upper
 callGroupDestroy :: Int -> Maybe Text -> BearerWrapper -> AppT ()
@@ -626,7 +627,7 @@ getMyTemplateInstances pageN (BearerWrapper token) = let
     Nothing -> $(logWarn) "Empty token UUID" >> pure (PagedResponse {responseObjects=[], responsePageSize=0, responseTotal=0})
     (Just userId) -> do
       let page = max 1 $ fromMaybe 1 pageN
-      hiddenTemplates <- runDB $ selectKeysList [ DeploymentTemplateDataHidden ==. True ] []
+      hiddenTemplates <- runDB $ selectList [ DeploymentTemplateHideGroup <-. tokenGroups ] [] <&> map (deploymentTemplateHideDeployment . entityVal)
       instancesCount <- runDB $ count [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ]
       instances <- runDB $ selectList [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ]
         [LimitTo pageSize, OffsetBy $ pageSize * (page - 1)]
@@ -650,13 +651,15 @@ deleteDeploymentInstance instanceId (BearerWrapper token) = do
 
 getDeploymentInstance :: Text -> BearerWrapper -> AppT DeploymentInstance
 getDeploymentInstance instanceId (BearerWrapper token) = do
-  token <- requireToken token
+  ~t@ActiveToken { .. } <- requireToken token
   instance' <- runDB $ get (DeploymentInstanceDataKey instanceId)
   case instance' of
     Nothing -> sendJSONError err404 (JSONError "deploymentNotFound" "Deployment not found" Null)
     (Just (DeploymentInstanceData { .. })) -> do
+      deploymentTemplateDataHidden <- runDB $
+        exists [ DeploymentTemplateHideDeployment ==. deploymentInstanceDataParent, DeploymentTemplateHideGroup <-. tokenGroups ]
       ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-      deploymentOwnership <- isDeploymentOwner token (DeploymentInstanceDataKey instanceId)
+      deploymentOwnership <- isDeploymentOwner t (DeploymentInstanceDataKey instanceId)
       if deploymentOwnership == NotOwner then sendJSONError err403 (JSONError "notOwner" "You do not own this instance!" Null) else do
         if deploymentOwnership == DeploymentOwner && deploymentTemplateDataHidden then do
           sendJSONError err403 (JSONError "instanceHidden" "Instance is hidden" Null) else do
@@ -689,7 +692,7 @@ getVMPortPower vmPort (BearerWrapper token) = do
   case tokenUUID of
     Nothing -> sendJSONError err401 (JSONError "invalidToken" "" Null)
     (Just uid) -> do
-      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
         ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
         let vmid = fromJust $ configVMID vmConfig
@@ -719,7 +722,7 @@ switchVMPortPower vmPort (BearerWrapper token) = do
   case tokenUUID of
     Nothing -> sendJSONError err401 (JSONError "invalidToken" "" Null)
     (Just uid) -> do
-      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
         ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
         let vmid = fromJust $ configVMID vmConfig
@@ -766,7 +769,7 @@ getVMPortNetworks vmPort (BearerWrapper token) = do
   case tokenUUID of
     Nothing -> sendJSONError err401 (JSONError "invalidToken" "" Null)
     (Just uid) -> do
-      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
         ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
         let vmid = fromJust $ configVMID vmConfig
@@ -792,7 +795,7 @@ vmPortAccessCheck vmPort (BearerWrapper token) = do
     InactiveToken -> sendJSONError err401 (JSONError "" "" Null)
     (ActiveToken { tokenUUID = Nothing }) -> sendJSONError err401 (JSONError "" "" Null)
     (ActiveToken { tokenUUID = Just uid,.. }) -> do
-      hasAccess <- isUserAccessedVMPort tokenRealmRoles uid vmPort
+      hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "" "" Null) else pure ()
 
 postInstanceLog :: Text -> Text -> BearerWrapper -> AppT ()

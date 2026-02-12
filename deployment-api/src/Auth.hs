@@ -41,8 +41,8 @@ splitVmPort portV = do
     [_] -> Nothing
     lst -> readMaybe (T.unpack . last $ lst) >>= \x -> Just (T.intercalate "-" (init lst), x)
 
-isUserAccessedVMPort :: [Text] -> Text -> Text -> AppT Bool
-isUserAccessedVMPort userRoles userId vmPort = let
+isUserAccessedVMPort :: [Text] -> [Text] -> Text -> Text -> AppT Bool
+isUserAccessedVMPort userGroups userRoles userId vmPort = let
   f :: AppT Bool
   f = do
     let deployTemplatesAdmin = "deployment-admin"
@@ -67,8 +67,9 @@ isUserAccessedVMPort userRoles userId vmPort = let
                   pure False
                 (vm:[]) -> do
                   ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
+                  templateHidden <- runDB $ exists [ DeploymentTemplateHideGroup <-. userGroups, DeploymentTemplateHideDeployment ==. deploymentInstanceDataParent]
                   if userId == deploymentTemplateDataOwnerId then $(logDebug) "Admin access. Allowed." >> pure True else do
-                    if userId /= deploymentInstanceDataOwnerId || deploymentTemplateDataHidden then $(logDebug) "Not admin and not owner" >> pure False else
+                    if userId /= deploymentInstanceDataOwnerId || templateHidden then $(logDebug) "Not admin and not owner" >> pure False else
                       if T.pack (configVMName vm) `elem` deploymentTemplateDataAvailableVMs then $(logDebug) "Stand owner to available VM. Allowed." >> pure True else
                         $(logDebug) "Stand owner to not available VM. Not allowed." >> pure False
                 _manyVMs -> do
