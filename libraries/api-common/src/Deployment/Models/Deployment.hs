@@ -53,7 +53,7 @@ data DeploymentTemplate = DeploymentTemplate
   , templateVMs              :: ![ConfigVM]
   , templateAvaiableVMs      :: ![Text]
   , templateExistingNetworks :: ![Text]
-  , templateHidden           :: !Bool
+  , templateHiddenFor        :: ![Text]
   } deriving (Show, Eq)
 
 instance FromJSON DeploymentTemplate where
@@ -64,7 +64,7 @@ instance FromJSON DeploymentTemplate where
     <*> v .: "vms"
     <*> v .: "availableVMs"
     <*> v .: "existingNetworks"
-    <*> v .:? "hidden" .!= False
+    <*> v .: "hiddenFor"
 
 instance ToJSON DeploymentTemplate where
   toJSON (DeploymentTemplate { .. }) = object
@@ -74,7 +74,7 @@ instance ToJSON DeploymentTemplate where
     , "vms" .= templateVMs
     , "availableVMs" .= templateAvaiableVMs
     , "existingNetworks" .= templateExistingNetworks
-    , "hidden" .= templateHidden
+    , "hiddenFor" .= templateHiddenFor
     ]
 
 data DeploymentStatus = Created | Deploying | Deployed | Destroying | Failed deriving (Show, Eq)
