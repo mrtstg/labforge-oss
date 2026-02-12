@@ -633,6 +633,7 @@ deploymentListPage pageN t = do
   authEnv <- asks $ getEnvFor AuthService
   allRoles <- withTokenVariable' $ \token' -> do
     globalDecoder' $ defaultRetryClientC authEnv (Auth.getAllGroups (BearerWrapper token'))
+  let roleNames = map groupName allRoles
   env <- asks $ getEnvFor DeploymentService
   d@(PagedResponse {responseTotal=totalDeployments, responseObjects=deployments}) <- globalDecoder' $ defaultRetryClientC env (C.getPagedDeploymentTemplates (Just page) userToken)
   let foreignOwners = map templateOwner $ filter (\t -> (Just . templateOwner) t /= tokenUUID) deployments
@@ -641,6 +642,8 @@ deploymentListPage pageN t = do
   let foreignOwnersMap = (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) foreignOwners'
   let hasNext = hasNextPages page d
   let totallyEmpty = page == 1 && totalDeployments == 0
+
+  let hiddenModal = [(":class", "hidden_show ? 'is-active' : ''")] :: [(String, String)]
   (\v -> baseTemplate token Nothing (Just "Развертывания") v (Just $ genericGroupActionFormData (if null allRoles then Nothing else (Just $ head allRoles)))) [shamlet|
 <div .container>
   $if totallyEmpty
@@ -649,8 +652,31 @@ deploymentListPage pageN t = do
     <h1 .title.is-3> Доступные развертывания
     <div .columns.is-multiline>
     $forall (DeploymentTemplate { .. }) <- deployments
-      <div .column>
+      <div .column x-data="{hidden_show:false}">
         <div .card>
+          <div .modal *{hiddenModal}>
+            <div .modal-background>
+            <div .modal-content>
+              <div .card.p-5>
+                <table .table.is-fullwidth>
+                  <thead>
+                    <tr>
+                      <th> Группа
+                      <th>
+                  <tbody>
+                    $if (not . null) templateHiddenFor
+                      $forall group <- templateHiddenFor
+                        <tr>
+                          <td style="width:80%"> #{group}
+                          <td>
+                            <button .button.mx-auto @click="fetch('/api/deployment/deployments/#{templateId}/hide?group=#{encodeText group}').then(_ => window.location.reload())"> Показать
+                    $forall group <- roleNames
+                      $if not (elem group templateHiddenFor)
+                        <tr>
+                          <td .is-fullwidth> #{group}
+                          <td>
+                            <button .button @click="fetch('/api/deployment/deployments/#{templateId}/hide?group=#{encodeText group}').then(_ => window.location.reload())"> Скрыть
+            <button @click="hidden_show = false" .modal-close.is-large aria-label=close>
           <header .card-header>
             <p .card-header-title>
               #{templateTitle}
@@ -660,6 +686,15 @@ deploymentListPage pageN t = do
                     <span>: Ошибка определения пользователя
                   $of (Just (BriefUser { .. }))
                     <span>: #{ fromMaybe "-" userFirstName } #{ fromMaybe "-" userLastName }
+            <div .dropdown>
+              <div .dropdown-trigger>
+                <button .button aria-haspopup="true" aria-controls="dropdown-menu">
+                  <span> Действия
+              <div .dropdown-menu role="menu">
+                <div .dropdown-content>
+                  <button .dropdown-item x-on:click="hidden_show=true"> Скрыть
+                  <a .dropdown-item href=/deployment/#{templateId}/copy> Создать копию
+                  <a .dropdown-item href=/deployment/#{templateId}/delete> Удалить
           <div .card-content>
             <p> Состав развертывания
             <table .table.is-fullwidth>
@@ -689,13 +724,6 @@ deploymentListPage pageN t = do
           <footer .card-footer>
             <a .card-footer-item href=/deployment/#{templateId}/instances> Стенды
             <a .card-footer-item href=/deployment/#{templateId}/edit> Редактировать
-            <a .card-footer-item href=/deployment/#{templateId}/delete> Удалить
-            <a .card-footer-item href=/deployment/#{templateId}/copy> Создать копию
-            <a .card-footer-item x-data="{}" x-on:click="fetch('/api/deployment/deployments/#{templateId}/hide').then(_ => window.location.reload())">
-              $if templateHidden
-                Показать
-              $else
-                Скрыть
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1
