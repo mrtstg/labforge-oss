@@ -627,10 +627,11 @@ getMyTemplateInstances pageN (BearerWrapper token) = let
     Nothing -> $(logWarn) "Empty token UUID" >> pure (PagedResponse {responseObjects=[], responsePageSize=0, responseTotal=0})
     (Just userId) -> do
       let page = max 1 $ fromMaybe 1 pageN
+      let isAdmin = deployTemplatesAdmin `elem` tokenRealmRoles
       hiddenTemplates <- runDB $ selectList [ DeploymentTemplateHideGroup <-. tokenGroups ] [] <&> map (deploymentTemplateHideDeployment . entityVal)
-      instancesCount <- runDB $ count [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ]
-      instances <- runDB $ selectList [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ]
-        [LimitTo pageSize, OffsetBy $ pageSize * (page - 1)]
+      let filter' = if not isAdmin then [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ] else [ DeploymentInstanceDataOwnerId ==. userId ]
+      instancesCount <- runDB $ count filter'
+      instances <- runDB $ selectList filter' [LimitTo pageSize, OffsetBy $ pageSize * (page - 1)]
       r <- helper [] instances
       pure $ PagedResponse
         { responseObjects=r
