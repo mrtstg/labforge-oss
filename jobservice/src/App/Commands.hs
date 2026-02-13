@@ -37,7 +37,8 @@ import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8      as LBS
 import           Data.List                       (nub)
 import           Data.Maybe
-import           Data.Text                       (pack)
+import           Data.Text                       (Text, pack)
+import qualified Data.Text                       as T
 import           Deployment.Client
 import           Deployment.Models.Deployment
 import           Handler.AllocateNode
@@ -57,6 +58,30 @@ import           Service.Environment
 import           System.Environment
 import           System.Exit
 import           System.Random
+
+genericFormattedLock :: Message -> Text -> Bool -> AppT a -> AppT ()
+genericFormattedLock msg key resendTask f' = do
+  let lockKey = T.unpack key
+  v <- getValue' lockKey
+  case v of
+    Nothing -> do
+      cacheValue' lockKey "lock" (Just 600)
+      _ <- f'
+      deleteValue' lockKey
+      pure ()
+    (Just _) -> do
+      $(logInfo) "Deployment action task is locked."
+      when resendTask $ do
+        $(logInfo) "Resending task."
+        r <- asks rabbitConnection
+        chan <- liftIO $ openChannel r
+        _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+        liftIO $ closeChannel chan
+
+genericDeploymentLock :: Message -> Text -> Bool -> AppT a -> AppT ()
+genericDeploymentLock msg deploymentId resendTask f' = do
+  let lockKey = "deployment_action_" <> deploymentId
+  genericDeploymentLock msg lockKey resendTask f'
 
 f :: TVar Int -> (Envelope, Message) -> AppT ()
 f deploymentsC (env, msg) = do
@@ -78,71 +103,78 @@ f deploymentsC (env, msg) = do
           $(logInfo) "Image task is locked. Skipping task."
           pure ()
     (Right (JobserviceAllocateNode deploymentId)) -> do
-      let lockKey = "allocate_node_lock"
-      v <- getValue' lockKey
-      case v of
-        Nothing -> do
-          cacheValue' lockKey "lock" (Just 600)
-          allocateNode (env, msg) deploymentId
-          deleteValue' lockKey
-        (Just _) -> do
-          $(logInfo) "Task is locked. Recreating message"
-          r <- asks rabbitConnection
-          chan <- liftIO $ openChannel r
-          _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
-          liftIO $ closeChannel chan
-          pure ()
-    (Right (JobserviceDeployInstance deploymentId)) -> do
-      let lockKey = "deploy_task_lock"
-      v <- getValue' lockKey
-      case v of
-        Nothing -> do
-          deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
-          deploymentLimit <- asks maxDeployments
-          if deploymentsInProgress >= deploymentLimit then do
-            $(logInfo) "Active deployments limit. Recreating message"
+      _ <- genericDeploymentLock msg deploymentId False $ do
+        let lockKey = "allocate_node_lock"
+        v <- getValue' lockKey
+        case v of
+          Nothing -> do
+            cacheValue' lockKey "lock" (Just 600)
+            allocateNode (env, msg) deploymentId
+            deleteValue' lockKey
+          (Just _) -> do
+            $(logInfo) "Task is locked. Recreating message"
             r <- asks rabbitConnection
             chan <- liftIO $ openChannel r
             _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
             liftIO $ closeChannel chan
-            pure ()
-          else do
-            (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
-            cacheValue' lockKey "lock" (Just 10)
-            $(logInfo) $ "Deploying " <> deploymentId
-            deployInstance env deploymentId
-            (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
-        (Just _) -> do
-          $(logInfo) "Task is locked. Recreating message"
+      pure ()
+    (Right (JobserviceDeployInstance deploymentId)) -> do
+      _ <- genericDeploymentLock msg deploymentId False $ do
+        let lockKey = "deploy_task_lock"
+        v <- getValue' lockKey
+        case v of
+          Nothing -> do
+            deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+            deploymentLimit <- asks maxDeployments
+            if deploymentsInProgress >= deploymentLimit then do
+              $(logInfo) "Active deployments limit. Recreating message"
+              r <- asks rabbitConnection
+              chan <- liftIO $ openChannel r
+              _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+              liftIO $ closeChannel chan
+              pure ()
+            else do
+              (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
+              cacheValue' lockKey "lock" (Just 10)
+              $(logInfo) $ "Deploying " <> deploymentId
+              deployInstance env deploymentId
+              (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
+          (Just _) -> do
+            $(logInfo) "Task is locked. Recreating message"
+            r <- asks rabbitConnection
+            chan <- liftIO $ openChannel r
+            _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+            liftIO $ closeChannel chan
+      pure ()
+    (Right (JobserviceDestroyInstance deploymentId)) -> do
+      _ <- genericDeploymentLock msg deploymentId True $ do
+        deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+        deploymentLimit <- asks maxDeployments
+        if deploymentsInProgress >= deploymentLimit then do
+          $(logInfo) "Active deployments limit. Recreating message"
           r <- asks rabbitConnection
           chan <- liftIO $ openChannel r
           _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
           liftIO $ closeChannel chan
           pure ()
-    (Right (JobserviceDestroyInstance deploymentId)) -> do
-      deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
-      deploymentLimit <- asks maxDeployments
-      if deploymentsInProgress >= deploymentLimit then do
-        $(logInfo) "Active deployments limit. Recreating message"
-        r <- asks rabbitConnection
-        chan <- liftIO $ openChannel r
-        _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
-        liftIO $ closeChannel chan
-        pure ()
-      else do
-        (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
-        _ <- liftIO $ do
-          randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
-          threadDelay randomDelay
-        $(logInfo) $ "Destroying " <> deploymentId
-        destroyInstance env deploymentId
-        (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
+        else do
+          (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
+          _ <- liftIO $ do
+            randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
+            threadDelay randomDelay
+          $(logInfo) $ "Destroying " <> deploymentId
+          destroyInstance env deploymentId
+          (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
+      pure ()
     (Right (JobservicePower deploymentId powerOn mask)) -> do
-      jobservicePower env deploymentId powerOn mask
+      genericFormattedLock msg ("deployment_power_task_" <> deploymentId) False $ do
+        jobservicePower env deploymentId powerOn mask
     (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId, deploymentMask=mask})) -> do
-      jobserviceSnapshot deploymentId snapName delete mask
+      genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
+        jobserviceSnapshot deploymentId snapName delete mask
     (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId, deploymentMask=mask})) -> do
-      jobserviceRollback deploymentId snapName mask
+      genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
+        jobserviceRollback deploymentId snapName mask
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = do
