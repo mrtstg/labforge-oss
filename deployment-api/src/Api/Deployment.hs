@@ -237,7 +237,8 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
       else do
         instancesExist <- runDB $ exists [ DeploymentInstanceDataParent ==. (DeploymentTemplateDataKey . fromIntegral $ tID)]
         if instancesExist then sendJSONError err400 (JSONError "badRequest" "There is left instances of this deployment" Null) else do
-          runDB $ delete (DeploymentTemplateDataKey . fromIntegral $ tID)
+          runDB $ deleteWhere [ DeploymentTemplateHideDeployment ==. templateKey ]
+          runDB $ delete templateKey
           jobEnv <- asks $ getEnvFor JobserviceAPI
           _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
           pure ()
@@ -629,7 +630,9 @@ getMyTemplateInstances pageN (BearerWrapper token) = let
       let page = max 1 $ fromMaybe 1 pageN
       let isAdmin = deployTemplatesAdmin `elem` tokenRealmRoles
       hiddenTemplates <- runDB $ selectList [ DeploymentTemplateHideGroup <-. tokenGroups ] [] <&> map (deploymentTemplateHideDeployment . entityVal)
-      let filter' = if not isAdmin then [ DeploymentInstanceDataOwnerId ==. userId, DeploymentInstanceDataParent /<-. hiddenTemplates ] else [ DeploymentInstanceDataOwnerId ==. userId ]
+      ownedTemplates <- runDB $ selectKeysList [ DeploymentTemplateDataOwnerId ==. userId ] []
+      -- TODO: fix after groups
+      let filter' = if not isAdmin then [ DeploymentInstanceDataOwnerId ==. userId ] <> ([ DeploymentInstanceDataParent <-. ownedTemplates ] ||. [ DeploymentInstanceDataParent /<-. hiddenTemplates ]) else [ DeploymentInstanceDataOwnerId ==. userId ]
       instancesCount <- runDB $ count filter'
       instances <- runDB $ selectList filter' [LimitTo pageSize, OffsetBy $ pageSize * (page - 1)]
       r <- helper [] instances
