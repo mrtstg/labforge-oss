@@ -35,6 +35,7 @@ import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8      as LBS
+import           Data.Functor                    ((<&>))
 import           Data.List                       (nub)
 import           Data.Maybe
 import           Data.Text                       (Text, pack)
@@ -178,7 +179,8 @@ f deploymentsC (env, msg) = do
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = do
-  let logFunction = if debug then defaultLogF else filterLogF LevelInfo
+  debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
+  let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
 
   _ <- do
     e <- getEnvironment
@@ -222,9 +224,11 @@ runCommand AppOpts { debugOn=debug } = do
   activeDeploymentsCounter <- newTVarIO (0 :: Int)
   pool <- createPool (f activeDeploymentsCounter) (`appTIO` config) threadsAmount
   _ <- forever $ do
+    _ <- flip runLoggingT logFunction $ $(logDebug) "Waiting for messages"
     res <- getMsg channel NoAck queue
     case res of
       Nothing -> threadDelay 1_000_000
       (Just (msg, env)) -> do
+        _ <- flip runLoggingT logFunction $ $(logDebug) "Got message!"
         putTask pool (env, msg)
   return ()
