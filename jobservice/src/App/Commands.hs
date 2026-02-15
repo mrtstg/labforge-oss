@@ -29,6 +29,7 @@ import           Config
 import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Concurrent.STM.TVar
+import           Control.Exception
 import           Control.Monad                   (forever, when)
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
@@ -178,7 +179,20 @@ f deploymentsC (env, msg) = do
         jobserviceRollback deploymentId snapName mask
 
 runCommand :: AppOpts -> IO ()
-runCommand AppOpts { debugOn=debug } = do
+runCommand AppOpts { debugOn=debug } = let
+
+  callback :: AsyncPool (Envelope, Message) -> (Message, Envelope) -> AppT ()
+  callback pool (msg, env) = do
+    $(logInfo) "Got message"
+    v <- liftIO $ readTVarIO (poolActiveThreads pool)
+    if v >= (length . poolThreads $ pool) then do
+      $(logDebug) "Threadpool is busy, reject..."
+      liftIO $ threadDelay 500_000
+      liftIO $ rejectEnv env True
+    else do
+      _ <- putTask pool (env, msg)
+      pure ()
+  in do
   debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
   let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
 
@@ -222,13 +236,7 @@ runCommand AppOpts { debugOn=debug } = do
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   activeDeploymentsCounter <- newTVarIO (0 :: Int)
-  pool <- createPool (f activeDeploymentsCounter) (`appTIO` config) threadsAmount
-  _ <- forever $ do
-    _ <- flip runLoggingT logFunction $ $(logDebug) "Waiting for messages"
-    res <- getMsg channel NoAck queue
-    case res of
-      Nothing -> threadDelay 1_000_000
-      (Just (msg, env)) -> do
-        _ <- flip runLoggingT logFunction $ $(logDebug) "Got message!"
-        putTask pool (env, msg)
+  pool <- createPool (\e@(env, _) -> f activeDeploymentsCounter e >> liftIO (ackEnv env)) (`appTIO` config) threadsAmount
+  _ <- consumeMsgs channel queue Ack (flip appTIO config . callback pool)
+  _ <- forever $ threadDelay 1_000_000
   return ()

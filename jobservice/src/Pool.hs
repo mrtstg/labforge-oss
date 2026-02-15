@@ -35,28 +35,27 @@ import           Control.Monad.Logger
 import           Data.Text                     (Text, pack)
 
 data AsyncPool a = AsyncPool
-  { poolThreads  :: ![Async ()]
-  , poolCallback :: a -> AppT ()
-  , poolQueue    :: !(TQueue a)
-  , poolSem      :: !QSemN
+  { poolThreads       :: ![Async ()]
+  , poolCallback      :: a -> AppT ()
+  , poolQueue         :: !(TQueue a)
+  , poolSem           :: !QSemN
+  , poolActiveThreads :: !(TVar Int)
   }
 
 createPool :: (a -> AppT ()) -> (AppT () -> IO ()) -> Int -> IO (AsyncPool a)
 createPool f appToIO tasks = let
-  tF :: QSemN -> TQueue a -> (a -> AppT ()) -> Int -> AppT ()
-  tF sem q callback workerNum  = do
+  tF :: QSemN -> TQueue a -> (a -> AppT ()) -> TVar Int -> Int -> AppT ()
+  tF sem q callback activeThreads workerNum  = do
     $(logInfo) $ "Stated worker " <> (pack . show) workerNum
     forever $ do
-      $(logDebug) $ "Worker " <> (pack . show) workerNum <> " reading query"
-      task <- (liftIO . atomically) $ tryReadTQueue q
-      case task of
-        Nothing  -> (liftIO . threadDelay) 1000000
-        (Just t) -> liftIO $ bracket_ (waitQSemN sem 1) (signalQSemN sem 1) (appToIO $ callback t)
+      t <- (liftIO . atomically) $ readTQueue q
+      liftIO $ bracket_ (waitQSemN sem 1 >> atomically (modifyTVar activeThreads (+1))) (atomically (modifyTVar activeThreads (\x -> x - 1)) >> signalQSemN sem 1) (appToIO $ callback t)
   in do
   sem <- newQSemN tasks
   q <- newTQueueIO
-  threads <- mapM (async . appToIO . tF sem q f) [1..tasks]
-  pure $ AsyncPool threads f q sem
+  active <- newTVarIO 0
+  threads <- mapM (async . appToIO . tF sem q f active) [1..tasks]
+  pure $ AsyncPool threads f q sem active
 
 putTask :: (MonadIO m) => AsyncPool a -> a -> m ()
 putTask (AsyncPool { .. }) t = (liftIO . atomically) $ writeTQueue poolQueue t
