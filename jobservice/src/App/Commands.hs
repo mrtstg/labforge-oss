@@ -27,6 +27,7 @@ import           App.Types
 import           Auth.Token
 import           Config
 import           Control.Concurrent
+import           Control.Concurrent.Async.Pool
 import           Control.Concurrent.STM
 import           Control.Concurrent.STM.TVar
 import           Control.Exception
@@ -50,7 +51,6 @@ import           Handler.Power
 import           Handler.Snapshot
 import           Jobservice.Models
 import           Network.AMQP
-import           Pool
 import           Proxmox.Deploy.Models.Config.VM
 import           Redis.Common
 import           Redis.Environment
@@ -64,15 +64,18 @@ import           System.Random
 genericFormattedLock :: Message -> Text -> Bool -> AppT a -> AppT ()
 genericFormattedLock msg key resendTask f' = do
   let lockKey = T.unpack key
+  $(logDebug) $ "Checking key " <> key
   v <- getValue' lockKey
   case v of
     Nothing -> do
+      $(logDebug) $ "Key " <> key <> " is not found. Processing next..."
       cacheValue' lockKey "lock" (Just 600)
       _ <- f'
       deleteValue' lockKey
       pure ()
     (Just _) -> do
       $(logInfo) "Deployment action task is locked."
+      $(logDebug) $ "Lock key " <> key <> " is found."
       when resendTask $ do
         $(logInfo) "Resending task."
         r <- asks rabbitConnection
@@ -83,14 +86,17 @@ genericFormattedLock msg key resendTask f' = do
 genericDeploymentLock :: Message -> Text -> Bool -> AppT a -> AppT ()
 genericDeploymentLock msg deploymentId resendTask f' = do
   let lockKey = "deployment_action_" <> deploymentId
-  genericDeploymentLock msg lockKey resendTask f'
+  genericFormattedLock msg lockKey resendTask f'
 
-f :: TVar Int -> (Envelope, Message) -> AppT ()
-f deploymentsC (env, msg) = do
-  _ <- liftIO $ do
-    randomDelay <- randomRIO (1_000_000, 3_000_000) :: IO Int
-    threadDelay randomDelay
-  case eitherDecode (msgBody msg) of
+f :: TVar Int -> (Message, Envelope) -> AppT ()
+f deploymentsC (msg, env) = do
+  randomDelay <- liftIO $ randomRIO (1_000_000, 3_000_000)
+  $(logDebug) $ "Waiting for " <> (T.pack . show) (randomDelay `div` 1_000_000) <> " seconds."
+  liftIO $ threadDelay randomDelay
+  $(logDebug) "Starting decoding message"
+  let decodeRes = eitherDecode (msgBody msg)
+  $(logDebug) $ "Decoded into " <> (T.pack . show) decodeRes
+  case decodeRes of
     (Left e) -> do
       $(logError) $ "Decode error: " <> pack e
     (Right (JobserviceUpdateUsedImages {})) -> do
@@ -177,21 +183,34 @@ f deploymentsC (env, msg) = do
     (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId, deploymentMask=mask})) -> do
       genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
         jobserviceRollback deploymentId snapName mask
+  $(logDebug) $ "Finished message handle, acknowledging"
+  liftIO $ ackEnv env
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = let
 
-  callback :: AsyncPool (Envelope, Message) -> (Message, Envelope) -> AppT ()
-  callback pool (msg, env) = do
-    $(logInfo) "Got message"
-    v <- liftIO $ readTVarIO (poolActiveThreads pool)
-    if v >= (length . poolThreads $ pool) then do
-      $(logDebug) "Threadpool is busy, reject..."
-      liftIO $ threadDelay 500_000
-      liftIO $ rejectEnv env True
-    else do
-      _ <- putTask pool (env, msg)
-      pure ()
+  getTasks :: Channel -> Text -> (TVar Int) -> Int -> TQueue (Message, Envelope) -> IO ()
+  getTasks channel queue activeThreads threadsAmount q = do
+    _ <- consumeMsgs channel queue Ack $ \e@(_,env) -> do
+      activeThreads' <- readTVarIO activeThreads
+      if activeThreads' >= threadsAmount then do
+        putStrLn "Pool is full"
+        threadDelay 500_000
+        rejectEnv env True
+      else do
+        atomically $ writeTQueue q e
+    pure ()
+
+  callback :: Config -> Int -> QSemN -> (TVar Int) -> (TVar Int) -> TQueue (Message, Envelope) -> AppT ()
+  callback cfg workerNum sem activeDeploymentsCounter activeThreadsCounter q = do
+    forever $ do
+      t <- (liftIO . atomically) $ readTQueue q
+      $(logDebug) $ pack $ "Read TQueue [" <> show workerNum <> "]"
+      liftIO $ bracket_
+        (waitQSemN sem 1 >> atomically (modifyTVar' activeThreadsCounter (+1)))
+        (atomically (modifyTVar' activeThreadsCounter (\x -> x - 1)) >> signalQSemN sem 1)
+        (flip appTIO cfg $ f activeDeploymentsCounter t)
+      $(logDebug) $ pack $ "Finished TQueue task [" <> show workerNum <> "]"
   in do
   debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
   let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
@@ -236,7 +255,14 @@ runCommand AppOpts { debugOn=debug } = let
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   activeDeploymentsCounter <- newTVarIO (0 :: Int)
-  pool <- createPool (\e@(env, _) -> f activeDeploymentsCounter e >> liftIO (ackEnv env)) (`appTIO` config) threadsAmount
-  _ <- consumeMsgs channel queue Ack (flip appTIO config . callback pool)
-  _ <- forever $ threadDelay 1_000_000
+  activeThreadsCounter <- newTVarIO 0
+  taskPool <- createPool
+  tasksQueue <- newTQueueIO
+  sem <- newQSemN threadsAmount
+  --pool <- createPool (\e@(env, _) -> f activeDeploymentsCounter e >> liftIO (ackEnv env)) (`appTIO` config) threadsAmount
+  --_ <- consumeMsgs channel queue Ack (flip appTIO config . callback pool)
+  _ <- withTaskGroupIn taskPool (threadsAmount + 1) $ \g -> do
+    _ <- async g (getTasks channel queue activeThreadsCounter threadsAmount tasksQueue)
+    mapM_ (\n -> async g . flip appTIO config $ callback config n sem activeDeploymentsCounter activeThreadsCounter tasksQueue) [1..threadsAmount]
+    forever $ threadDelay 500_000
   return ()

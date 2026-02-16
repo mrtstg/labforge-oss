@@ -36,7 +36,6 @@ library
       Handler.Snapshot
       Handler.Utils
       Init
-      Pool
   other-modules:
       Paths_jobservice
   autogen-modules:
@@ -49,6 +48,7 @@ library
     , amqp ==0.22.1
     , api-common
     , async ==2.2.4
+    , async-pool ==0.9.2
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , containers ==0.6.7
@@ -87,6 +87,7 @@ executable jobservice-exe
     , amqp ==0.22.1
     , api-common
     , async ==2.2.4
+    , async-pool ==0.9.2
     , base >=4.7 && <5
     , bytestring ==0.11.5.2
     , containers ==0.6.7

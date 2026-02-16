@@ -55,7 +55,6 @@ import           Handler.Power
 import           Handler.Snapshot
 import           Jobservice.Models
 import           Network.AMQP
-import           Pool
 import           Proxmox.Deploy.Models.Config.VM
 import           Redis.Common
 import           Redis.Environment

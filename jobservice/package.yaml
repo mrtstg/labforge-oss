@@ -41,6 +41,7 @@ dependencies:
 - hedis == 0.15.2
 - containers == 0.6.7
 - random == 1.2.1.1
+- async-pool == 0.9.2
 - keycloak-api
 - proxmox-api
 - api-common
