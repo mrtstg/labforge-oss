@@ -59,6 +59,7 @@ DeploymentTemplateData
   vms [ConfigVM] sqltype=jsonb
   availableVMs [Text] sqltype=jsonb
   existingNetworks [Text] sqltype=jsonb
+  snapshotPolicy DeploymentSnapshotPolicy sqltype=jsonb default='{"quota":0,"useAny":false,"deleteAny":false,"deleteOwned":false}'
   UniqueTitle
   deriving Show Eq
 DeploymentTemplateHide
@@ -93,6 +94,13 @@ UsedBridges
   UniqueName
   deriving Show
 |]
+
+instance PersistField DeploymentSnapshotPolicy where
+  toPersistValue = toPersistValueJSON
+  fromPersistValue = fromPersistValueJSON
+
+instance PersistFieldSql DeploymentSnapshotPolicy where
+  sqlType _ = SqlOther "JSONB"
 
 instance PersistField TransactionData where
   toPersistValue = toPersistValueJSON

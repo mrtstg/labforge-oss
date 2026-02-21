@@ -179,6 +179,7 @@ getPagedDeploymentTemplates pageN (BearerWrapper token) = do
       , templateExistingNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
       , templateAvaiableVMs=(deploymentTemplateDataAvailableVMs . entityVal) e
       , templateHiddenFor=map (deploymentTemplateHideGroup . entityVal) g
+      , templateSnapshotPolicy=(deploymentTemplateDataSnapshotPolicy . entityVal) e
       }) (zip templates hiddenGroups)
     , responsePageSize=pageSize
     , responseTotal=templatesTotal
@@ -197,6 +198,7 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         , deploymentTemplateDataOwnerId=fromJust tokenUUID
         , deploymentTemplateDataExistingNetworks=reqExistingNetworks
         , deploymentTemplateDataAvailableVMs=reqAvailableVMs
+        , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
         })
       jobEnv <- asks $ getEnvFor JobserviceAPI
       _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
@@ -221,7 +223,8 @@ getDeploymentTemplate tID (BearerWrapper token) = do
           , templateOwner = deploymentTemplateDataOwnerId
           , templateTitle = deploymentTemplateDataTitle
           , templateVMs = deploymentTemplateDataVms
-          , templateHiddenFor=groups
+          , templateHiddenFor = groups
+          , templateSnapshotPolicy = deploymentTemplateDataSnapshotPolicy
           }
 
 deleteDeploymentTemplate :: Int -> BearerWrapper -> AppT ()
@@ -259,6 +262,7 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
           , DeploymentTemplateDataVms =. reqVMs
           , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
           , DeploymentTemplateDataExistingNetworks =. reqExistingNetworks
+          , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
           ]
         jobEnv <- asks $ getEnvFor JobserviceAPI
         _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
