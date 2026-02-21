@@ -355,7 +355,7 @@ copyDeploymentPage did t = do
   let ~(Just userToken) = t
   env <- asks $ getEnvFor DeploymentService
   (DeploymentTemplate { .. }) <- globalDecoder' (defaultRetryClientC env $ C.getDeploymentTemplate did userToken)
-  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия", reqExistingNetworks=templateExistingNetworks, reqAvailableVMs=templateAvaiableVMs}) userToken)
+  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия", reqExistingNetworks=templateExistingNetworks, reqAvailableVMs=templateAvaiableVMs, reqSnapshotPolicy=templateSnapshotPolicy}) userToken)
   tempRedirectTo "/deployment/my"
 
 deleteDeploymentPage :: Int -> Maybe BearerWrapper -> AppT Html
@@ -388,6 +388,7 @@ deploymentEditPage tid t = do
       templates: #{preEscapedToMarkup names},
       title: "#{preEscapedText $ title' templateTitle}",
       vms: #{preEscapedToMarkup vms},
+      snapshotPolicy: #{(preEscapedToMarkup . prettyEncode) templateSnapshotPolicy},
       addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
       existingNetworks: #{preEscapedToMarkup $ prettyEncode templateExistingNetworks},
@@ -402,7 +403,7 @@ deploymentEditPage tid t = do
       },
       sendRequest() {
         var availableVMs = this.vms.filter(i => i.available).map(i => i.name);
-        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, existingNetworks: this.existingNetworks, vms: this.vms});
+        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, existingNetworks: this.existingNetworks, vms: this.vms, snapshot: this.snapshotPolicy});
         fetch("/api/deployment/deployments/#{templateId}", {
           method: "PATCH",
           body: payload,
@@ -482,6 +483,7 @@ deploymentCreatePage t = do
       templates: #{preEscapedToMarkup names},
       title: "",
       vms: [],
+      snapshotPolicy: {quota: 0, deleteOwned: false, useAny: false, deleteAny: false},
       addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: "", disks: []}) },
       deleteVM(i) { this.vms.splice(i, 1) },
       moveVM(index, delta) {
@@ -496,7 +498,7 @@ deploymentCreatePage t = do
       removeENet(i) { this.existingNetworks.splice(i, 1) },
       sendRequest() {
         var availableVMs = this.vms.filter(i => i.available).map(i => i.name);
-        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, existingNetworks: this.existingNetworks, vms: this.vms});
+        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, existingNetworks: this.existingNetworks, vms: this.vms, snapshot: this.snapshotPolicy});
         fetch("/api/deployment/deployments", {
           method: "POST",
           body: payload,

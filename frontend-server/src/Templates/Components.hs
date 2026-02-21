@@ -387,6 +387,24 @@ genericDeploymentForm = let
               <button .button @click="moveVM(index, 1)"> Передвинуть ниже
     <div .block>
       <button .button.is-fullwidth @click="addVM()"> Добавить ВМ
+    <div .block>
+      <h2 .subtitle.is-5> Политика пользовательских снапшотов
+      <div .control>
+        <label .label> Квота снапшотов (шт.)
+        <input .input type=number x-model.number="snapshotPolicy['quota']" min=0>
+        <p .help> Если указан 0 или отрицательное число и выключен доступ ко всем шаблонам, пользователь не сможет откатывать виртуальные машины.
+      <div .control>
+        <label .checkbox>
+          <input .checkbox type=checkbox x-model="snapshotPolicy['useAny']">
+          Пользователь может откатываться от любых снапшотов, а не только собственных
+      <div .control>
+        <label .checkbox>
+          <input .checkbox type=checkbox x-model="snapshotPolicy['deleteOwned']">
+          Пользователь может удалить созданные им снапшоты
+      <div .control>
+        <label .checkbox>
+          <input .checkbox type=checkbox x-model="snapshotPolicy['deleteAny']">
+          Пользователь может удалять любые снапшоты, а не только созданные им
     <div .block x-data="{input: ''}">
       <h2 .subtitle.is-5> Список существующих сетей
       <p> Такие сети не создаются, а используют bridge с тем же именем.
