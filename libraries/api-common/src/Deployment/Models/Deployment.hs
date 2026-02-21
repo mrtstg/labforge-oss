@@ -8,6 +8,7 @@ module Deployment.Models.Deployment
   , PowerState(..)
   , DeploymentStatus(..)
   , DeploymentPatch(..)
+  , DeploymentSnapshotPolicy(..)
   ) where
 
 import           Data.Aeson
@@ -24,11 +25,34 @@ instance ToJSON PowerState where
 instance FromJSON PowerState where
   parseJSON = withObject "PowerState" $ \v -> PowerState <$> v .: "power"
 
+data DeploymentSnapshotPolicy = DeploymentSnapshotPolicy
+  { deploymentSnapshotQuota       :: !Int
+  , deploymentSnapshotDeleteOwned :: !Bool
+  , deploymentSnapshotUseAny      :: !Bool
+  , deploymentSnapshotDeleteAny   :: !Bool
+  } deriving (Show, Eq)
+
+instance ToJSON DeploymentSnapshotPolicy where
+  toJSON (DeploymentSnapshotPolicy { .. }) = object
+    [ "quota" .= deploymentSnapshotQuota
+    , "deleteOwned" .= deploymentSnapshotDeleteOwned
+    , "useAny" .= deploymentSnapshotUseAny
+    , "deleteAny" .= deploymentSnapshotDeleteAny
+    ]
+
+instance FromJSON DeploymentSnapshotPolicy where
+  parseJSON = withObject "DeploymentSnapshotPolicy" $ \v -> DeploymentSnapshotPolicy
+    <$> v .:? "quota" .!= 0
+    <*> v .:? "deleteOwned" .!= True
+    <*> v .: "useAny"
+    <*> v .: "deleteAny"
+
 data DeploymentCreate = DeploymentCreate
   { reqTitle            :: !Text
   , reqVMs              :: ![ConfigVM]
   , reqAvailableVMs     :: ![Text]
   , reqExistingNetworks :: ![Text]
+  , reqSnapshotPolicy   :: !DeploymentSnapshotPolicy
   } deriving (Show, Eq)
 
 instance ToJSON DeploymentCreate where
@@ -45,6 +69,7 @@ instance FromJSON DeploymentCreate where
     <*> v .: "vms"
     <*> v .: "availableVMs"
     <*> v .: "existingNetworks"
+    <*> v .: "snapshot"
 
 data DeploymentTemplate = DeploymentTemplate
   { templateId               :: !Int
@@ -54,6 +79,7 @@ data DeploymentTemplate = DeploymentTemplate
   , templateAvaiableVMs      :: ![Text]
   , templateExistingNetworks :: ![Text]
   , templateHiddenFor        :: ![Text]
+  , templateSnapshotPolicy   :: !DeploymentSnapshotPolicy
   } deriving (Show, Eq)
 
 instance FromJSON DeploymentTemplate where
@@ -65,6 +91,7 @@ instance FromJSON DeploymentTemplate where
     <*> v .: "availableVMs"
     <*> v .: "existingNetworks"
     <*> v .: "hiddenFor"
+    <*> v .: "snapshot"
 
 instance ToJSON DeploymentTemplate where
   toJSON (DeploymentTemplate { .. }) = object
@@ -75,6 +102,7 @@ instance ToJSON DeploymentTemplate where
     , "availableVMs" .= templateAvaiableVMs
     , "existingNetworks" .= templateExistingNetworks
     , "hiddenFor" .= templateHiddenFor
+    , "snapshot" .= templateSnapshotPolicy
     ]
 
 data DeploymentStatus = Created | Deploying | Deployed | Destroying | Failed deriving (Show, Eq)
