@@ -602,9 +602,7 @@ vncPage vmPort t = let
   <div .column.is-6>
     <div .block x-data="snapshotForm('#{vmPort}')">
       <template x-if="snaps == null">
-        <p> Загружаем сшапшоты
-      <template x-if="snaps != null && snaps.length == 0">
-        <p> Нет доступных снапшотов!
+        <p> Загружается список снапшотов
       <template x-if="snaps">
         <table .table>
           <thead>
@@ -622,6 +620,9 @@ vncPage vmPort t = let
                   <button @click="rollback(snap.name)" .button.is-outlined.is-warning> Откатить
                 <td>
                   <button @click="deleteSnap(snap.name)" .button.is-outlined.is-danger> Удалить
+            <template x-if="snaps != null && snaps.length == 0">
+              <tr>
+                <td> Нет доступных снапшотов!
 |]
 
   body = [shamlet|
