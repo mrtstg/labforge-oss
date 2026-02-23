@@ -582,24 +582,53 @@ notFound = do
 
 vncPage :: Text -> Maybe BearerWrapper -> AppT Html
 vncPage vmPort t = let
+  vmWidgets = [shamlet|
+<div .columns.is-multiline>
+  <div .column.is-6>
+    <div .block x-data="{ networks: null }" x-init="fetch('/api/deployment/vm/#{vmPort}/networks').then(r => r.json()).then(d => networks = d)">
+      <template x-if="networks">
+        <div .columns.is-centered>
+          <div .column.is-half>
+            <table .table.is-fullwidth>
+              <thead>
+                <tr>
+                  <th> MAC-адрес
+                  <th> Название сети
+              <tbody>
+                <template x-for="mac in Object.keys(networks)">
+                  <tr>
+                    <td x-text="mac">
+                    <td x-text="networks[mac]">
+  <div .column.is-6>
+    <div .block x-data="snapshotForm('#{vmPort}')">
+      <template x-if="snaps == null">
+        <p> Загружаем сшапшоты
+      <template x-if="snaps != null && snaps.length == 0">
+        <p> Нет доступных снапшотов!
+      <template x-if="snaps">
+        <table .table>
+          <thead>
+            <tr>
+              <th> Снапшот
+              <th>
+                <button @click="createSnap" .button> Создать снапшот
+              <th>
+                <button @click="init" .button> Обновить
+          <tbody>
+            <template x-for="snap in snaps">
+              <tr>
+                <td x-text="snap.name">
+                <td>
+                  <button @click="rollback(snap.name)" .button.is-outlined.is-warning> Откатить
+                <td>
+                  <button @click="deleteSnap(snap.name)" .button.is-outlined.is-danger> Удалить
+|]
+
   body = [shamlet|
 <div .block>
   <div .container>
     <div #app>
-<div .block x-data="{ networks: null }" x-init="fetch('/api/deployment/vm/#{vmPort}/networks').then(r => r.json()).then(d => networks = d)">
-  <template x-if="networks">
-    <div .columns.is-centered>
-      <div .column.is-half>
-        <table .table.is-fullwidth>
-          <thead>
-            <tr>
-              <th> MAC-адрес
-              <th> Название сети
-          <tbody>
-            <template x-for="mac in Object.keys(networks)">
-              <tr>
-                <td x-text="mac">
-                <td x-text="networks[mac]">
+^{vmWidgets}
 |]
   bodyOff = [shamlet|
 <div .block>
@@ -609,9 +638,45 @@ vncPage vmPort t = let
         <p>Виртуальная машина выключена!</p>
       <div class="message-body">
         Включите виртуальную машину на странице стенда чтобы подключиться к ней
+^{vmWidgets}
 |]
   after = [shamlet|
 <script src=/static/js/vnc.js>
+<script>
+  ^{unwrapErrorFunction}
+  document.addEventListener('alpine:init', () => {
+    Alpine.data("snapshotForm", (vmPort) => ({
+      snaps: null,
+      init() {
+        fetch("/api/deployment/vm/" + vmPort + "/snapshot/list").then(r => {
+          unwrapError(r, () => { r.json().then(resp => { this.snaps = resp }) }, (e) => this.addNotification(e))
+        }).catch(err => {
+          console.log(err);
+        })
+      },
+      rollback(snapName) {
+        fetch("/api/deployment/vm/" + vmPort + "/snapshot/rollback?name=" + encodeURIComponent(snapName)).then(r => {
+          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на откатывание ВМ отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e))
+        }).catch(err => {
+          console.log(err);
+        })
+      },
+      deleteSnap(snapName) {
+        fetch("/api/deployment/vm/" + vmPort + "/snapshot?name=" + encodeURIComponent(snapName), {method: 'DELETE'}).then(r => {
+          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на удаление снапшота отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e))
+        }).catch(err => {
+          console.log(err);
+        })
+      },
+      createSnap() {
+        fetch("/api/deployment/vm/" + vmPort + "/snapshot").then(r => {
+          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на создание снапшота отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e))
+        }).catch(err => {
+          console.log(err);
+        })
+      }
+    }))
+  })
 |]
 
   head = [shamlet|

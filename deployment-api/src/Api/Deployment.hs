@@ -35,13 +35,15 @@ import           Auth.Token
 import           Cluster.Client
 import           Cluster.Models.Node
 import           Config
-import           Control.Monad                            (when)
+import           Control.Monad                            (unless, when)
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Functor                             ((<&>))
+import           Data.List                                (find, sortOn)
 import qualified Data.Map                                 as M
 import           Data.Maybe
+import           Data.Ord                                 (Down (..))
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Database
@@ -67,6 +69,7 @@ import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Ssl
 import           Proxmox.Models
 import           Proxmox.Models.Network
+import           Proxmox.Models.Snapshot
 import           Proxmox.Models.VM
 import           Proxmox.Models.VMConfig
 import           Proxmox.Retry                            (defaultRetryClient',
@@ -818,6 +821,118 @@ postInstanceLog instanceId logLine (BearerWrapper token) = do
         runDB $ updateWhere [ DeploymentInstanceDataId ==. DeploymentInstanceDataKey instanceId ] [ DeploymentInstanceDataLogs =. deploymentInstanceDataLogs ++ [logLine] ]
         pure ()
 
+getVMPortSnapshots :: Text -> AppT (DeploymentSnapshotPolicy, Entity DeploymentInstanceData, [ProxmoxSnapshot], ConfigVM)
+getVMPortSnapshots vmPort = do
+  ~(Just (d@(Entity _ DeploymentInstanceData { .. }), vmData)) <- findInstanceByVMPort vmPort
+  ~(Just (DeploymentTemplateData { deploymentTemplateDataSnapshotPolicy = p@DeploymentSnapshotPolicy { .. }, .. })) <- runDB $ get deploymentInstanceDataParent
+  case deploymentInstanceDataDeployConfig of
+    Nothing -> pure (p, d, [], vmData)
+    (Just cfg@(DeployConfig { deployParameters = DeployParams { deployUrl=deployUrl, deployNodeName=deployNodeName } })) -> do
+      mgr <- liftIO $ createProxmoxManager cfg
+      nodeUrl' <- liftIO $ tryParseUrl (T.unpack deployUrl)
+      case nodeUrl' of
+        (Left _) -> sendJSONError err500 (JSONError "serverError" "Failed to parse node URL" Null)
+        (Right nodeUrl) -> do
+          let state = ProxmoxState nodeUrl mgr
+          snapshots' <- defaultRetryClientC' state $ P.getVMSnapshots deployNodeName (fromMaybe 0 $ configVMID vmData)
+          case snapshots' of
+            (Left e) -> do
+              $(logError) $ T.pack $ "Error getting snapshots: " <> show e
+              sendJSONError err500 (JSONError "Internal error" "Failed to get snapshots" Null)
+            (Right (ProxmoxResponse { proxmoxData = snapshots })) -> pure (p, d, snapshots, vmData)
+
+listVMPortSnapshots :: Text -> BearerWrapper -> AppT [ProxmoxSnapshot]
+listVMPortSnapshots vmPort t@(BearerWrapper token) = do
+  ~t@(ActiveToken { .. }) <- requireToken token
+  let uid = fromMaybe "" tokenUUID
+  hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
+  if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
+    (DeploymentSnapshotPolicy { .. }, Entity _ DeploymentInstanceData { .. }, snapshots, _) <- getVMPortSnapshots vmPort
+    isAdmin <- isDeploymentTemplateAdministrator t deploymentInstanceDataParent
+    if deploymentSnapshotQuota <= 0 && not deploymentSnapshotUseAny && not isAdmin then pure [] else do
+      let snapshots' = sortOn (Down . fromMaybe 0 . snapshotTime) $ filter ((/=) "current" . snapshotName) snapshots
+      if deploymentSnapshotUseAny || isAdmin then pure snapshots' else
+        pure $ filter ((==) "usermade" . snapshotDescription) snapshots'
+
+getVMPortSnapshotPolicy :: Text -> BearerWrapper -> AppT DeploymentSnapshotPolicy
+getVMPortSnapshotPolicy vmPort (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireToken token
+  let uid = fromMaybe "" tokenUUID
+  hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
+  if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
+    ~(Just (Entity _ DeploymentInstanceData { .. }, _)) <- findInstanceByVMPort vmPort
+    ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
+    pure deploymentTemplateDataSnapshotPolicy
+
+-- TODO: ratelimit?
+takeVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
+takeVMPortSnapshot vmPort Nothing (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireToken token
+  let uid = fromMaybe "" tokenUUID
+  hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
+  if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
+    (_, _, snapshots, _) <- getVMPortSnapshots vmPort
+    let snapNames = map snapshotName snapshots
+    let snapList = filter (`notElem` snapNames) $ map (T.pack . ("snap" <>) . show) [1..100]
+    case snapList of
+      [] -> sendJSONError err500 (JSONError "internalError" "Cant generate snapshot name" Null)
+      (snapName:_) -> takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token)
+takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
+  ~t@(ActiveToken { .. }) <- requireToken token
+  let uid = fromMaybe "" tokenUUID
+  hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
+  if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
+    (DeploymentSnapshotPolicy { .. }, Entity (DeploymentInstanceDataKey dId) DeploymentInstanceData { .. }, snapshots, vmData) <- getVMPortSnapshots vmPort
+    let userSnapshotsAmount = length $ filter ((==) "usermade" . snapshotDescription) snapshots
+    isAdmin <- isDeploymentTemplateAdministrator t deploymentInstanceDataParent
+    unless (isAdmin || deploymentSnapshotQuota > 0) $ sendJSONError err403 (JSONError "forbidden" "You cant make snapshots" $ object ["message" .= String "У вас нет прав на создание снапшотов!"])
+    when (userSnapshotsAmount >= deploymentSnapshotQuota && not isAdmin) $ sendJSONError err400 (JSONError "badRequest" "Too many snapshots are made" $ object ["message" .= String "Сделано слишком много снапшотов!"])
+    let nameTaken = any ((==) snapName . snapshotName) snapshots
+    when nameTaken $ sendJSONError err400 (JSONError "badRequest" "Snapshot name taken" $ object ["message" .= String "Имя снапшота занято"])
+    unless (matchSnapshotRequirements . T.unpack $ snapName) $ sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" $ object ["message" .= String "Название снапшота не подходит по требованиям"])
+    jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+    withTokenVariable'' $ \t' -> do
+      defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName False (T.pack $ configVMName vmData)) (BearerWrapper t')
+
+deleteVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
+deleteVMPortSnapshot _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
+deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
+  ~t@(ActiveToken { .. }) <- requireToken token
+  let uid = fromMaybe "" tokenUUID
+  hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
+  if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
+    (DeploymentSnapshotPolicy { .. }, Entity (DeploymentInstanceDataKey dId) DeploymentInstanceData { .. }, snapshots, vmData) <- getVMPortSnapshots vmPort
+    let userSnapshots = map snapshotName $ filter ((==) "usermade" . snapshotDescription) snapshots
+    isAdmin <- isDeploymentTemplateAdministrator t deploymentInstanceDataParent
+    unless (isAdmin || deploymentSnapshotDeleteAny || deploymentSnapshotDeleteOwned) $ sendJSONError err403 (JSONError "forbidden" "You cant delete snapshots" $ object ["message" .= String "У вас нет прав на удаление снапшотов!"])
+    when (snapName `notElem` userSnapshots && not deploymentSnapshotDeleteAny && not isAdmin) $ sendJSONError err403 (JSONError "forbidden" "You cant delete not owned templates" $ object ["message" .= String "Вы не можете удалить данный снапшот"])
+    let nameTaken = any ((==) snapName . snapshotName) snapshots
+    unless nameTaken $ sendJSONError err404 (JSONError "badRequest" "Snapshot is not found" $ object ["message" .= String "Снапшот не найден"])
+    unless (matchSnapshotRequirements . T.unpack $ snapName) $ sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" $ object ["message" .= String "Название снапшота не подходит по требованиям"])
+    jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+    withTokenVariable'' $ \t' -> do
+      defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName True (T.pack $ configVMName vmData)) (BearerWrapper t')
+
+rollbackVMPort :: Text -> Maybe Text -> BearerWrapper -> AppT ()
+rollbackVMPort _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
+rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
+  ~t@(ActiveToken { .. }) <- requireToken token
+  let uid = fromMaybe "" tokenUUID
+  hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
+  if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
+    (DeploymentSnapshotPolicy { .. }, Entity (DeploymentInstanceDataKey dId) DeploymentInstanceData { .. }, snapshots, vmData) <- getVMPortSnapshots vmPort
+    isAdmin <- isDeploymentTemplateAdministrator t deploymentInstanceDataParent
+    let snapshots' = map snapshotName . sortOn (Down . fromMaybe 0 . snapshotTime) . filter ((/=) "current" . snapshotName) . filter (if not isAdmin then ((==) "usermade" . snapshotDescription) else const True) $ snapshots
+    if deploymentSnapshotQuota <= 0 && not deploymentSnapshotUseAny && not isAdmin then do
+      sendJSONError err403 (JSONError "forbidden" "You can rollback VM!" $ object ["message" .= String "У вас нет квоты снапшотов или права на использование всех снапшотов!"])
+      else do
+        case find (snapName ==) snapshots' of
+          Nothing -> sendJSONError err404 (JSONError "badRequest" "Snapshot is not found" $ object ["message" .= String "Снапшот не найден"])
+          (Just _) -> do
+            jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+            withTokenVariable'' $ \t' -> do
+              defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceRollback dId snapName (T.pack $ configVMName vmData)) (BearerWrapper t')
+
 deploymentServer :: ServerT DeploymentAPI AppT
 deploymentServer = getPagedTemplates
   :<|> deleteTemplate
@@ -851,3 +966,8 @@ deploymentServer = getPagedTemplates
   :<|> getUndeployedVMAmount
   :<|> postInstanceLog
   :<|> switchTemplateVisibility
+  :<|> getVMPortSnapshotPolicy
+  :<|> takeVMPortSnapshot
+  :<|> deleteVMPortSnapshot
+  :<|> listVMPortSnapshots
+  :<|> rollbackVMPort
