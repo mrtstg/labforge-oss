@@ -65,8 +65,8 @@ jobserviceRollback deploymentId snapName mask = do
           _ <- deployTransaction (map (`VMRollbacked` T.unpack snapName) (filter filterF vms)) deploymentId deployConfig
           pure ()
 
-jobserviceSnapshot :: Text -> Text -> Bool -> Text -> AppT ()
-jobserviceSnapshot deploymentId snapName delete mask = do
+jobserviceSnapshot :: Text -> Text -> Bool -> Text -> Text -> AppT ()
+jobserviceSnapshot deploymentId snapName delete mask comment = do
   $(logInfo) $ "Snapping instance " <> (T.pack . show) deploymentId
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
@@ -84,5 +84,6 @@ jobserviceSnapshot deploymentId snapName delete mask = do
         (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
           let vmNames = map (T.pack . configVMName) vms
           let filterF = createMaskFunction vmNames mask
-          _ <- deployTransaction (map ((\x -> if delete then flip SnapshotNotExists x else flip SnapshotExists x) (ProxmoxSnapshotCreate {snapshotCreateStateful=Just True, snapshotCreateName=snapName, snapshotCreateDesc=Nothing})) (filter filterF vms)) deploymentId deployConfig
+          -- TODO: statefullness control
+          _ <- deployTransaction (map ((\x -> if delete then flip SnapshotNotExists x else flip SnapshotExists x) (ProxmoxSnapshotCreate {snapshotCreateStateful=Just False, snapshotCreateName=snapName, snapshotCreateDesc=Just comment})) (filter filterF vms)) deploymentId deployConfig
           pure ()

@@ -177,9 +177,9 @@ f deploymentsC (msg, env) = do
     (Right (JobservicePower deploymentId powerOn mask)) -> do
       genericFormattedLock msg ("deployment_power_task_" <> deploymentId) False $ do
         jobservicePower env deploymentId powerOn mask
-    (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId, deploymentMask=mask})) -> do
+    (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
       genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
-        jobserviceSnapshot deploymentId snapName delete mask
+        jobserviceSnapshot deploymentId snapName delete mask comment
     (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId, deploymentMask=mask})) -> do
       genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
         jobserviceRollback deploymentId snapName mask
