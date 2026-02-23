@@ -41,6 +41,30 @@ splitVmPort portV = do
     [_] -> Nothing
     lst -> readMaybe (T.unpack . last $ lst) >>= \x -> Just (T.intercalate "-" (init lst), x)
 
+findInstanceByVMPort :: Text -> AppT (Maybe (Entity DeploymentInstanceData, ConfigVM))
+findInstanceByVMPort vmPort = do
+  case splitVmPort vmPort of
+    Nothing -> pure Nothing
+    (Just (nodeName, display)) -> do
+      relatedAllocations <- runDB $ selectList [ UsedDisplayNum ==. display, UsedDisplayNodeName ==. nodeName ] []
+      relatedInstances <- runDB $ selectFirst
+        [ DeploymentInstanceDataId <-. map (usedDisplayUsedBy . entityVal) relatedAllocations
+        , DeploymentInstanceDataDeployConfig !=. Nothing ] []
+      case relatedInstances of
+        Nothing -> do
+          $(logWarn) "No related instances found!"
+          pure Nothing
+        Just e@(Entity _ DeploymentInstanceData { .. }) -> do
+          let usedVMName = filter (\vm -> configVMDisplay vm == Just display) (deployVMs $ fromJust deploymentInstanceDataDeployConfig)
+          case usedVMName of
+            [] -> do
+              $(logWarn) $ "Couldnt find VM with display " <> (T.pack . show) display
+              pure Nothing
+            (vm:[]) -> (pure . pure) (e, vm)
+            _manyVMs -> do
+              $(logError) $ "There is several VM with same display!"
+              pure Nothing
+
 isUserAccessedVMPort :: [Text] -> [Text] -> Text -> Text -> AppT Bool
 isUserAccessedVMPort userGroups userRoles userId vmPort = let
   f :: AppT Bool
