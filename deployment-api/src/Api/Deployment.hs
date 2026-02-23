@@ -430,8 +430,8 @@ callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (Bear
           let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage m (BearerWrapper t)
           withTokenVariable'' $ \t -> do
             case (doDelete, doRollback) of
-              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentId=instanceKey, deploymentMask=fromMaybe "*" mask'})
-              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentId=instanceKey,deploymentMask=fromMaybe "*" mask'})
+              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentId=instanceKey, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
+              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentId=instanceKey,deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
               (False, True) -> taskF t (JobserviceRollback instanceKey snapName $ fromMaybe "*" mask')
 
 callGroupSnapshot :: Int -> Maybe Text -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
@@ -892,7 +892,7 @@ takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
     unless (matchSnapshotRequirements . T.unpack $ snapName) $ sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" $ object ["message" .= String "Название снапшота не подходит по требованиям"])
     jobserviceEnv <- asks $ getEnvFor JobserviceAPI
     withTokenVariable'' $ \t' -> do
-      defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName False (T.pack $ configVMName vmData)) (BearerWrapper t')
+      defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else "")) (BearerWrapper t')
 
 deleteVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 deleteVMPortSnapshot _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -911,7 +911,7 @@ deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
     unless (matchSnapshotRequirements . T.unpack $ snapName) $ sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" $ object ["message" .= String "Название снапшота не подходит по требованиям"])
     jobserviceEnv <- asks $ getEnvFor JobserviceAPI
     withTokenVariable'' $ \t' -> do
-      defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName True (T.pack $ configVMName vmData)) (BearerWrapper t')
+      defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName True (T.pack $ configVMName vmData) "") (BearerWrapper t')
 
 rollbackVMPort :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 rollbackVMPort _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -922,9 +922,9 @@ rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
   if not hasAccess then sendJSONError err403 (JSONError "forbidden" "You dont have access to VM!" Null) else do
     (DeploymentSnapshotPolicy { .. }, Entity (DeploymentInstanceDataKey dId) DeploymentInstanceData { .. }, snapshots, vmData) <- getVMPortSnapshots vmPort
     isAdmin <- isDeploymentTemplateAdministrator t deploymentInstanceDataParent
-    let snapshots' = map snapshotName . sortOn (Down . fromMaybe 0 . snapshotTime) . filter ((/=) "current" . snapshotName) . filter (if not isAdmin then ((==) "usermade" . snapshotDescription) else const True) $ snapshots
+    let snapshots' = map snapshotName . sortOn (Down . fromMaybe 0 . snapshotTime) . filter ((/=) "current" . snapshotName) . filter (if not isAdmin && not deploymentSnapshotUseAny then ((==) "usermade" . snapshotDescription) else const True) $ snapshots
     if deploymentSnapshotQuota <= 0 && not deploymentSnapshotUseAny && not isAdmin then do
-      sendJSONError err403 (JSONError "forbidden" "You can rollback VM!" $ object ["message" .= String "У вас нет квоты снапшотов или права на использование всех снапшотов!"])
+      sendJSONError err403 (JSONError "forbidden" "You cant rollback VM!" $ object ["message" .= String "У вас нет квоты снапшотов или права на использование всех снапшотов!"])
       else do
         case find (snapName ==) snapshots' of
           Nothing -> sendJSONError err404 (JSONError "badRequest" "Snapshot is not found" $ object ["message" .= String "Снапшот не найден"])
