@@ -40,7 +40,7 @@ data JobserviceMessage = JobserviceUpdateUsedImages {}
                        | JobserviceAllocateNode { deploymentId :: !Text }
                        | JobserviceDeployInstance { deploymentId :: !Text }
                        | JobserviceDestroyInstance { deploymentId :: !Text }
-                       | JobserviceSnapshot { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentDelete :: !Bool, deploymentMask :: !Text }
+                       | JobserviceSnapshot { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentDelete :: !Bool, deploymentMask :: !Text, deploymentSnapshotComment :: !Text }
                        | JobserviceRollback { deploymentId :: !Text, deploymentSnapshot :: !Text, deploymentMask :: !Text }
                        | JobservicePower { deploymentId :: !Text, deploymentPower :: !Bool, deploymentMask :: !Text } deriving (Show, Eq)
 
@@ -49,7 +49,7 @@ instance ToJSON JobserviceMessage where
   toJSON (JobserviceAllocateNode { .. }) = object ["type" .= String "allocateNode", "deploymentId" .= deploymentId]
   toJSON (JobserviceDeployInstance { .. }) = object ["type" .= String "deployInstance", "deploymentId" .= deploymentId]
   toJSON (JobserviceDestroyInstance { .. }) = object ["type" .= String "destroyInstance", "deploymentId" .= deploymentId]
-  toJSON (JobserviceSnapshot { .. }) = object [ "type" .= String "snapshotInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "delete" .= deploymentDelete, "mask" .= deploymentMask ]
+  toJSON (JobserviceSnapshot { .. }) = object [ "type" .= String "snapshotInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "delete" .= deploymentDelete, "mask" .= deploymentMask, "comment" .= deploymentSnapshotComment ]
   toJSON (JobserviceRollback { .. }) = object [ "type" .= String "rollbackInstance", "deploymentId" .= deploymentId, "snapshot" .= deploymentSnapshot, "mask" .= deploymentMask ]
   toJSON (JobservicePower { .. }) = object [ "type" .= String "powerInstance", "deploymentId" .= deploymentId, "power" .= deploymentPower, "mask" .= deploymentMask ]
 
@@ -65,8 +65,9 @@ instance FromJSON JobserviceMessage where
     (Just (String "snapshotInstance")) -> JobserviceSnapshot
       <$> v .: "deploymentId"
       <*> v .: "snapshot"
-      <*> v .: "delete"
+      <*> v .:? "delete" .!= False
       <*> v .: "mask"
+      <*> v .:? "comment" .!= ""
     (Just (String "rollbackInstance")) -> JobserviceRollback
       <$> v .: "deploymentId"
       <*> v .: "snapshot"
