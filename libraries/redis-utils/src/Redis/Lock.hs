@@ -13,7 +13,7 @@ import           Redis.Common
 checkRedisLock :: (MonadIO m, RedisConnection a, MonadReader a m) => String -> m Bool
 checkRedisLock k = getValue' k <&> isNothing
 
-redisLockWrapper :: (MonadIO m, RedisConnection a, MonadReader a m) => String -> Integer -> m a -> m a -> m a
+redisLockWrapper :: (MonadIO m, RedisConnection a, MonadReader a m) => String -> Integer -> m r -> m r -> m r
 redisLockWrapper lockKey lockTime onLocked onFree = do
   lockFree <- checkRedisLock lockKey
   if lockFree then do
@@ -23,7 +23,7 @@ redisLockWrapper lockKey lockTime onLocked onFree = do
     pure r
   else onLocked
 
-redisRateLockWrapper :: (MonadIO m, RedisConnection a, MonadReader a m) => String -> Integer -> m a -> m a -> m a
+redisRateLockWrapper :: (MonadIO m, RedisConnection a, MonadReader a m) => String -> Integer -> m r -> m r -> m r
 redisRateLockWrapper lockKey lockTime onLocked onFree = do
   lockFree <- checkRedisLock lockKey
   if lockFree then do
