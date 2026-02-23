@@ -13,6 +13,7 @@ import           Data.Text
 import           Deployment.Models.Deployment
 import           Deployment.Models.Stats
 import           Proxmox.Deploy.Models.Config.Template
+import           Proxmox.Models.Snapshot
 import           Servant.API
 
 type DeploymentTemplateCapture = Capture "DeploymentTemplateID" Int
@@ -51,3 +52,8 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "vm" :> "allocations" :> "amount" :> "undeployed" :> AuthHeader :> Get '[JSON] (M.Map Text Int)
   :<|> "api" :> "deployment" :> "instances" :> DeploymentInstanceCapture :> "log" :> ReqBody '[JSON] Text :> AuthHeader :> Post '[JSON] ()
   :<|> "api" :> "deployment" :> "deployments" :> DeploymentTemplateCapture :> "hide" :> QueryParam "group" Text :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> "policy" :> AuthHeader :> Get '[JSON] DeploymentSnapshotPolicy
+  :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> QueryParam "name" Text :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> QueryParam "name" Text :> AuthHeader :> Delete '[JSON] ()
+  :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> "list" :> AuthHeader :> Get '[JSON] [ProxmoxSnapshot]
+  :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> "rollback" :> QueryParam "name" Text :> AuthHeader :> Get '[JSON] ()

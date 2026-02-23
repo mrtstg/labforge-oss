@@ -32,6 +32,11 @@ module Deployment.Client
   , getUndeployedVMAmount
   , postInstanceLog
   , hideDeploymentTemplate
+  , getVMPortSnapshotPolicy
+  , takeVMPortSnapshot
+  , deleteVMPortSnapshot
+  , listVMPortSnapshots
+  , rollbackVMPort
   ) where
 
 import           Data.Proxy
@@ -73,4 +78,9 @@ getPagedTemplates
   :<|> deleteDeploymentInstance
   :<|> getUndeployedVMAmount
   :<|> postInstanceLog
-  :<|> hideDeploymentTemplate = client api
+  :<|> hideDeploymentTemplate
+  :<|> getVMPortSnapshotPolicy
+  :<|> takeVMPortSnapshot
+  :<|> deleteVMPortSnapshot
+  :<|> listVMPortSnapshots
+  :<|> rollbackVMPort = client api
