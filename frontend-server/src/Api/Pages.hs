@@ -630,16 +630,6 @@ vncPage vmPort t = let
     <div #app>
 ^{vmWidgets}
 |]
-  bodyOff = [shamlet|
-<div .block>
-  <div .container>
-    <article class="message is-warning">
-      <div class="message-header">
-        <p>Виртуальная машина выключена!</p>
-      <div class="message-body">
-        Включите виртуальную машину на странице стенда чтобы подключиться к ней
-^{vmWidgets}
-|]
   after = [shamlet|
 <script src=/static/js/vnc.js>
 <script>
@@ -687,10 +677,8 @@ vncPage vmPort t = let
   let ~(Just userToken) = t
   deploymentEnv <- asks $ getEnvFor DeploymentService
   (PowerState vmOn) <- globalDecoder' $ defaultRetryClientC deploymentEnv (C.getVMPortPower vmPort userToken)
-  if vmOn then do
-    baseTemplate token (Just head) (Just "VNC") body (Just after)
-  else do
-    baseTemplate token (Just head) (Just "VNC") bodyOff Nothing
+  unless vmOn $ addMessageToSession token "Виртуальная машина выключена. Включите ее на странице стенда, доступ на данной странице восстановится автоматически."
+  baseTemplate token (Just head) (Just "VNC") body (Just after)
 
 deploymentListPage :: Maybe Int -> Maybe BearerWrapper -> AppT Html
 deploymentListPage pageN t = do
