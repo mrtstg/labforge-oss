@@ -85,14 +85,11 @@ genericFormattedLock msg key resendTask f' = do
 
 genericDeploymentLock :: Message -> Text -> Bool -> AppT a -> AppT ()
 genericDeploymentLock msg deploymentId resendTask f' = do
-  let lockKey = "deployment_action_" <> deploymentId
+  let lockKey = jobserviceLockKey GenericLock deploymentId
   genericFormattedLock msg lockKey resendTask f'
 
 f :: TVar Int -> (Message, Envelope) -> AppT ()
 f deploymentsC (msg, env) = do
-  randomDelay <- liftIO $ randomRIO (1_000_000, 3_000_000)
-  $(logDebug) $ "Waiting for " <> (T.pack . show) (randomDelay `div` 1_000_000) <> " seconds."
-  liftIO $ threadDelay randomDelay
   $(logDebug) "Starting decoding message"
   let decodeRes = eitherDecode (msgBody msg)
   $(logDebug) $ "Decoded into " <> (T.pack . show) decodeRes
@@ -144,6 +141,9 @@ f deploymentsC (msg, env) = do
             else do
               (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
               cacheValue' lockKey "lock" (Just 10)
+              _ <- liftIO $ do
+                randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
+                threadDelay randomDelay
               $(logInfo) $ "Deploying " <> deploymentId
               deployInstance env deploymentId
               (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
@@ -175,13 +175,13 @@ f deploymentsC (msg, env) = do
           (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
       pure ()
     (Right (JobservicePower deploymentId powerOn mask)) -> do
-      genericFormattedLock msg ("deployment_power_task_" <> deploymentId) False $ do
+      genericFormattedLock msg (jobserviceLockKey PowerLock deploymentId) False $ do
         jobservicePower env deploymentId powerOn mask
     (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
-      genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
+      genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
         jobserviceSnapshot deploymentId snapName delete mask comment
     (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId, deploymentMask=mask})) -> do
-      genericFormattedLock msg ("deployment_snapshot_" <> deploymentId) False $ do
+      genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
         jobserviceRollback deploymentId snapName mask
   $(logDebug) $ "Finished message handle, acknowledging"
   liftIO $ ackEnv env
