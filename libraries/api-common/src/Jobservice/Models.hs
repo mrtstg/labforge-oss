@@ -5,11 +5,35 @@ module Jobservice.Models
   , jobserviceUsedImageKey
   , JobserviceMessage(..)
   , JobserviceImageUsageData(..)
+  , JobserviceLockType(..)
+  , jobserviceLockKey
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import           Data.Text         (Text)
+import           Servant.API
+
+data JobserviceLockType = AnyLock | GenericLock | SnapshotLock | PowerLock deriving (Show, Eq, Ord)
+
+instance ToHttpApiData JobserviceLockType where
+  toUrlPiece AnyLock      = "any"
+  toUrlPiece GenericLock  = "generic"
+  toUrlPiece SnapshotLock = "snapshot"
+  toUrlPiece PowerLock    = "power"
+
+instance FromHttpApiData JobserviceLockType where
+  parseUrlPiece "any"      = pure AnyLock
+  parseUrlPiece "generic"  = pure AnyLock
+  parseUrlPiece "snapshot" = pure AnyLock
+  parseUrlPiece "power"    = pure AnyLock
+  parseUrlPiece _          = Left "Invalid lock type"
+
+jobserviceLockKey :: JobserviceLockType -> Text -> Text
+jobserviceLockKey GenericLock  = ("deployment_action_" <>)
+jobserviceLockKey AnyLock      = jobserviceLockKey GenericLock
+jobserviceLockKey SnapshotLock = ("deployment_snapshot_" <>)
+jobserviceLockKey PowerLock    = ("deployment_power_task_" <>)
 
 jobserviceUsedImageKey imageName = "jobservice-used-" <> imageName <> "-at"
 jobserviceUsedImagesKey = "jobservice-used-images"

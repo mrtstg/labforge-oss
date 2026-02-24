@@ -2,6 +2,7 @@ module Jobservice.Client
   ( insertJobserviceMessage
   , getHeldImages
   , getImageUsage
+  , isDeploymentLocked
   ) where
 
 import           Jobservice.Schema
@@ -13,4 +14,5 @@ api = Proxy
 
 insertJobserviceMessage
   :<|> getHeldImages
-  :<|> getImageUsage = client api
+  :<|> getImageUsage
+  :<|> isDeploymentLocked = client api

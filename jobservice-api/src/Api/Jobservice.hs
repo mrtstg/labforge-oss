@@ -30,6 +30,8 @@ import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import           Data.Functor               ((<&>))
+import           Data.Maybe
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import           Jobservice.Models
@@ -40,7 +42,16 @@ import           Redis.Common
 import           Servant
 
 jobserviceServer :: ServerT JobserviceAPI AppT
-jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage
+jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage :<|> isDeploymentLocked
+
+isDeploymentLocked :: Text -> JobserviceLockType -> BearerWrapper -> AppT Bool
+isDeploymentLocked deploymentId AnyLock (BearerWrapper token) = do
+  _ <- requireToken token
+  mapM (getValue' . T.unpack . (`jobserviceLockKey` deploymentId)) [GenericLock, PowerLock, SnapshotLock] <&> any isJust
+isDeploymentLocked deploymentId specifiedKey (BearerWrapper token) = do
+  _ <- requireToken token
+  let lockKey = T.unpack $ jobserviceLockKey specifiedKey deploymentId
+  getValue' lockKey <&> isJust
 
 sendMessage :: JobserviceMessage -> BearerWrapper -> AppT ()
 sendMessage msgPayload (BearerWrapper token) = do
