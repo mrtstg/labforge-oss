@@ -26,6 +26,7 @@ import qualified Cluster.Client                           as C
 import           Cluster.Models.Node
 import           Config
 import           Control.Monad.Reader
+import           Data.List                                (nub)
 import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
@@ -126,7 +127,7 @@ allocateNode (env, msg) deploymentId = do
                       Nothing -> pure ()
                       (Just vmids) -> do
                         $(logInfo) $ "[" <> deploymentId <> "] Allocated VMIDs"
-                        let sdnNetworksNames = filter (`notElem` templateExistingNetworks) $ map (T.pack . configVMNetworkName) $ foldMap (fromMaybe [] . configVMNetworks) templateVMs
+                        let sdnNetworksNames = nub . filter (`notElem` templateExistingNetworks) . map (T.pack . configVMNetworkName) $ foldMap (fromMaybe [] . configVMNetworks) templateVMs
                         networkAllocateRes'' <- withTokenVariable $ \t -> do
                           defaultRetryClientC deploymentEnv (D.requestDeploymentNetwork nodeName deploymentId (Just $ length sdnNetworksNames) (BearerWrapper t))
                         networkAllocateRes' <- unpackError networkAllocateRes'' errorF
