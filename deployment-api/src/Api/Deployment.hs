@@ -681,7 +681,7 @@ getDeploymentInstance instanceId (BearerWrapper token) = do
               , instanceTitle=deploymentTemplateDataTitle
               , instanceState=deploymentInstanceDataState
               , instanceOf=(fromIntegral . fromSqlKey) deploymentInstanceDataParent
-              , instanceLogs=if deploymentOwnership == TemplateOwner then [] else deploymentInstanceDataLogs
+              , instanceLogs=if deploymentOwnership /= TemplateOwner then [] else deploymentInstanceDataLogs
               , instanceDeployConfig=if deploymentOwnership /= TemplateOwner then Nothing else deploymentInstanceDataDeployConfig
               , instanceVMPower = M.empty
               , instanceNetworkMap=if deploymentOwnership /= TemplateOwner then Nothing else Just deploymentInstanceDataNetworkNamesMap
