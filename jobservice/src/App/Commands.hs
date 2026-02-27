@@ -108,20 +108,19 @@ f deploymentsC (msg, env) = do
           $(logInfo) "Image task is locked. Skipping task."
           pure ()
     (Right (JobserviceAllocateNode deploymentId)) -> do
-      _ <- genericDeploymentLock msg deploymentId False $ do
-        let lockKey = "allocate_node_lock"
-        v <- getValue' lockKey
-        case v of
-          Nothing -> do
-            cacheValue' lockKey "lock" (Just 600)
-            allocateNode (env, msg) deploymentId
-            deleteValue' lockKey
-          (Just _) -> do
-            $(logInfo) "Task is locked. Recreating message"
-            r <- asks rabbitConnection
-            chan <- liftIO $ openChannel r
-            _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
-            liftIO $ closeChannel chan
+      let lockKey = "allocate_node_lock"
+      v <- getValue' lockKey
+      case v of
+        Nothing -> do
+          cacheValue' lockKey "lock" (Just 600)
+          allocateNode (env, msg) deploymentId
+          deleteValue' lockKey
+        (Just _) -> do
+          $(logInfo) "Task is locked. Recreating message"
+          r <- asks rabbitConnection
+          chan <- liftIO $ openChannel r
+          _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+          liftIO $ closeChannel chan
       pure ()
     (Right (JobserviceDeployInstance deploymentId)) -> do
       _ <- genericDeploymentLock msg deploymentId False $ do
