@@ -85,6 +85,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
       _ <- setDeploymentInstanceStatus deploymentKey Failed
       pure False
     (Right url) -> do
+      deploymentEnv <- asks $ getEnvFor DeploymentService
       m <- liftIO $ createProxmoxManager deployConfig
       let stages = planTransactionStages deployConfig target
       let state = ProxmoxState url m
@@ -107,6 +108,8 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
       case v of
         (Left e) -> do
           $(logError) $ "Failed to get PVE data: " <> (T.pack . show) e
+          _ <- withTokenVariable $ \token -> do
+            defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentKey ("Не удалось получить данные от Proxmox: " <> (T.pack . show) e) (BearerWrapper token)
           --addLogToDeploymentInstance deploymentKey $ "Failed to get PVE data: " <> (pack . show) e
           _ <- setDeploymentInstanceStatus deploymentKey Failed
           pure False
@@ -114,8 +117,10 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
           planRes <- liftIO $ planTransactionActions stages a b c d e planState
           case planRes of
             (Left e) -> do
-              $(logError) $ "Failed to plan transaction: " <> (T.pack . show) e
-              --addLogToDeploymentInstance deploymentKey $ "Failed to plan transaction: " <> (pack . show) e
+              let errorText = "Failed to plan transaction: " <> (T.pack . show) e
+              $(logError) errorText
+              _ <- withTokenVariable $ \token -> do
+                defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentKey errorText (BearerWrapper token)
               _ <- setDeploymentInstanceStatus deploymentKey Failed
               pure False
             (Right actions) -> do
@@ -124,8 +129,10 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
               result <- (liftIO . runExceptT) $ (runStateT (unTransaction executeTransaction) (planState { transactionActions = cleanedActions }))
               case result of
                 (Left e) -> do
-                  $(logError) $ "Failed to run transaction: " <> (T.pack . show) e
-                  --addLogToDeploymentInstance deploymentKey $ "Failed to run transaction: " <> (pack . show) e
+                  let errorText = "Failed to run transaction: " <> (T.pack . show) e
+                  $(logError) errorText
+                  _ <- withTokenVariable $ \token -> do
+                    defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentKey errorText (BearerWrapper token)
                   _ <- setDeploymentInstanceStatus deploymentKey Failed
                   pure False
                 (Right _) -> do
