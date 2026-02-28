@@ -78,9 +78,9 @@ DeploymentInstanceData
   vmLinks (M.Map String String) sqltype=jsonb
   deriving Show
 UsedVMID
-  num Int Primary
+  num Int
   usedBy DeploymentInstanceDataId OnDeleteCascade OnUpdateCascade
-  UniqueNum
+  Primary num usedBy
   deriving Show
 UsedDisplay
   num Int
