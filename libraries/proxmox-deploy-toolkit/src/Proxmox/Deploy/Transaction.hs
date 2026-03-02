@@ -67,6 +67,7 @@ import           Proxmox.Models.VMClone
 import           Proxmox.Models.VMConfig
 import           Proxmox.Retry
 import           Proxmox.Schema                           (ProxmoxState (ProxmoxState))
+import           Servant.Client
 import           Servant.Client                           (parseBaseUrl)
 import           Utils
 
@@ -105,9 +106,11 @@ vmUnlocked (ProxmoxResponse { proxmoxData = Just ProxmoxVMConfig { vmLock = vmLo
 sdnNetworkExistsOrDeleted :: String -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
 sdnNetworkExistsOrDeleted vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isJust (sdnNetworkState x)) networks || all (\x -> sdnNetworkName x /= vnetName) networks
 
-sdnNetworkExists :: String -> Bool -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
-sdnNetworkExists vnetName True (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isJust (sdnNetworkState x)) networks
-sdnNetworkExists vnetName False (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isNothing (sdnNetworkState x)) networks
+sdnNetworkCreated :: String -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
+sdnNetworkCreated vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName && isNothing (sdnNetworkState x)) networks
+
+sdnNetworkDeclaredOrCreated :: String -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
+sdnNetworkDeclaredOrCreated vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName) networks
 
 -- looks up for transaction data and deploy config for vmid
 getVMID :: String -> TransactionData -> DeployConfig -> Maybe Int
@@ -517,10 +520,21 @@ executeTransactionAction (TransactionDelayAfter secondsPause action) = do
   () <- executeTransactionAction action
   (liftIO . threadDelay . (* 1_000_000)) secondsPause
 executeTransactionAction ApplySDNNetworks = applySDNWrapper
-executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = do
+executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = let
+  getAllSDNNetworks :: StatefulTransactionT (Either ClientError (ProxmoxResponse [ProxmoxSDNNetwork]))
+  getAllSDNNetworks = do
+    (TransactionState { .. }) <- get
+    pending <- defaultRetryClient' transactionProxmoxState $ getSDNNetworks (Just 1)
+    running <- defaultRetryClient' transactionProxmoxState $ getSDNNetworks Nothing
+    case (pending, running) of
+      (Right (ProxmoxResponse { proxmoxData = v1 }), Right (ProxmoxResponse { proxmoxData = v2 })) -> (pure . pure . flip ProxmoxResponse Nothing) (v1 <> v2)
+      (Left e, Left _) -> (pure . Left) e
+      (Right v, Left _) -> (pure . pure) v
+      (_, Right v) -> (pure . pure) v
+  in do
   (TransactionState { .. }) <- get
   bridgesResponse <- (defaultRetryClient' transactionProxmoxState) (getSDNNetworks Nothing) >>= defaultClientErrorWrapper
-  if sdnNetworkExists vnetName False bridgesResponse then
+  if sdnNetworkCreated vnetName bridgesResponse then
     $(logWarn) $ T.pack $ "SDN network " <> show vnetName <> " already exists"
   else do
     $(logInfo) $ T.pack $ "Creating SDN network " <> show vnetName
@@ -530,8 +544,8 @@ executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreat
       ("SDN network " <> (T.pack . show) vnetName <> " is not created. Waiting...")
       20
       1_000_000
-      (defaultRetryClient' transactionProxmoxState $ getSDNNetworks (Just 1))
-      (sdnNetworkExists vnetName True)
+      getAllSDNNetworks
+      (sdnNetworkDeclaredOrCreated vnetName)
     case bridgeResult of
       (Left e) -> throwError (ClientError e)
       (Right True) -> $(logInfo) $ T.pack $ "Created SDN network " <> show vnetName
@@ -539,7 +553,7 @@ executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreat
 executeTransactionAction (DestroySDNNetwork (ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = do
   (TransactionState { .. }) <- get
   bridgesResponse <- (defaultRetryClient' transactionProxmoxState) (getSDNNetworks Nothing) >>= defaultClientErrorWrapper
-  if not (sdnNetworkExists vnetName False bridgesResponse) then
+  if not (sdnNetworkCreated vnetName bridgesResponse) then
     $(logWarn) $ T.pack $ "SDN network " <> show vnetName <> " does not exists"
   else do
     $(logInfo) $ T.pack $ "Deleting SDN network " <> show vnetName
