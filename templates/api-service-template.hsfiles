@@ -709,7 +709,7 @@ import           System.IO
 
 main :: IO ()
 main = do
-  hSetBuffering stdout NoBuffering
+  hSetBuffering stdout LineBuffering
   mainF
 
 {-# START_FILE deployment/Dockerfile #-}
@@ -766,6 +766,7 @@ dependencies:
 - http-conduit == 2.3.8.1
 - http-types == 0.12.3
 - exceptions == 0.10.5
+- containers == 0.6.7
 - keycloak-api
 - api-common
 
@@ -837,6 +838,9 @@ import qualified Data.Text            as T
 import           Database
 import           Database.Persist
 import           Servant
+import           Servant.Client
+import           Models.JSONError
+import           Service.Environment
 
 type SampleAPI = "" :> Get '[JSON] Int
 
@@ -875,11 +879,11 @@ import           Config
 import           Control.Monad               (when)
 import           Control.Monad.Logger
 import           Data.ByteString.Char8       (ByteString)
+import           Data.Functor                ((<&>))
 import           Data.Pool                   (Pool)
 import           Data.Text                   (pack)
 import           Database
 import           Database.Persist.Postgresql
-import           Database.Persist.Sqlite
 import           Network.Wai.Handler.Warp
 import           Network.Wai.Logger
 import           Servant.Client
@@ -897,7 +901,8 @@ runCommand AppOpts { debugOn=debug, appCommand=MakeMigrations } = do
   pool <- createPool debug url
   runSqlPool doMigration pool
 runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = do
-  let logFunction = if debug then defaultLogF else filterLogF LevelInfo
+  debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
+  let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
   url <- runLoggingT requirePostgresString logFunction
   pool <- createPool debug url
   when runMigrate $ runSqlPool doMigration pool
@@ -906,15 +911,22 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     e <- getEnvironment
     flip runLoggingT logFunction $ $(logDebug) $ "Current environment: " <> (pack . show) e
 
+  -- redis <- redisConnectionFromEnv
+  -- when (isNothing redis) $ do
+  --   flip runLoggingT logFunction $ $(logError) "Failed to build Redis connection"
+  --   exitWith (ExitFailure 1)
+
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
 
+  let authEnv = mkClientEnv authManager authUrl
   let config = Config { serviceCredentials=creds
     , logFunction=logFunction
     , configDBPool=pool
     , authToken=tokenV
-    , authFunctions=genericTokenFunctions logFunction creds (mkClientEnv authManager authUrl)
+    , authFunctions=genericTokenFunctions logFunction creds authEnv
+    , authEnv = authEnv
     }
   let app' = app config
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
@@ -1057,6 +1069,7 @@ module Config
   , defaultLogF
   , filterLogF
   , runClientApp
+  , appToIO
   ) where
 
 import           Api.Keycloak.Token
@@ -1070,6 +1083,10 @@ import           Data.Text                   (Text)
 import           Database.Persist.Postgresql
 import           Servant
 import           Servant.Client
+import           Service.Environment
+
+appToIO :: AppT a -> Config -> IO (Either ServerError a)
+appToIO m cfg = (runHandler . flip runReaderT cfg . runApp) m
 
 type LogFunction = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 
@@ -1081,13 +1098,20 @@ instance MonadLogger AppT where
     f <- asks logFunction
     liftIO $ f loc src level (toLogStr msg)
 
+instance MonadLoggerIO AppT where
+  askLoggerIO = asks logFunction
+
 data Config = Config
   { configDBPool       :: !(Pool SqlBackend)
   , logFunction        :: !LogFunction
   , serviceCredentials :: !(Text, Text)
   , authToken          :: !(TokenVariable Text)
   , authFunctions      :: TokenVariableFunctions Text
+  , authEnv            :: !ClientEnv
   }
+
+instance ServiceEnvironment Config where
+  getEnvFor AuthService       = authEnv
 
 instance HasTokenVariable Config Text where
   getTokenVariable = authToken
