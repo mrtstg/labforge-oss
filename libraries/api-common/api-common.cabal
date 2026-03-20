@@ -50,6 +50,7 @@ library
       Service.Config
       Service.Environment
       Service.Ssl
+      Utils.Time
   other-modules:
       Paths_api_common
   autogen-modules:
