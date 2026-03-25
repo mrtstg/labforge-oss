@@ -110,12 +110,9 @@ $doctype 5
           <div .my-2.mx-5>
             <button .button.is-info.is-fullwidth @click="() => { notifications = [] }"> Очистить все
         <template x-for="(message, index) in notifications">
-          <div .my-2.mx-5>
+          <div .my-1.mx-3>
             <article .message>
-              <div .message-header>
-                <p> Уведомление
-                <button .delete aria-label=delete @click="deleteNotification(index)">
-              <div .message-body x-text=message>
+              <div .message-body.is-clickable x-text=message @click="deleteNotification(index)">
       ^{body}
   $case afterBody
     $of (Just afterHtml)
@@ -197,12 +194,9 @@ $doctype 5
           <div .my-2.mx-5>
             <button .button.is-info.is-fullwidth @click="() => { notifications = [] }"> Очистить все
         <template x-for="(message, index) in notifications">
-          <div .my-2.mx-5>
+          <div .my-1.mx-3>
             <article .message>
-              <div .message-header>
-                <p> Уведомление
-                <button .delete aria-label=delete @click="deleteNotification(index)">
-              <div .message-body x-text=message>
+              <div .message-body.is-clickable x-text=message @click="deleteNotification(index)">
       ^{body}
     <footer .class.mt-auto.p-3>
       <div .content.has-text-centered>
