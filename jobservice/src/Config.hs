@@ -66,6 +66,7 @@ data Config = Config
   , deploySDNZone      :: !Text
   , rabbitConnection   :: !R.Connection
   , maxDeployments     :: !Int
+  , notificationEnv    :: !ClientEnv
   }
 
 instance ServiceEnvironment Config where
@@ -73,6 +74,7 @@ instance ServiceEnvironment Config where
   getEnvFor DeploymentService = asks deploymentEnv
   getEnvFor JobserviceAPI     = asks jobserviceApiEnv
   getEnvFor ClusterManager    = asks clusterEnv
+  getEnvFor NotificationAPI   = asks notificationEnv
   getEnvFor _                 = error "Undefined environment"
 
 instance RedisConnection Config where

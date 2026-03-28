@@ -31,25 +31,26 @@ import qualified Data.Text                         as T
 import qualified Deployment.Client                 as D
 import           Deployment.Models.Deployment
 import           Handler.Utils
+import           Jobservice.Models
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Models.Transaction
 import           Proxmox.Models.Snapshot
 import           Service.Environment
 
-defaultErrorFallback :: Text  -> String -> AppT (Maybe a)
-defaultErrorFallback deploymentId err = do
+defaultErrorFallback :: JobserviceMessageMeta -> String -> AppT (Maybe a)
+defaultErrorFallback m@(JobserviceMessageMeta { .. }) err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
-  _ <- setDeploymentInstanceStatus deploymentId Failed
+  _ <- setDeploymentInstanceStatus m Failed
   pure Nothing
 
-jobserviceRollback :: Text -> Text -> Text -> AppT ()
-jobserviceRollback deploymentId snapName mask = do
+jobserviceRollback :: JobserviceMessageMeta -> Text -> Text -> AppT ()
+jobserviceRollback m@(JobserviceMessageMeta { .. }) snapName mask = do
   $(logInfo) $ "Rollback of instance " <> (T.pack . show) deploymentId
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
     defaultRetryClient deploymentEnv $ D.getDeploymentInstance deploymentId (BearerWrapper t)
-  instance' <- unpackError instance'' (defaultErrorFallback deploymentId)
+  instance' <- unpackError instance'' (defaultErrorFallback m)
   case instance' of
     Nothing -> pure ()
     (Just (DeploymentInstance { .. })) -> do
@@ -57,7 +58,7 @@ jobserviceRollback deploymentId snapName mask = do
         Nothing -> do
           $(logError) $ "Deployment config is not set!"
           -- logInstance "Deployment config is not set!"
-          _ <- setDeploymentInstanceStatus deploymentId Failed
+          _ <- setDeploymentInstanceStatus m Failed
           pure ()
         (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
           let vmNames = map (T.pack . configVMName) vms
@@ -65,21 +66,20 @@ jobserviceRollback deploymentId snapName mask = do
           _ <- deployTransaction (map (`VMRollbacked` T.unpack snapName) (filter filterF vms)) deploymentId deployConfig
           pure ()
 
-jobserviceSnapshot :: Text -> Text -> Bool -> Text -> Text -> AppT ()
-jobserviceSnapshot deploymentId snapName delete mask comment = do
+jobserviceSnapshot :: JobserviceMessageMeta -> Text -> Bool -> Text -> Text -> AppT ()
+jobserviceSnapshot m@(JobserviceMessageMeta { .. }) snapName delete mask comment = do
   $(logInfo) $ "Snapping instance " <> (T.pack . show) deploymentId
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
     defaultRetryClient deploymentEnv $ D.getDeploymentInstance deploymentId (BearerWrapper t)
-  instance' <- unpackError instance'' (defaultErrorFallback deploymentId)
+  instance' <- unpackError instance'' (defaultErrorFallback m)
   case instance' of
     Nothing -> pure ()
     (Just (DeploymentInstance { .. })) -> do
       case instanceDeployConfig of
         Nothing -> do
           $(logError) $ "Deployment config is not set!"
-          --logInstance "Deployment config is not set!"
-          _ <- setDeploymentInstanceStatus deploymentId Failed
+          _ <- setDeploymentInstanceStatus m Failed
           pure ()
         (Just deployConfig@(DeployConfig { deployVMs = vms })) -> do
           let vmNames = map (T.pack . configVMName) vms

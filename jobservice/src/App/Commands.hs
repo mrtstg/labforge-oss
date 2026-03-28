@@ -96,7 +96,7 @@ f deploymentsC (msg, env) = do
   case decodeRes of
     (Left e) -> do
       $(logError) $ "Decode error: " <> pack e
-    (Right (JobserviceUpdateUsedImages {})) -> do
+    (Right (JobserviceTask _ JobserviceUpdateUsedImages {})) -> do
       let lockKey = "image_usage_lock"
       v <- getValue' lockKey
       case v of
@@ -107,10 +107,10 @@ f deploymentsC (msg, env) = do
         (Just _) -> do
           $(logInfo) "Image task is locked. Skipping task."
           pure ()
-    (Right (JobserviceAllocateNode deploymentId)) -> do
+    (Right (JobserviceTask (Just meta@(JobserviceMessageMeta { deploymentUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
       genericFormattedLock msg "allocate_node_lock" True $ do
-        allocateNode (env, msg) deploymentId
-    (Right (JobserviceDeployInstance deploymentId)) -> do
+        allocateNode (env, msg) meta
+    (Right (JobserviceTask (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, deploymentUserId = Just _ }) JobserviceDeployInstance {})) -> do
       deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
       deploymentLimit <- asks maxDeployments
       if deploymentsInProgress >= deploymentLimit then do
@@ -123,10 +123,10 @@ f deploymentsC (msg, env) = do
             randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
             threadDelay (randomDelay + min 30 (5_000_000 * deploymentsInProgress))
           $(logInfo) $ "Deploying " <> deploymentId
-          deployInstance env deploymentId
+          deployInstance env meta
           (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
         pure ()
-    (Right (JobserviceDestroyInstance deploymentId)) -> do
+    (Right (JobserviceTask (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, deploymentUserId = Just _ }) JobserviceDestroyInstance {})) -> do
       _ <- genericDeploymentLock msg deploymentId True $ do
         deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
         deploymentLimit <- asks maxDeployments
@@ -139,19 +139,21 @@ f deploymentsC (msg, env) = do
             randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
             threadDelay randomDelay
           $(logInfo) $ "Destroying " <> deploymentId
-          destroyInstance env deploymentId
+          destroyInstance env meta
           (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
       pure ()
-    (Right (JobservicePower deploymentId powerOn mask)) -> do
+    (Right (JobserviceTask (Just m@(JobserviceMessageMeta { .. })) (JobservicePower powerOn mask))) -> do
       genericFormattedLock msg (jobserviceLockKey PowerLock deploymentId) False $ do
-        jobservicePower env deploymentId powerOn mask
-    (Right (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentId=deploymentId, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
+        jobservicePower m env powerOn mask
+    (Right (JobserviceTask (Just m@(JobserviceMessageMeta { .. })) JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
       genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
-        jobserviceSnapshot deploymentId snapName delete mask comment
-    (Right (JobserviceRollback {deploymentSnapshot=snapName, deploymentId=deploymentId, deploymentMask=mask})) -> do
+        jobserviceSnapshot m snapName delete mask comment
+    (Right (JobserviceTask (Just m@(JobserviceMessageMeta { .. })) JobserviceRollback {deploymentSnapshot=snapName, deploymentMask=mask})) -> do
       genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
-        jobserviceRollback deploymentId snapName mask
-  $(logDebug) $ "Finished message handle, acknowledging"
+        jobserviceRollback m snapName mask
+    (Right t) -> do
+      $(logError) $ T.pack $ "Invalid task format: " <> show t
+  $(logDebug) "Finished message handle, acknowledging"
   liftIO $ ackEnv env
 
 runCommand :: AppOpts -> IO ()
@@ -198,6 +200,7 @@ runCommand AppOpts { debugOn=debug } = let
   (depUrl, depManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
   (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
+  (notificationUrl, notificationManager) <- runLoggingT (requireServiceEnv "NOTIFICATION") logFunction
 
   threadsAmount <- runLoggingT (lookupEnvDefault "THREADS_AMOUNT" 4) logFunction
   concurrentDeployments <- runLoggingT (lookupEnvDefault "CONCURRENT_DEPLOYMENTS" 2) logFunction
@@ -219,6 +222,7 @@ runCommand AppOpts { debugOn=debug } = let
     , clusterEnv=mkClientEnv clusterManager clusterUrl
     , rabbitConnection=amqpConn
     , maxDeployments = concurrentDeployments
+    , notificationEnv = mkClientEnv notificationManager notificationUrl
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   activeDeploymentsCounter <- newTVarIO (0 :: Int)

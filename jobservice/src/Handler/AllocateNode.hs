@@ -25,11 +25,11 @@ import           Auth.Client
 import qualified Cluster.Client                           as C
 import           Cluster.Models.Node
 import           Config
+import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.List                                (nub)
 import qualified Data.Map                                 as M
 import           Data.Maybe
-import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import qualified Deployment.Client                        as D
 import           Deployment.Models.Deployment
@@ -37,33 +37,20 @@ import           Handler.Utils
 import qualified Jobservice.Client                        as J
 import           Jobservice.Models
 import           Network.AMQP
-import qualified Proxmox.Client                           as P
+import           Notification.Client
+import qualified Notification.Models                      as N
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Models.Config.DeployAgent
 import           Proxmox.Deploy.Models.Config.Network
-import           Proxmox.Deploy.Models.Config.Template
 import           Proxmox.Deploy.Models.Config.VM
-import           Proxmox.Deploy.Models.Transaction
-import           Proxmox.Deploy.Ssl
-import           Proxmox.Deploy.Transaction
-import           Proxmox.Deploy.Types
-import           Proxmox.Models
-import           Proxmox.Models.Network
-import           Proxmox.Models.Snapshot
-import           Proxmox.Models.Storage
---import           Proxmox.Retry
-import           Api.BaseUrl
-import           Control.Concurrent
-import           Control.Monad.Logger
-import           Proxmox.Schema
-import           Servant.Client
 import           Service.Environment
+import           Utils.Time
 
-defaultErrorFallback :: Text -> Envelope -> String -> AppT (Maybe a)
-defaultErrorFallback deploymentId env err = do
+defaultErrorFallback :: JobserviceMessageMeta -> Envelope -> String -> AppT (Maybe a)
+defaultErrorFallback m@(JobserviceMessageMeta {deploymentId=deploymentId}) env err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
-  _ <- setDeploymentInstanceStatus deploymentId Failed
+  _ <- setDeploymentInstanceStatus m Failed
   pure Nothing
 
 renameNet :: M.Map String String -> ConfigVM -> ConfigVM
@@ -74,9 +61,9 @@ renameNet namesMap vmData@(TemplatedConfigVM { configVMNetworks = Just nets }) =
     Nothing  -> d
     (Just v) -> d { configVMNetworkName = v }
 
-allocateNode :: (Envelope, Message) -> Text -> AppT ()
-allocateNode (env, msg) deploymentId = do
-  let errorF = defaultErrorFallback deploymentId env
+allocateNode :: (Envelope, Message) -> JobserviceMessageMeta -> AppT ()
+allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
+  let errorF = defaultErrorFallback m env
   deploymentEnv <- asks $ getEnvFor DeploymentService
   deployment'' <- withTokenVariable $ \token -> do
     defaultRetryClientC deploymentEnv (D.getDeploymentInstance deploymentId (BearerWrapper token))
@@ -170,10 +157,21 @@ allocateNode (env, msg) deploymentId = do
                                       }
                                     patchRes <- withTokenVariable $ \t ->
                                       defaultRetryClientC deploymentEnv (D.patchDeploymentInstance deploymentId patch (BearerWrapper t))
-                                    _ <- unpackError patchRes errorF
-                                    jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-                                    jobRes <- withTokenVariable $ \t ->
-                                      defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage (JobserviceDeployInstance deploymentId) (BearerWrapper t))
-                                    _ <- unpackError jobRes errorF
-                                    $(logInfo) $ "[" <> deploymentId <> "] Sent new deploy job"
-                                    pure ()
+                                    p <- unpackError patchRes errorF
+                                    case p of
+                                      Nothing -> pure ()
+                                      _ -> do
+                                        jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+                                        jobRes <- withTokenVariable $ \t ->
+                                          defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage (JobserviceTask (Just m) (JobserviceDeployInstance {})) (BearerWrapper t))
+                                        j <- unpackError jobRes errorF
+                                        case j of
+                                          Nothing -> pure ()
+                                          _ -> do
+                                            nEnv <- asks $ getEnvFor NotificationAPI
+                                            ts <- getUnixIntTime
+                                            _ <- withTokenVariable $ \token -> do
+                                              defaultRetrySClient nEnv $ postEventPayload (N.InstanceAllocated {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventGroup=deploymentGroup, eventDeployment=templateId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
+                                            $(logInfo) $ "[" <> deploymentId <> "] Sent new deploy job"
+                                            pure ()
+allocateNode _ _ = error "Invalid message"

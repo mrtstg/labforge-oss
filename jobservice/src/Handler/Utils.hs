@@ -13,6 +13,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TemplateHaskell   #-}
 module Handler.Utils
   ( setDeploymentInstanceStatus
@@ -34,11 +35,15 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import qualified Data.ByteString.Char8                    as BS
 import qualified Data.Map                                 as M
+import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
 import           Deployment.Client
 import qualified Deployment.Client                        as D
 import           Deployment.Models.Deployment
+import           Jobservice.Models
+import           Notification.Client
+import           Notification.Models
 import qualified Proxmox.Client                           as P
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
@@ -56,6 +61,7 @@ import           Proxmox.Models.Storage
 import           Proxmox.Schema
 import           Servant.Client
 import           Service.Environment
+import           Utils.Time
 
 createMaskFunction :: [Text] -> Text -> (ConfigVM -> Bool)
 createMaskFunction vmNames mask = flip elem maskList . T.pack . configVMName where
@@ -146,10 +152,13 @@ sendLogRequest deploymentId cfg loc src lvl msg = appTIO f cfg where
         defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentId str (BearerWrapper token)
       pure ()
 
-setDeploymentInstanceStatus :: Text -> DeploymentStatus -> AppT (Either String ())
-setDeploymentInstanceStatus dId status = do
+setDeploymentInstanceStatus :: JobserviceMessageMeta -> DeploymentStatus -> AppT (Either String ())
+setDeploymentInstanceStatus (JobserviceMessageMeta { deploymentId = dId, Jobservice.Models.templateId = tId, .. }) status = do
   deploymentEnv <- asks $ getEnvFor DeploymentService
+  nEnv <- asks $ getEnvFor NotificationAPI
+  ts <- getUnixIntTime
   res <- withTokenVariable $ \token -> do
+    _ <- defaultRetrySClient nEnv $ postEventPayload (InstanceStatus {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventStatus=Failed, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
     defaultRetryClient deploymentEnv (patchDeploymentInstance dId
       (DeploymentPatch {patchInstanceVMLinks=Nothing, patchInstanceState=Just status, patchInstanceNetworkMap=Nothing, patchInstanceDeployConfig=Nothing}) (BearerWrapper token))
   case res of

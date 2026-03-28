@@ -30,6 +30,7 @@ import qualified Data.Text                           as T
 import qualified Deployment.Client                   as D
 import           Deployment.Models.Deployment
 import           Handler.Utils
+import           Jobservice.Models
 import           Network.AMQP
 import qualified Proxmox.Client                      as P
 import           Proxmox.Deploy.Models.Config
@@ -46,15 +47,15 @@ import qualified Proxmox.Retry                       as R
 import           Proxmox.Schema
 import           Service.Environment
 
-defaultErrorFallback :: Text -> Envelope -> String -> AppT (Maybe a)
-defaultErrorFallback deploymentId env err = do
+defaultErrorFallback :: JobserviceMessageMeta -> Envelope -> String -> AppT (Maybe a)
+defaultErrorFallback m@(JobserviceMessageMeta { .. }) env err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
-  _ <- setDeploymentInstanceStatus deploymentId Failed
+  _ <- setDeploymentInstanceStatus m Failed
   pure Nothing
 
-jobservicePower :: Envelope -> Text -> Bool -> Text -> AppT ()
-jobservicePower env deploymentId powerOn mask = do
-  let errorF = defaultErrorFallback deploymentId env
+jobservicePower :: JobserviceMessageMeta -> Envelope -> Bool -> Text -> AppT ()
+jobservicePower m@(JobserviceMessageMeta { .. }) env powerOn mask = do
+  let errorF = defaultErrorFallback m env
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
     defaultRetryClient deploymentEnv $ D.getDeploymentInstance deploymentId (BearerWrapper t)

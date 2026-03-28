@@ -93,7 +93,7 @@ fillUsedTemplatesMap acc (template:templates) = let
   f imageName m = do
     case M.lookup imageName acc of
       Nothing -> acc
-      (Just v) -> M.insert imageName (JobserviceImageUsageData {usedImageDeploymentUserName="", usedImageDeploymentUserId=templateOwner template, usedImageDeploymentName=templateTitle template, usedImageDeploymentId=templateId template}:v) m
+      (Just v) -> M.insert imageName (JobserviceImageUsageData {usedImageDeploymentUserName="", usedImageDeploymentUserId=templateOwner template, usedImageDeploymentName=templateTitle template, usedImageDeploymentId=Deployment.Models.Deployment.templateId template}:v) m
   in do
   let images = map configVMParentTemplate . filter isTemplateVM $ templateVMs template
   let nmap = foldr f acc images

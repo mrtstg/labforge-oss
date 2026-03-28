@@ -21,6 +21,7 @@ import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.User
 import           Api.Keycloak.Token
+import           Api.Keycloak.Utils
 import           Api.Retry
 import           Auth.Client
 import qualified Cluster.Client                           as C
@@ -40,6 +41,8 @@ import           Handler.Utils
 import qualified Jobservice.Client                        as J
 import           Jobservice.Models
 import           Network.AMQP
+import           Notification.Client
+import qualified Notification.Models                      as N
 import qualified Proxmox.Client                           as P
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
@@ -58,6 +61,7 @@ import           Proxmox.Models.Storage
 import           Proxmox.Schema
 import           Servant.Client
 import           Service.Environment
+import           Utils.Time
 
 -- TODO: remove double with deployment API
 leaveLastItem :: (Eq a) => a -> [a] -> [a]
@@ -68,21 +72,20 @@ leaveLastItem item = helper [] where
 hasItem :: (Eq a) => a -> [a] -> Bool
 hasItem item = foldr (\ el -> (||) (item == el)) False
 
-defaultErrorFallback :: Text -> Envelope -> String -> AppT (Maybe a)
-defaultErrorFallback deploymentId env err = do
+defaultErrorFallback :: JobserviceMessageMeta -> Envelope -> String -> AppT (Maybe a)
+defaultErrorFallback m@(JobserviceMessageMeta {deploymentId=deploymentId}) env err = do
   $(logError) $ "[" <> deploymentId <> "]" <> T.pack err
-  _ <- setDeploymentInstanceStatus deploymentId Failed
+  _ <- setDeploymentInstanceStatus m Failed
   pure Nothing
 
-generateAndDeployTransaction :: DeployTarget -> Text -> DeployConfig -> AppT Bool
-generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { deployParameters = DeployParams {deployUrl=deployUrl, deployNodeName=nodeName} }) = do
+generateAndDeployTransaction :: DeployTarget -> JobserviceMessageMeta -> DeployConfig -> AppT Bool
+generateAndDeployTransaction target taskMeta@(JobserviceMessageMeta { deploymentId=deploymentKey }) deployConfig@(DeployConfig { deployParameters = DeployParams {deployUrl=deployUrl, deployNodeName=nodeName} }) = do
   cfg <- ask
   parseRes <- liftIO $ tryParseUrl (T.unpack deployUrl)
   case parseRes of
     (Left e) -> do
       $(logError) $ "Failed to parse URL: " <> T.pack e
-      -- addLogToDeploymentInstance deploymentKey $ "Failed to parse URL: " <> pack e
-      _ <- setDeploymentInstanceStatus deploymentKey Failed
+      _ <- setDeploymentInstanceStatus taskMeta Failed
       pure False
     (Right url) -> do
       deploymentEnv <- asks $ getEnvFor DeploymentService
@@ -110,8 +113,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
           $(logError) $ "Failed to get PVE data: " <> (T.pack . show) e
           _ <- withTokenVariable $ \token -> do
             defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentKey ("Не удалось получить данные от Proxmox: " <> (T.pack . show) e) (BearerWrapper token)
-          --addLogToDeploymentInstance deploymentKey $ "Failed to get PVE data: " <> (pack . show) e
-          _ <- setDeploymentInstanceStatus deploymentKey Failed
+          _ <- setDeploymentInstanceStatus taskMeta Failed
           pure False
         (Right (a, b, c, d, e)) -> do
           planRes <- liftIO $ planTransactionActions stages a b c d e planState
@@ -121,7 +123,7 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
               $(logError) errorText
               _ <- withTokenVariable $ \token -> do
                 defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentKey errorText (BearerWrapper token)
-              _ <- setDeploymentInstanceStatus deploymentKey Failed
+              _ <- setDeploymentInstanceStatus taskMeta Failed
               pure False
             (Right actions) -> do
               let cleanedActions = leaveLastItem ApplySDNNetworks actions
@@ -133,15 +135,15 @@ generateAndDeployTransaction target deploymentKey deployConfig@(DeployConfig { d
                   $(logError) errorText
                   _ <- withTokenVariable $ \token -> do
                     defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentKey errorText (BearerWrapper token)
-                  _ <- setDeploymentInstanceStatus deploymentKey Failed
+                  _ <- setDeploymentInstanceStatus taskMeta Failed
                   pure False
                 (Right _) -> do
-                  setDeploymentInstanceStatus deploymentKey (if target == Deploy then Deployed else Created)
+                  setDeploymentInstanceStatus taskMeta (if target == Deploy then Deployed else Created)
                   pure True
 
-deployInstance :: Envelope -> Text -> AppT ()
-deployInstance env deploymentId = do
-  let errorF = defaultErrorFallback deploymentId env
+deployInstance :: Envelope -> JobserviceMessageMeta -> AppT ()
+deployInstance env m@(JobserviceMessageMeta {deploymentId=deploymentId, templateId = tId, ..}) = do
+  let errorF = defaultErrorFallback m env
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
     defaultRetryClient deploymentEnv $ D.getDeploymentInstance deploymentId (BearerWrapper t)
@@ -149,21 +151,27 @@ deployInstance env deploymentId = do
   case instance' of
     Nothing -> pure ()
     (Just (DeploymentInstance { .. })) -> do
-      when (instanceState `notElem` [Deployed, Deploying, Destroying]) $ do
-        _ <- setDeploymentInstanceStatus deploymentId Deploying
+      if instanceState `notElem` [Deployed, Deploying, Destroying] then do
+        _ <- setDeploymentInstanceStatus m Deploying
         case instanceDeployConfig of
           Nothing -> do
-            -- #TODO: log
-            _ <- setDeploymentInstanceStatus deploymentId Created
+            --_ <- setDeploymentInstanceStatus m Created
             errorF "Deployment config is not set"
             pure ()
           (Just deployConfig) -> do
-            _ <- generateAndDeployTransaction Deploy deploymentId deployConfig
+            _ <- generateAndDeployTransaction Deploy m deployConfig
             pure ()
+      else do
+        nEnv <- asks $ getEnvFor NotificationAPI
+        ts <- getUnixIntTime
+        _ <- withTokenVariable $ \token -> do
+          defaultRetrySClient nEnv $ postEventPayload (N.InstanceStatus {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventStatus=instanceState, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
+        pure ()
+deployInstance _ _ = error "Invalid message"
 
-destroyInstance :: Envelope -> Text -> AppT ()
-destroyInstance env deploymentId = do
-  let errorF = defaultErrorFallback deploymentId env
+destroyInstance :: Envelope -> JobserviceMessageMeta -> AppT ()
+destroyInstance env m@(JobserviceMessageMeta {deploymentId=deploymentId, templateId = tId, .. }) = do
+  let errorF = defaultErrorFallback m env
   deploymentEnv <- asks $ getEnvFor DeploymentService
   instance'' <- withTokenVariable $ \t -> do
     defaultRetryClient deploymentEnv $ D.getDeploymentInstance deploymentId (BearerWrapper t)
@@ -171,19 +179,30 @@ destroyInstance env deploymentId = do
   case instance' of
     Nothing -> pure ()
     (Just (DeploymentInstance { .. })) -> do
-      _ <- setDeploymentInstanceStatus deploymentId Destroying
+      _ <- setDeploymentInstanceStatus m Destroying
       case instanceDeployConfig of
         Nothing -> do
           -- #TODO: log
-          _ <- setDeploymentInstanceStatus deploymentId Created
-          errorF "Deployment config is not set"
+          --_ <- setDeploymentInstanceStatus m Created
+          --errorF "Deployment config is not set"
           deleteRes <- withTokenVariable $ \t -> do
             defaultRetryClient deploymentEnv $ D.deleteDeploymentInstance deploymentId (BearerWrapper t)
-          _ <- unpackError deleteRes errorF
-          pure ()
+          d <- unpackError deleteRes errorF
+          case d of
+            Nothing -> pure ()
+            (Just _) -> do
+              nEnv <- asks $ getEnvFor NotificationAPI
+              ts <- getUnixIntTime
+              _ <- withTokenVariable $ \token -> do
+                defaultRetrySClient nEnv $ postEventPayload (N.InstanceDeleted {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
+              pure ()
         (Just deployConfig) -> do
-          deployed <- generateAndDeployTransaction Destroy deploymentId deployConfig
+          deployed <- generateAndDeployTransaction Destroy m deployConfig
           when deployed $ do
+            nEnv <- asks $ getEnvFor NotificationAPI
+            ts <- getUnixIntTime
+            _ <- withTokenVariable $ \token -> do
+              defaultRetrySClient nEnv $ postEventPayload (N.InstanceDeleted {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
             deleteRes <- withTokenVariable $ \t -> do
               defaultRetryClient deploymentEnv $ D.deleteDeploymentInstance deploymentId (BearerWrapper t)
             _ <- unpackError deleteRes errorF
