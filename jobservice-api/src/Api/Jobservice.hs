@@ -53,7 +53,7 @@ isDeploymentLocked deploymentId specifiedKey (BearerWrapper token) = do
   let lockKey = T.unpack $ jobserviceLockKey specifiedKey deploymentId
   getValue' lockKey <&> isJust
 
-sendMessage :: JobserviceMessage -> BearerWrapper -> AppT ()
+sendMessage :: JobserviceTask -> BearerWrapper -> AppT ()
 sendMessage msgPayload (BearerWrapper token) = do
   _ <- requireRealmRoles token ["jobservice-send"]
   -- TODO: future validation

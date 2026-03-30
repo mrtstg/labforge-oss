@@ -70,7 +70,7 @@ f cfg = forever $ do
         $(logInfo) "Creating images request"
         r <- asks rabbitConnection
         chan <- liftIO $ openChannel r
-        let msg = newMsg { msgBody = encode JobserviceUpdateUsedImages {}, msgDeliveryMode = Just NonPersistent }
+        let msg = newMsg { msgBody = encode (JobserviceTask Nothing JobserviceUpdateUsedImages {}), msgDeliveryMode = Just NonPersistent }
         _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
         liftIO $ closeChannel chan
         liftIO $ threadDelay (5 * 60_000_000)
