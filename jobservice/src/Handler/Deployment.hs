@@ -138,7 +138,9 @@ generateAndDeployTransaction target taskMeta@(JobserviceMessageMeta { deployment
                   _ <- setDeploymentInstanceStatus taskMeta Failed
                   pure False
                 (Right _) -> do
-                  setDeploymentInstanceStatus taskMeta (if target == Deploy then Deployed else Created)
+                  when (target == Deploy) $ do
+                    _ <- setDeploymentInstanceStatus taskMeta Deployed
+                    pure ()
                   pure True
 
 deployInstance :: Envelope -> JobserviceMessageMeta -> AppT ()
