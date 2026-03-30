@@ -210,7 +210,7 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
         })
       jobEnv <- asks $ getEnvFor JobserviceAPI
-      _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
+      _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceTask Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t))
       pure ()
 
 getDeploymentTemplate :: Int -> BearerWrapper -> AppT DeploymentTemplate
@@ -252,7 +252,7 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
           runDB $ deleteWhere [ DeploymentTemplateHideDeployment ==. templateKey ]
           runDB $ delete templateKey
           jobEnv <- asks $ getEnvFor JobserviceAPI
-          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
+          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceTask Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t))
           pure ()
 
 patchDeploymentTemplate :: Int -> DeploymentCreate -> BearerWrapper -> AppT ()
@@ -274,7 +274,7 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
           , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
           ]
         jobEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceUpdateUsedImages {}) (BearerWrapper t))
+        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceTask Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t))
         pure ()
 
 requestDeploymentVMID :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
@@ -431,7 +431,7 @@ requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper toke
 
 callGroupDeployment :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDeployment tID groupName (BearerWrapper token) = do
-  t <- requireToken token
+  ~t@(ActiveToken { .. }) <- requireToken token
   case groupName of
     Nothing -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just "") -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
@@ -449,29 +449,30 @@ callGroupDeployment tID groupName (BearerWrapper token) = do
             (Left _)  -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
             (Right _) -> do
               $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
-              putTask tasksPool (GroupDeployment tID group)
+              putTask tasksPool (GroupDeployment tID group tokenUUID)
               pure ()
 
 callInstanceSnapshot :: Text -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
 callInstanceSnapshot _ (Just "") _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 callInstanceSnapshot _ Nothing _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
 callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (BearerWrapper token) = do
-  t <- requireToken token
+  ~t@ActiveToken { .. } <- requireToken token
   d <- runDB $ get (DeploymentInstanceDataKey instanceKey)
   case d of
     Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
-    (Just (DeploymentInstanceData { .. })) -> do
+    (Just (DeploymentInstanceData { deploymentInstanceDataParent = deploymentInstanceDataParent, .. })) -> do
       isOperator <- isDeploymentTemplateOperator t deploymentInstanceDataParent
       if not isOperator then sendJSONError err403 (JSONError "notOwner" "You're not operator of template!" Null)
       else do
         if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
           jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-          let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage m (BearerWrapper t)
+          let meta = JobserviceMessageMeta {deploymentAuthorId=tokenUUID, deploymentGroup=Nothing, deploymentUserId=Just deploymentInstanceDataOwnerId, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}
+          let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just meta) m) (BearerWrapper t)
           withTokenVariable'' $ \t -> do
             case (doDelete, doRollback) of
-              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentId=instanceKey, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
-              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentId=instanceKey,deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
-              (False, True) -> taskF t (JobserviceRollback instanceKey snapName $ fromMaybe "*" mask')
+              (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
+              (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
+              (False, True) -> taskF t (JobserviceRollback snapName $ fromMaybe "*" mask')
 
 callGroupSnapshot :: Int -> Maybe Text -> Maybe Text -> Maybe Text -> Bool -> Bool -> BearerWrapper -> AppT ()
 callGroupSnapshot _ (Just "") _ _ _ _ _ = sendJSONError err400 (JSONError "badRequest" "Snapshot or group is not specified" Null)
@@ -517,7 +518,7 @@ switchTemplateVisibility templateId (Just group) (BearerWrapper token) = do
 -- TODO: unify with function upper
 callGroupDestroy :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDestroy tID groupName (BearerWrapper token) = do
-  t <- requireToken token
+  ~t@(ActiveToken { .. }) <- requireToken token
   case groupName of
     Nothing -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just "") -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
@@ -535,7 +536,7 @@ callGroupDestroy tID groupName (BearerWrapper token) = do
             (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
             (Right _) -> do
               $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
-              putTask tasksPool (GroupDestroy tID group)
+              putTask tasksPool (GroupDestroy tID group tokenUUID)
               pure ()
 
 callGroupPower :: Int -> Maybe Text -> Maybe Text -> Bool -> BearerWrapper -> AppT ()
@@ -566,7 +567,7 @@ deploymentInstanceKey e = deploymentInstanceDataOwnerId e <> "-" <>
 
 callInstanceDestroy :: Text -> BearerWrapper -> AppT ()
 callInstanceDestroy instanceKey (BearerWrapper token) = do
-  t <- requireToken token
+  ~t@ActiveToken { .. } <- requireToken token
   d <- runDB $ get (DeploymentInstanceDataKey instanceKey)
   case d of
     Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
@@ -575,7 +576,7 @@ callInstanceDestroy instanceKey (BearerWrapper token) = do
       if not isAdministrator then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceDestroyInstance instanceKey) (BearerWrapper t))
+        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}) (JobserviceDestroyInstance {})) (BearerWrapper t))
         pure ()
 
 generateGroupDeploymentFilter :: Maybe Text -> AppT [Filter DeploymentInstanceData]
@@ -949,8 +950,9 @@ takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
       withTokenVariable'' $ \t' -> do
         locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
         when (isLeft locked || locked == Right True) $ deploymentLockedResponse
+        let meta = JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
-          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else "")) (BearerWrapper t')
+          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
 
 deleteVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 deleteVMPortSnapshot _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -972,8 +974,9 @@ deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
       withTokenVariable'' $ \t' -> do
         locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
         when (isLeft locked || locked == Right True) deploymentLockedResponse
+        let meta = JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
-          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceSnapshot dId snapName True (T.pack $ configVMName vmData) "") (BearerWrapper t')
+          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
 
 rollbackVMPort :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 rollbackVMPort _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -997,7 +1000,8 @@ rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
                   locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
                   when (isLeft locked || locked == Right True) deploymentLockedResponse
                   redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
-                    defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceRollback dId snapName (T.pack $ configVMName vmData)) (BearerWrapper t')
+                    let meta = JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
+                    defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
 
 deploymentServer :: ServerT DeploymentAPI AppT
 deploymentServer = getPagedTemplates

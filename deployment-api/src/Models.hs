@@ -16,8 +16,8 @@ module Models (QueryRequest(..)) where
 
 import           Data.Text
 
-data QueryRequest = GroupDeployment Int Text
-  | GroupDestroy Int Text
+data QueryRequest = GroupDeployment Int Text (Maybe Text)
+  | GroupDestroy Int Text (Maybe Text)
   | GroupPower Int Text Bool Text
   | GroupMakeSnapshot Int Text Text Text
   | GroupDeleteSnapshot Int Text Text Text

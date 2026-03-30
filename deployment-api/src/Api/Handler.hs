@@ -12,60 +12,82 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TemplateHaskell    #-}
 module Api.Handler (handleTask) where
 
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.User
 import           Api.Keycloak.Token
 import           Api.Keycloak.Utils
+import           Api.Retry
 import           Auth.Client
 import           Config
 import           Control.Concurrent.STM
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import qualified Data.Map                     as M
+import           Data.Maybe
 import           Data.Text                    (Text, pack, unpack)
+import qualified Data.Text                    as T
 import           Database
 import           Database.Persist
+import           Database.Persist.Postgresql  (fromSqlKey)
 import           Deployment.Models.Deployment
 import qualified Jobservice.Client            as J
 import           Jobservice.Models
 import           Models
-import           Proxmox.Retry
+import           Notification.Client
+import qualified Notification.Models          as N
 import           Service.Environment
+import           System.Random
+import           Utils.Time
 
+generateGroupKey :: (MonadIO m) => Int -> Maybe Text -> Maybe Int -> m Text
+generateGroupKey tID authorID ts' = do
+  ts <- maybe getUnixIntTime pure ts'
+  uid <- randomRIO (1_000_000 :: Int, 9_999_999)
+  pure $ T.pack (show tID <> "-" <> show ts <> "-" <> show uid <> "-") <> fromMaybe "none" authorID
 
 handleTask :: TQueue QueryRequest -> QueryRequest -> AppT ()
-handleTask _ (GroupDeployment tID groupName) = do
+handleTask _ (GroupDeployment tID groupName authorID) = do
   $(logDebug) $ "Creating group deployment for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
   case groupMembersResp of
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
+      ts <- getUnixIntTime
+      groupKey <- generateGroupKey tID authorID (Just ts)
+      nEnv <- asks $ getEnvFor NotificationAPI
+      _ <- withTokenVariable' $ \t -> defaultRetrySClient nEnv $ postEventPayload (N.GroupAction {eventTimestamp=ts, eventTargetAmount=length users, eventGroupType=N.GroupDeployment, eventGroup=Just groupKey, eventDeployment=tID, eventAuthor=authorID}) (BearerWrapper t)
       let usersId = map userID users
-      existingDeployments <- runDB $ selectKeysList [
+      existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState ==. Created,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceDeployInstance t) (BearerWrapper token)) existingDeployments
-      newDeployments <- createMissingDeployments (DeploymentTemplateDataKey $ fromIntegral tID) tID users
-      mapM_ (\t -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv (J.insertJobserviceMessage (JobserviceAllocateNode t) (BearerWrapper token))) newDeployments
-handleTask _ (GroupDestroy tID groupName) = do
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDeployInstance {})) (BearerWrapper token)) existingDeployments
+      newDeploymentsKeys <- createMissingDeployments (DeploymentTemplateDataKey $ fromIntegral tID) tID (Just groupKey) authorID users
+      newDeployments <- runDB $ selectList [ DeploymentInstanceDataId <-. map DeploymentInstanceDataKey newDeploymentsKeys ] []
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceAllocateNode {})) (BearerWrapper token)) newDeployments
+handleTask _ (GroupDestroy tID groupName authorID) = do
   $(logDebug) $ "Creating group destroy for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
   case groupMembersResp of
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
+      ts <- getUnixIntTime
+      groupKey <- generateGroupKey tID authorID (Just ts)
+      nEnv <- asks $ getEnvFor NotificationAPI
+      _ <- withTokenVariable' $ \t -> defaultRetrySClient nEnv $ postEventPayload (N.GroupAction {eventTimestamp=ts, eventTargetAmount=length users, eventGroupType=N.GroupDestroy, eventGroup=Just groupKey, eventDeployment=tID, eventAuthor=authorID}) (BearerWrapper t)
       let usersId = map userID users
-      existingDeployments <- runDB $ selectKeysList [
+      existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState !=. Destroying,
@@ -73,7 +95,7 @@ handleTask _ (GroupDestroy tID groupName) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceDestroyInstance t) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDeployInstance {})) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupRollback tID groupName snapName mask) = do
   $(logDebug) $ "Creating group rollback for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
@@ -82,14 +104,14 @@ handleTask _ (GroupRollback tID groupName snapName mask) = do
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
       let usersId = map userID users
-      existingDeployments <- runDB $ selectKeysList [
+      existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState ==. Deployed,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceRollback t snapName mask) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceRollback snapName mask)) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupMakeSnapshot tID groupName snapName mask) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -97,14 +119,14 @@ handleTask _ (GroupMakeSnapshot tID groupName snapName mask) = do
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
       let usersId = map userID users
-      existingDeployments <- runDB $ selectKeysList [
+      existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState ==. Deployed,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceSnapshot t snapName False mask "") (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceSnapshot snapName False mask "")) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupDeleteSnapshot tID groupName snapName mask) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -112,14 +134,14 @@ handleTask _ (GroupDeleteSnapshot tID groupName snapName mask) = do
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
       let usersId = map userID users
-      existingDeployments <- runDB $ selectKeysList [
+      existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState ==. Deployed,
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceSnapshot t snapName True mask "") (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceSnapshot snapName True mask "")) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupPower tID groupName powerOn mask) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -127,7 +149,7 @@ handleTask _ (GroupPower tID groupName powerOn mask) = do
     (Left e) -> $(logError) $ "Group members request error: " <> (pack . show) e
     (Right users) -> do
       let usersId = map userID users
-      existingDeployments <- runDB $ selectKeysList [
+      existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState !=. Created,
@@ -136,13 +158,13 @@ handleTask _ (GroupPower tID groupName powerOn mask) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(DeploymentInstanceDataKey t) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobservicePower t powerOn mask) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobservicePower powerOn mask)) (BearerWrapper token)) existingDeployments
 handleTask _ r = do
   $(logInfo) $ (pack . show) r
   pure ()
 
-createMissingDeployments :: Key DeploymentTemplateData -> Int -> [BriefUser] -> AppT [Text]
-createMissingDeployments tID tIDnum = helper [] where
+createMissingDeployments :: Key DeploymentTemplateData -> Int -> Maybe Text -> Maybe Text -> [BriefUser] -> AppT [Text]
+createMissingDeployments tID tIDnum groupKey authorID = helper [] where
   helper :: [Text] -> [BriefUser] -> AppT [Text]
   helper acc [] = pure acc
   helper acc (BriefUser { .. }:users) = do
@@ -158,4 +180,7 @@ createMissingDeployments tID tIDnum = helper [] where
         , deploymentInstanceDataDeployConfig=Nothing
         }
       _ <- runDB $ insertKey (DeploymentInstanceDataKey key) instanceEntity
+      ts <- getUnixIntTime
+      nEnv <- asks $ getEnvFor NotificationAPI
+      _ <- withTokenVariable' $ \t -> defaultRetrySClient nEnv $ postEventPayload (N.InstanceCreated {eventTargetUser=userID, eventAuthor=authorID, eventDeployment=tIDnum, eventGroup=groupKey, eventTimestamp=ts}) (BearerWrapper t)
       helper (key:acc) users

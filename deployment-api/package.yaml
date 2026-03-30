@@ -40,6 +40,7 @@ dependencies:
 - containers == 0.6.7
 - stm == 2.5.1.0
 - hedis == 0.15.2
+- deepseq == 1.4.8.0
 - random == 1.2.1.1
 - redis-utils
 - keycloak-api
