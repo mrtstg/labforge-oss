@@ -158,7 +158,7 @@ setDeploymentInstanceStatus (JobserviceMessageMeta { deploymentId = dId, Jobserv
   nEnv <- asks $ getEnvFor NotificationAPI
   ts <- getUnixIntTime
   res <- withTokenVariable $ \token -> do
-    _ <- defaultRetrySClient nEnv $ postEventPayload (InstanceStatus {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventStatus=Failed, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
+    _ <- defaultRetrySClient nEnv $ postEventPayload (InstanceStatus {eventTimestamp=ts, eventTargetUser=fromMaybe "" deploymentUserId, eventStatus=status, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
     defaultRetryClient deploymentEnv (patchDeploymentInstance dId
       (DeploymentPatch {patchInstanceVMLinks=Nothing, patchInstanceState=Just status, patchInstanceNetworkMap=Nothing, patchInstanceDeployConfig=Nothing}) (BearerWrapper token))
   case res of
