@@ -12,10 +12,17 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses>. -}
-module Utils.Time (getUnixIntTime) where
+module Utils.Time
+  ( getUnixIntTime
+  , getUnixIntTimeMs
+  ) where
 
 import           Control.Monad.IO.Class
+import           Data.Functor           ((<&>))
 import           Data.Time.Clock.POSIX
+
+getUnixIntTimeMs :: (MonadIO m) => m Int
+getUnixIntTimeMs = liftIO getPOSIXTime <&> (floor . (* 1000))
 
 getUnixIntTime :: (MonadIO m) => m Int
 getUnixIntTime = do
