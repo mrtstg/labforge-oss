@@ -27,6 +27,8 @@ import           Models.JSONError
 import           Servant.Client
 import           Servant.Server
 import           Service.Environment
+import           Utils.Time
+import           Web.JWT
 
 lookupToken :: (MonadIO m, MonadLogger m, HasTokenVariable s Text, ServiceEnvironment s, MonadReader s m, MonadError ServerError m) => Text -> m I.IntrospectResponse
 lookupToken token = do
@@ -58,12 +60,17 @@ genericTokenFunctions logF (cID, cSecret) env = TokenFunctions
     , tokenIssueF=runLoggingT issue logF } where
   validate :: (MonadIO m, MonadLogger m) => Text -> m Bool
   validate token = do
-    r <- (liftIO . flip runClientM env) $ getTokenCapabilities (BearerWrapper token)
-    case r of
-      (Left e) -> do
-        $(logDebug) $ pack $ "Failed to validate token: " <> show e
-        return False
-      (Right _) -> return True
+    let tokenTime = fmap (fmap (floor . secondsSinceEpoch) . Web.JWT.exp . claims) . Web.JWT.decode $ token
+    case tokenTime of
+      Nothing -> do
+        $(logWarn) "Failed to decode service token"
+        pure False
+      (Just Nothing) -> do
+        $(logWarn) "Issued service token has no exp attribute"
+        pure False
+      (Just (Just expTime)) -> do
+        currentTime <- getUnixIntTime
+        return $ expTime > currentTime + 30
   issue :: (MonadIO m, MonadLogger m) => m (Either String Text)
   issue = do
     r <- (liftIO . flip runClientM env) $ postGrantRequest (ClientCredentialsRequest {reqClientSecret=cSecret, reqClientID=cID})

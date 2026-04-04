@@ -1,5 +1,5 @@
 name:                api-common
-version:             0.1.8.2
+version:             0.1.9.0
 github:              "learnew2/api-common"
 license:             BSD-3-Clause
 author:              "Ilya Zamaratskikh"
@@ -29,6 +29,11 @@ dependencies:
 - connection == 0.3.1
 - network == 3.1.4.0
 - containers == 0.6.7
+- time == 1.12.2
+- http-media == 0.8.1.1
+- servant-conduit == 0.15.1
+- deepseq == 1.4.8.0
+- jwt == 0.11.0
 - keycloak-api
 - proxmox-api
 - proxmox-deploy-toolkit
