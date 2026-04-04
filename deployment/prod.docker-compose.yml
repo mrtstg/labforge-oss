@@ -110,6 +110,17 @@ services:
       - ../jobservice-api.env
     depends_on:
       - rabbitmq
+  notification-api:
+    profiles: ['app']
+    image: notification-api
+    container_name: labforge-notification-api
+    hostname: notification-api
+    restart: unless-stopped
+    env_file:
+      - ../docker.env
+      - ../notification.env
+    depends_on:
+      - rabbitmq
   kroki:
     profiles: ['app']
     image: yuzutech/kroki
@@ -153,7 +164,7 @@ services:
     restart: unless-stopped
   cadvisor:
     profiles: ['app']
-    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: labforge-cadvisor
     hostname: cadvisor
     privileged: true
