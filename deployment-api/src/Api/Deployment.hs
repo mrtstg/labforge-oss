@@ -35,6 +35,7 @@ import           Auth.Token
 import           Cluster.Client
 import           Cluster.Models.Node
 import           Config
+import           Control.Concurrent                       (threadDelay)
 import           Control.Monad                            (unless, when)
 import           Control.Monad.Logger
 import           Control.Monad.Reader
@@ -286,8 +287,9 @@ requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) 
     helper acc (n:ns) | length acc /= amount = do
       idHold <- runDB $ exists [ UsedVMIDNum ==. n ]
       if idHold then helper acc ns else do
-        _ <- runDB $ insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})
-        helper (n:acc) ns
+        redisLockWrapper "global_vmid_lock" 3 (liftIO (threadDelay 1000000) >> helper acc (n:ns)) $ do
+          _ <- runDB $ insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})
+          helper (n:acc) ns
                       | otherwise = (pure . pure) acc
   in do
   when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
@@ -332,8 +334,9 @@ requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper tok
                         | otherwise = do
         nameHold <- runDB $ exists [ UsedBridgesName ==. T.pack n ]
         if nameHold then helper acc ns else do
-          _ <- runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n})
-          helper (n:acc) ns
+          redisLockWrapper "global_network_lock" 3 (liftIO (threadDelay 1000000) >> helper acc (n:ns)) $ do
+            _ <- runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n})
+            helper (n:acc) ns
   in do
   when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
@@ -374,10 +377,11 @@ requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper toke
                   | otherwise = pure Nothing
     helper acc (n:ns) | length acc == amount = (pure . pure) acc
                       | otherwise = do
-      displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
-      if displayHold then helper acc ns else do
-        _ <- runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node})
-        helper (n:acc) ns
+        displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
+        if displayHold then helper acc ns else do
+          redisLockWrapper "global_display_lock" 3 (liftIO (threadDelay 1000000) >> helper acc (n:ns)) $ do
+            _ <- runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node})
+            helper (n:acc) ns
   in do
     when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
     _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
