@@ -1,13 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
 module Service.Ssl (
   createSSLManager
   ) where
 
+import           Data.Maybe
 import           Network.Connection
 import           Network.HTTP.Conduit
 
-createSSLManager :: Bool -> IO Manager
-createSSLManager ignoreSSL = let
+createSSLManager :: Bool -> Maybe Int -> IO Manager
+createSSLManager ignoreSSL timeout = let
   tlsSettings = TLSSettingsSimple
     { settingDisableCertificateValidation = ignoreSSL
     , settingDisableSession = False
@@ -16,4 +18,4 @@ createSSLManager ignoreSSL = let
 
   in do
   let settings = mkManagerSettings tlsSettings Nothing
-  newManager settings
+  newManager (settings { managerResponseTimeout = responseTimeoutMicro (fromMaybe 30_000_000 timeout) })

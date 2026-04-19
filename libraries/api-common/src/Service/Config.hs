@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
@@ -79,11 +80,13 @@ requireServiceEnv :: (MonadIO m, MonadCatch m) => String -> LoggingT m (BaseUrl,
 requireServiceEnv prefix = let
   urlKey = prefix <> "_URL"
   sslKey = prefix <> "_IGNORE_SSL"
+  timeoutKey = prefix <> "_TIMEOUT"
 
   in do
     ssl' <- liftIO $ lookupEnv sslKey <&> fromMaybe "0"
     url' <- requireEnvUrl urlKey
-    mgr <- liftIO $ createSSLManager (ssl' == "1")
+    timeout' <- requireEnvRead timeoutKey (\v -> ($(logError) . pack $ "Awaited " <> timeoutKey <> ", received " <> show v) >> pure 30)
+    mgr <- liftIO $ createSSLManager (ssl' == "1") (Just $ timeout' * 1_000_000)
     return (url', mgr)
 
 requireEnvText :: (MonadIO m) => String -> LoggingT m String -> LoggingT m Text
