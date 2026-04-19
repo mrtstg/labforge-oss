@@ -26,6 +26,7 @@ import           Control.Monad               (when)
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Data.ByteString.Char8       (ByteString)
+import           Data.Functor                ((<&>))
 import           Data.Maybe
 import           Data.Pool                   (Pool)
 import           Data.Text                   (pack)
@@ -53,7 +54,8 @@ runCommand AppOpts { debugOn=debug, appCommand=MakeMigrations } = do
   pool <- App.Commands.createPool debug url
   runSqlPool doMigration pool
 runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = do
-  let logFunction = if debug then defaultLogF else filterLogF LevelInfo
+  debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
+  let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
   url <- runLoggingT requirePostgresString logFunction
   pool <- App.Commands.createPool debug url
   when runMigrate $ runSqlPool doMigration pool
