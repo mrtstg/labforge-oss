@@ -85,7 +85,7 @@ requireServiceEnv prefix = let
   in do
     ssl' <- liftIO $ lookupEnv sslKey <&> fromMaybe "0"
     url' <- requireEnvUrl urlKey
-    timeout' <- requireEnvRead timeoutKey (\v -> ($(logError) . pack $ "Awaited " <> timeoutKey <> ", received " <> show v) >> pure 30)
+    timeout' <- requireEnvRead timeoutKey (\v -> ($(logWarn) . pack $ "Awaited " <> timeoutKey <> ", received " <> show v <> ". Processing with default value...") >> pure 29)
     mgr <- liftIO $ createSSLManager (ssl' == "1") (Just $ timeout' * 1_000_000)
     return (url', mgr)
 
