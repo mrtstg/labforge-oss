@@ -12,11 +12,12 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not:<|> see <http://www.gnu.org/licenses>. -}
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeOperators      #-}
 module Api.Deployment
   ( deploymentServer
   , deploymentInstanceKey
@@ -82,6 +83,7 @@ import           Redis.Lock
 import           Servant
 import           Servant.Client
 import           Service.Environment
+import           System.Random
 import           Utils
 
 templateAdminRole = "image-admin"
@@ -287,9 +289,8 @@ requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) 
     helper acc (n:ns) | length acc /= amount = do
       idHold <- runDB $ exists [ UsedVMIDNum ==. n ]
       if idHold then helper acc ns else do
-        redisLockWrapper "global_vmid_lock" 3 (liftIO (threadDelay 1000000) >> helper acc (n:ns)) $ do
-          _ <- runDB $ insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})
-          helper (n:acc) ns
+        _ <- redisLockWrapper_ "global_vmid_lock" 5 (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper acc (n:ns)) $ runDB (insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n}))
+        helper (n:acc) ns
                       | otherwise = (pure . pure) acc
   in do
   when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
@@ -334,9 +335,8 @@ requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper tok
                         | otherwise = do
         nameHold <- runDB $ exists [ UsedBridgesName ==. T.pack n ]
         if nameHold then helper acc ns else do
-          redisLockWrapper "global_network_lock" 3 (liftIO (threadDelay 1000000) >> helper acc (n:ns)) $ do
-            _ <- runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n})
-            helper (n:acc) ns
+          _ <- redisLockWrapper_ "global_network_lock" 5 (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper acc (n:ns)) $ runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n})
+          helper (n:acc) ns
   in do
   when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
@@ -379,9 +379,8 @@ requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper toke
                       | otherwise = do
         displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
         if displayHold then helper acc ns else do
-          redisLockWrapper "global_display_lock" 3 (liftIO (threadDelay 1000000) >> helper acc (n:ns)) $ do
-            _ <- runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node})
-            helper (n:acc) ns
+          _ <- redisLockWrapper_ "global_display_lock" 5 (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper acc (n:ns)) $ runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node})
+          helper (n:acc) ns
   in do
     when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
     _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]

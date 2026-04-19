@@ -69,6 +69,7 @@ library
     , persistent-sqlite ==2.13.2.0
     , proxmox-api
     , proxmox-deploy-toolkit
+    , random ==1.2.1.1
     , redis-utils
     , resource-pool ==0.4.0.0
     , servant-client ==0.19
@@ -114,6 +115,7 @@ executable deployment-api
     , persistent-sqlite ==2.13.2.0
     , proxmox-api
     , proxmox-deploy-toolkit
+    , random ==1.2.1.1
     , redis-utils
     , resource-pool ==0.4.0.0
     , servant-client ==0.19
