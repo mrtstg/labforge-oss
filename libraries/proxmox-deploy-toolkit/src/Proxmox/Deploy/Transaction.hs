@@ -154,6 +154,7 @@ waitTaskCompletion maxTries ts taskId taskType = helper 0 where
             _foundError -> do
               pure (Just False)
 
+--TODO: max recursion depth
 powerVMWrapper :: Int -> Int -> StatefulTransactionT ()
 powerVMWrapper ts vmid = do
   (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
@@ -163,21 +164,26 @@ powerVMWrapper ts vmid = do
       $(logError) $ "VM power request failure: " <> (T.pack . show) e
       powerVMWrapper ts vmid
     (Right (ProxmoxResponse {proxmoxData=Just (ProxmoxVMStatusWrapper Proxmox.Models.VM.VMRunning)})) -> do
-      $(logError) "VM is already running"
+      $(logWarn) "VM is already running"
       pure ()
     _anyOther -> do
-      r <- waitForClient
-        5_000_000
-        "VM power task is not found"
-        4
-        1_000_000
-        (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) (Just "OK") (Just "qmstart") Nothing (Just vmid))
-        (\(ProxmoxResponse tasks _) -> not . null $ tasks)
-      v <- defaultClientErrorWrapper r
-      if v then pure () else do
-        nts <- getUnixIntTime
-        _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
-        powerVMWrapper nts vmid
+      powerTasks <- defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) Nothing (Just "qmstart") Nothing (Just vmid)
+      case powerTasks of
+        (Left e) -> $(logError) . T.pack $ "Power task check failure: " <> show e
+        (Right (ProxmoxResponse {proxmoxData=tasks})) -> do
+          if any ((/= Just "OK") . taskStatus) tasks then do
+            $(logWarn) "Found error power task. Sleeping..."
+            liftIO $ threadDelay 10_000_000
+            nts <- getUnixIntTime
+            _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
+            liftIO $ threadDelay 10_000_000
+            powerVMWrapper nts vmid
+          else do
+            liftIO $ threadDelay 3_000_000
+            nts <- getUnixIntTime
+            _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
+            liftIO $ threadDelay 3_000_000
+            powerVMWrapper nts vmid
 
 applySDNWrapper :: StatefulTransactionT ()
 applySDNWrapper = do
