@@ -601,6 +601,34 @@ vncPage vmPort t = let
                     <td x-text="networks[mac]">
   <div .column.is-6>
     <div .block x-data="snapshotForm('#{vmPort}')">
+      <div .modal *{rollbackModal}>
+        <div .modal-background>
+        <div .modal-content>
+          <div .card.p-3>
+            <p .pb-1>
+              Откатить снапшот
+              <span x-text="active_snap">
+              ?
+            <div .columns.is-fullwidth>
+              <div .is-6.column>
+                <button @click="show_rollback = false" .button.is-fullwidth> Отменить
+              <div .is-6.column>
+                <button .is-warning.button.is-fullwidth @click="rollback(active_snap)"> Откатить
+          <button @click="show_rollback = false" .modal-close.is-large aria-label=close>
+      <div .modal *{deleteModal}>
+        <div .modal-background>
+        <div .modal-content>
+          <div .card.p-3>
+            <p .pb-1>
+              Удалить снапшот
+              <span x-text="active_snap">
+              ?
+            <div .columns.is-fullwidth>
+              <div .is-6.column>
+                <button @click="show_delete = false" .button.is-fullwidth> Отменить
+              <div .is-6.column>
+                <button .is-danger.button.is-fullwidth @click="deleteSnap(active_snap)"> Удалить
+          <button @click="show_delete = false" .modal-close.is-large aria-label=close>
       <template x-if="snaps == null">
         <p> Загружается список снапшотов
       <template x-if="snaps">
@@ -617,20 +645,21 @@ vncPage vmPort t = let
               <tr>
                 <td x-text="snap.name">
                 <td>
-                  <button @click="rollback(snap.name)" .button.is-outlined.is-warning> Откатить
+                  <button @click="active_snap=snap.name;show_rollback=true" .button.is-outlined.is-warning> Откатить
                 <td>
-                  <button @click="deleteSnap(snap.name)" .button.is-outlined.is-danger> Удалить
+                  <button @click="active_snap=snap.name;show_delete=true" .button.is-outlined.is-danger> Удалить
             <template x-if="snaps != null && snaps.length == 0">
               <tr>
                 <td> Нет доступных снапшотов!
 |]
-
   body = [shamlet|
 <div .block>
   <div .container>
     <div #app>
 ^{vmWidgets}
 |]
+  deleteModal = [(":class", "show_delete ? 'is-active' : ''")] :: [(String, String)]
+  rollbackModal = [(":class", "show_rollback ? 'is-active' : ''")] :: [(String, String)]
   after = [shamlet|
 <script src=/static/js/vnc.js>
 <script>
@@ -638,6 +667,9 @@ vncPage vmPort t = let
   document.addEventListener('alpine:init', () => {
     Alpine.data("snapshotForm", (vmPort) => ({
       snaps: null,
+      show_delete: false,
+      show_rollback: false,
+      active_snap: '',
       init() {
         fetch("/api/deployment/vm/" + vmPort + "/snapshot/list").then(r => {
           unwrapError(r, () => { r.json().then(resp => { this.snaps = resp }) }, (e) => this.addNotification(e))
@@ -647,14 +679,16 @@ vncPage vmPort t = let
       },
       rollback(snapName) {
         fetch("/api/deployment/vm/" + vmPort + "/snapshot/rollback?name=" + encodeURIComponent(snapName)).then(r => {
-          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на откатывание ВМ отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e))
+          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на откатывание ВМ отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e));
+          this.show_rollback = false
         }).catch(err => {
           console.log(err);
         })
       },
       deleteSnap(snapName) {
         fetch("/api/deployment/vm/" + vmPort + "/snapshot?name=" + encodeURIComponent(snapName), {method: 'DELETE'}).then(r => {
-          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на удаление снапшота отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e))
+          unwrapError(r, () => { r.json().then(_ => this.addNotification("Запрос на удаление снапшота отправлен. Ожидайте выполнения в течение 30 секунд."))}, (e) => this.addNotification(e));
+          this.show_delete=false
         }).catch(err => {
           console.log(err);
         })
