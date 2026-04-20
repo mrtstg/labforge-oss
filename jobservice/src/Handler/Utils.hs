@@ -138,12 +138,13 @@ sendLogRequest :: Text -> Config -> Loc -> LogSource -> LogLevel -> LogStr -> IO
 sendLogRequest deploymentId cfg loc src lvl msg = appTIO f cfg where
   f :: AppT ()
   f = do
-    let str = (T.pack . BS.unpack . fromLogStr) $ defaultLogStr loc src lvl msg
-    $(logInfo) str
-    deploymentEnv <- asks $ getEnvFor DeploymentService
-    _ <- withTokenVariable $ \token -> do
-      defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentId str (BearerWrapper token)
-    pure ()
+    let str = (T.strip . T.pack . BS.unpack . fromLogStr) $ defaultLogStr loc src lvl msg
+    if T.null str then pure () else do
+      $(logInfo) str
+      deploymentEnv <- asks $ getEnvFor DeploymentService
+      _ <- withTokenVariable $ \token -> do
+        defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentId str (BearerWrapper token)
+      pure ()
 
 setDeploymentInstanceStatus :: Text -> DeploymentStatus -> AppT (Either String ())
 setDeploymentInstanceStatus dId status = do
