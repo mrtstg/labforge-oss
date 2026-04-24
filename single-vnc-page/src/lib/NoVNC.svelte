@@ -14,6 +14,7 @@
 
   export let controlPower: boolean = true
   export let showDesktopName: boolean = true
+  export let showConnectionState: boolean = true
   export let url: string;
   export let onConnectCallback: () => Promise<void> = async () => {}
   export let onDisconnectCallback: () => Promise<void> = async () => {}
@@ -59,13 +60,15 @@
 
 <div class="vnc-container__wrapper">
   <div class="vnc-container">
-    <div class="flex flex-row items-center justify-between text-slate w-full">
-      {#if showDesktopName}
-        <h3 class="text-xl font-semibold"> { showDesktopName ? (desktopName.length == 0 ? "Виртуальная машина" : desktopName) : "" } - { connected ? "подключено" : "отключено" } </h3>
-      {:else}
-        <h3 class="font-semibold"> { connected ? "Подключено" : "Отключено" } </h3>
-      {/if}
-    </div>
+    {#if showConnectionState}
+      <div class="flex flex-row items-center justify-between text-slate w-full">
+        {#if showDesktopName}
+          <h3 class="text-xl font-semibold"> { showDesktopName ? (desktopName.length == 0 ? "Виртуальная машина" : desktopName) : "" } - { connected ? "подключено" : "отключено" } </h3>
+        {:else}
+          <h3 class="font-semibold"> { connected ? "Подключено" : "Отключено" } </h3>
+        {/if}
+      </div>
+    {/if}
     {#key key}
       <Rfb desktopCallback={updateDesktop} connectCallback={updateConnect} url={url} onConnectCallback={onConnectCallback} onDisconnectCallback={onDisconnectCallback}/>
     {/key}
