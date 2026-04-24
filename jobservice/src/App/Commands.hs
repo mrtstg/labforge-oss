@@ -54,31 +54,26 @@ import           Network.AMQP
 import           Proxmox.Deploy.Models.Config.VM
 import           Redis.Common
 import           Redis.Environment
+import           Redis.Lock
 import           Servant.Client
 import           Service.Config
 import           Service.Environment
 import           System.Environment
 import           System.Exit
 import           System.Random
+import           Time
 
 genericFormattedLock :: Message -> Text -> Bool -> AppT a -> AppT ()
-genericFormattedLock msg key resendTask f' = do
-  let lockKey = T.unpack key
-  $(logDebug) $ "Checking key " <> key
-  v <- getValue' lockKey
-  case v of
-    Nothing -> do
-      $(logDebug) $ "Key " <> key <> " is not found. Processing next..."
-      cacheValue' lockKey "lock" (Just 600)
-      _ <- f'
-      deleteValue' lockKey
-      pure ()
-    (Just _) -> do
-      $(logInfo) "Deployment action task is locked."
-      $(logDebug) $ "Lock key " <> key <> " is found."
-      when resendTask $ do
-        $(logInfo) "Resending task."
-        recreateMessageWithDelay msg
+genericFormattedLock msg key resendTask f' = let
+  fail_ :: AppT ()
+  fail_ = do
+    $(logDebug) "Deployment action task is locked."
+    $(logDebug) $ "Lock key " <> key <> " is found."
+    when resendTask $ do
+      $(logDebug) "Resending task."
+      recreateMessageWithDelay msg
+  in do
+  redisNXLockWrapper (T.unpack key) 600 (getUnixIntTime <&> fromIntegral) fail_ (void f')
 
 genericDeploymentLock :: Message -> Text -> Bool -> AppT a -> AppT ()
 genericDeploymentLock msg deploymentId resendTask f' = do
