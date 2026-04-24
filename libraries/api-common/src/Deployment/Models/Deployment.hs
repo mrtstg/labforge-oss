@@ -61,6 +61,7 @@ instance ToJSON DeploymentCreate where
     , "vms" .= reqVMs
     , "availableVMs" .= reqAvailableVMs
     , "existingNetworks" .= reqExistingNetworks
+    , "snapshot" .= reqSnapshotPolicy
     ]
 
 instance FromJSON DeploymentCreate where
