@@ -91,6 +91,7 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "instance" :> Capture "instanceID" Text :> "schema" :> AuthHeader' :> Get '[HTML] Html
   :<|> "instance" :> Capture "instanceID" Text :> "delete" :> AuthHeader' :> Get '[HTML] Html
   :<|> "vnc" :> Capture "vmPort" Text :> AuthHeader' :> Get '[HTML] Html
+  :<|> "vnc" :> Capture "vmPort" Text :> "full" :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> "create" :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> "my" :> QueryParam "page" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "delete" :> AuthHeader' :> Get '[HTML] Html
@@ -130,6 +131,7 @@ pagesServer = indexPage
   :<|> instanceSchemaPage
   :<|> deleteInstancePage
   :<|> vncPage
+  :<|> vncPageFull
   :<|> deploymentCreatePage
   :<|> deploymentListPage
   :<|> deleteDeploymentPage
@@ -580,6 +582,25 @@ notFound = do
       <p class="subtitle"> Страница с данным адресом недоступна.
 |]
 
+vncPageFull :: Text -> Maybe BearerWrapper -> AppT Html
+vncPageFull vmPort t = let
+  body = [shamlet|
+<div #app>
+|]
+  after = [shamlet|
+<script src=/static/js/vnc.js>
+|]
+  head = [shamlet|
+<link rel=stylesheet href=/static/css/vnc.css>
+|]
+  in do
+  token <- requireToken' t
+  let ~(Just userToken) = t
+  deploymentEnv <- asks $ getEnvFor DeploymentService
+  (PowerState vmOn) <- globalDecoder' $ defaultRetryClientC deploymentEnv (C.getVMPortPower vmPort userToken)
+  unless vmOn $ addMessageToSession token "Виртуальная машина выключена. Включите ее на странице стенда, доступ на данной странице восстановится автоматически."
+  vncTemplate token (Just head) (Just "VNC") body (Just after)
+
 vncPage :: Text -> Maybe BearerWrapper -> AppT Html
 vncPage vmPort t = let
   vmWidgets = [shamlet|
@@ -1001,6 +1022,8 @@ instancePage dID t Nothing = do
           <td> #{key}
           <td>
             <a href=/vnc/#{value}> подключиться
+            <span> /
+            <a href=/vnc/#{value}/full> полный экран
           <td>
             $case M.lookup key instanceVMPower
               $of (Just True)

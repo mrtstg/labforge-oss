@@ -77,6 +77,52 @@ $doctype 5
         Labforge, by <a href="https://github.com/mrtstg"> Ilya Zamaratskikh </a>. <a href="https://github.com/mrtstg/labforge-oss"> Code </a> is licensed under GPLv3
 |]
 
+vncTemplate :: IntrospectResponse -> Maybe Html -> Maybe String -> Html -> Maybe Html -> AppT Html
+vncTemplate token head' title' body afterBody = let
+  lookMessages :: IntrospectResponse -> AppT [Text]
+  lookMessages InactiveToken = pure []
+  lookMessages token@(ActiveToken {}) = do
+    messagesMap <- asks sessionMessages >>= liftIO . readTVarIO
+    let res = fromMaybe [] $ M.lookup (fromMaybe "" $ tokenUUID token) messagesMap
+    asks sessionMessages >>= \x -> (liftIO . atomically) $ modifyTVar x (M.insert (fromMaybe "" $ tokenUUID token) [])
+    pure res
+  in do
+  messages <- lookMessages token
+  let xinit = [("x-init" :: Text, T.intercalate ";" (map (\v -> "addNotification(\"" <> T.replace "\"" "\\\"" v <> "\")") messages))]
+  pure [shamlet|
+$doctype 5
+<html>
+  <head>
+    <title> #{fromMaybe "Labforge" title'}
+    $case head'
+      $of (Just headHtml)
+        ^{headHtml}
+      $of Nothing
+    <meta charset=utf-8>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script defer src="/static/js/alpine.js"></script>
+    <link rel="stylesheet" href="/static/css/bulma.min.css">
+    <link rel="stylesheet" href="/static/css/codemirror.min.css">
+  <body .is-flex.is-flex-direction-column style="min-height:100vh">
+    <div .is-fullheight.is-flex-grow-1 x-data="{ notifications: [], deleteNotification(i) { this.notifications.splice(i, 1) }, addNotification(message) {this.notifications.push(message);} }" *{xinit}>
+      <div class="is-flex is-flex-direction-column-reverse" style="position:fixed;z-index:9999;bottom:0px;right:0px;max-width:500px;">
+        <div x-show="notifications.length">
+          <div .my-2.mx-5>
+            <button .button.is-info.is-fullwidth @click="() => { notifications = [] }"> Очистить все
+        <template x-for="(message, index) in notifications">
+          <div .my-2.mx-5>
+            <article .message>
+              <div .message-header>
+                <p> Уведомление
+                <button .delete aria-label=delete @click="deleteNotification(index)">
+              <div .message-body x-text=message>
+      ^{body}
+  $case afterBody
+    $of (Just afterHtml)
+      ^{afterHtml}
+    $of Nothing
+|]
+
 baseTemplate :: IntrospectResponse -> Maybe Html -> Maybe String -> Html -> Maybe Html -> AppT Html
 baseTemplate token head' title' body afterBody = let
   lookMessages :: IntrospectResponse -> AppT [Text]
