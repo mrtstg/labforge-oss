@@ -84,8 +84,8 @@ import           Servant
 import           Servant.Client
 import           Service.Environment
 import           System.Random
-import           Time
 import           Utils
+import           Utils.Time
 
 templateAdminRole = "image-admin"
 templateReadRole = "image-view"

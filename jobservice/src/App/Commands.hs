@@ -61,7 +61,7 @@ import           Service.Environment
 import           System.Environment
 import           System.Exit
 import           System.Random
-import           Time
+import           Utils.Time
 
 genericFormattedLock :: Message -> Text -> Bool -> AppT a -> AppT ()
 genericFormattedLock msg key resendTask f' = let
