@@ -283,16 +283,27 @@ requestDeploymentVMID _ _ Nothing (BearerWrapper token) = do
   sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
 requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) = let
   allocateVMID :: DeploymentInstanceDataId -> Int -> [Int] -> AppT (Maybe [Int])
-  allocateVMID dId amount = helper [] where
-    helper :: [Int] -> [Int] -> AppT (Maybe [Int])
-    helper acc [] | length acc /= amount = pure Nothing
-                  | otherwise = pure $ Just acc
-    helper acc (n:ns) | length acc /= amount = do
-      idHold <- runDB $ exists [ UsedVMIDNum ==. n ]
-      if idHold then helper acc ns else do
-        _ <- redisNXLockWrapper "global_vmid_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper acc (n:ns)) $ runDB (insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})) >> pure Nothing
-        helper (n:acc) ns
-                      | otherwise = (pure . pure) acc
+  allocateVMID dId amount = helper where
+    helper :: [Int] -> AppT (Maybe [Int])
+    helper [] = do
+      allocatedVMID <- runDB $ count [ UsedVMIDUsedBy ==. dId ]
+      if allocatedVMID >= amount then do
+        vmids <- runDB $ selectList [ UsedVMIDUsedBy ==. dId ] [] <&> \x -> map (usedVMIDNum . entityVal) x
+        pure $ Just vmids
+      else do
+        $(logError) "Lack of VMID pool!"
+        runDB $ deleteWhere [ UsedVMIDUsedBy ==. dId ]
+        pure Nothing
+    helper (n:ns) = do
+      allocatedVMID <- runDB $ count [ UsedVMIDUsedBy ==. dId ]
+      if allocatedVMID >= amount then do
+        vmids <- runDB $ selectList [ UsedVMIDUsedBy ==. dId ] [] <&> \x -> map (usedVMIDNum . entityVal) x
+        pure $ Just vmids
+      else do
+        idHold <- runDB $ exists [ UsedVMIDNum ==. n ]
+        if idHold then helper ns else do
+          _ <- redisNXLockWrapper "global_vmid_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB (insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})) >> pure Nothing
+          helper ns
   in do
   when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
@@ -328,16 +339,27 @@ requestDeploymentNetworks _ _ Nothing (BearerWrapper token) = do
 requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper token) = let
   allocateNetworks :: DeploymentInstanceDataId -> Int -> [String] -> AppT (Maybe [String])
   allocateNetworks dId amount pool = do
-    helper [] pool where
-      helper :: [String] -> [String] -> AppT (Maybe [String])
-      helper acc [] | length acc == amount = (pure . pure) acc
-                    | otherwise = pure Nothing
-      helper acc (n:ns) | length acc == amount = (pure . pure) acc
-                        | otherwise = do
-        nameHold <- runDB $ exists [ UsedBridgesName ==. T.pack n ]
-        if nameHold then helper acc ns else do
-          _ <- redisNXLockWrapper "global_network_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper acc (n:ns)) $ runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n}) >> pure Nothing
-          helper (n:acc) ns
+    helper pool where
+      helper :: [String] -> AppT (Maybe [String])
+      helper [] = do
+        allocatedNetworks <- runDB $ count [ UsedBridgesUsedBy ==. dId ]
+        if allocatedNetworks >= amount then do
+          nets <- runDB $ selectList [ UsedBridgesUsedBy ==. dId ] [] <&> \x -> map (T.unpack . usedBridgesName . entityVal) x
+          pure $ Just nets
+        else do
+          $(logError) $ "Lack of network pool!"
+          runDB $ deleteWhere [ UsedBridgesUsedBy ==. dId ]
+          pure Nothing
+      helper (n:ns) = do
+        allocatedNetworks <- runDB $ count [ UsedBridgesUsedBy ==. dId ]
+        if allocatedNetworks >= amount then do
+          nets <- runDB $ selectList [ UsedBridgesUsedBy ==. dId ] [] <&> \x -> map (T.unpack . usedBridgesName . entityVal) x
+          pure $ Just nets
+        else do
+          nameHold <- runDB $ exists [ UsedBridgesName ==. T.pack n ]
+          if nameHold then helper ns else do
+            _ <- redisNXLockWrapper "global_network_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n}) >> pure Nothing
+            helper ns
   in do
   when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
@@ -372,16 +394,27 @@ requestDeploymentDisplay _ _ Nothing (BearerWrapper token) = do
   sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
 requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper token) = let
   allocateDisplays :: Text -> DeploymentInstanceDataId -> Int -> [Int] -> AppT (Maybe [Int])
-  allocateDisplays node dId amount = helper [] where
-    helper :: [Int] -> [Int] -> AppT (Maybe [Int])
-    helper acc [] | length acc == amount = (pure . pure) acc
-                  | otherwise = pure Nothing
-    helper acc (n:ns) | length acc == amount = (pure . pure) acc
-                      | otherwise = do
+  allocateDisplays node dId amount = helper where
+    helper :: [Int] -> AppT (Maybe [Int])
+    helper [] = do
+      allocatedDisplays <- runDB $ count [ UsedDisplayUsedBy ==. dId ]
+      if allocatedDisplays >= amount then do
+        displays <- runDB $ selectList [ UsedDisplayUsedBy ==. dId ] [] <&> \x -> map (usedDisplayNum . entityVal) x
+        pure $ Just displays
+      else do
+        $(logError) "Lack of display pool!"
+        runDB $ deleteWhere [ UsedDisplayUsedBy ==. dId ]
+        pure Nothing
+    helper (n:ns) = do
+      allocatedDisplays <- runDB $ count [ UsedDisplayUsedBy ==. dId ]
+      if allocatedDisplays >= amount then do
+        displays <- runDB $ selectList [ UsedDisplayUsedBy ==. dId ] [] <&> \x -> map (usedDisplayNum . entityVal) x
+        pure $ Just displays
+      else do
         displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
-        if displayHold then helper acc ns else do
-          _ <- redisNXLockWrapper "global_display_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper acc (n:ns)) $ runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node}) >> pure Nothing
-          helper (n:acc) ns
+        if displayHold then helper ns else do
+          _ <- redisNXLockWrapper "global_display_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node}) >> pure Nothing
+          helper ns
   in do
     when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
     _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
