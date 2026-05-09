@@ -1,0 +1,38 @@
+on_exit = 'restart'
+on_error = 'exit'
+restart_delay = 3
+
+[run.auth-service]
+command = "make run"
+cwd = "./auth-service"
+watch = ["./auth-service/src/**/*.hs"]
+
+[run.cluster-manager]
+command = "make run"
+cwd = "./cluster-manager"
+watch = ["./cluster-manager/src/**/*.hs"]
+
+[run.deployment-api]
+command = "make run"
+cwd = "./deployment-api"
+watch = ["./deployment-api/src/**/*.hs"]
+
+[run.frontend]
+command = "make run"
+cwd = "./frontend-server"
+watch = ["./frontend-server/src/**/*.hs"]
+
+[run.kroki-proxy]
+command = "make run"
+cwd = "./kroki-proxy"
+watch = ["./kroki-proxy/src/**/*.hs"]
+
+[run.jobservice]
+command = "make run"
+cwd = "./jobservice"
+watch = ["./jobservice/src/**/*.hs"]
+
+[run.jobservice-api]
+command = "make run"
+cwd = "./jobservice-api"
+watch = ["./jobservice-api/src/**/*.hs"]
