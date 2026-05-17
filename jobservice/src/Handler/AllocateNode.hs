@@ -37,8 +37,6 @@ import           Handler.Utils
 import qualified Jobservice.Client                        as J
 import           Jobservice.Models
 import           Network.AMQP
-import           Notification.Client
-import qualified Notification.Models                      as N
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Models.Config.DeployAgent
@@ -168,10 +166,6 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                                         case j of
                                           Nothing -> pure ()
                                           _ -> do
-                                            nEnv <- asks $ getEnvFor NotificationAPI
-                                            ts <- getUnixIntTime
-                                            _ <- withTokenVariable $ \token -> do
-                                              defaultRetrySClient nEnv $ postEventPayload (N.InstanceAllocated {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventGroup=deploymentGroup, eventDeployment=templateId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
                                             $(logInfo) $ "[" <> deploymentId <> "] Sent new deploy job"
                                             pure ()
 allocateNode _ _ = error "Invalid message"

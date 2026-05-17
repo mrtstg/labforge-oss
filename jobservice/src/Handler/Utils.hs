@@ -42,8 +42,6 @@ import           Deployment.Client
 import qualified Deployment.Client                        as D
 import           Deployment.Models.Deployment
 import           Jobservice.Models
-import           Notification.Client
-import           Notification.Models
 import qualified Proxmox.Client                           as P
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
@@ -155,10 +153,7 @@ sendLogRequest deploymentId cfg loc src lvl msg = appTIO f cfg where
 setDeploymentInstanceStatus :: JobserviceMessageMeta -> DeploymentStatus -> AppT (Either String ())
 setDeploymentInstanceStatus (JobserviceMessageMeta { deploymentId = dId, Jobservice.Models.templateId = tId, .. }) status = do
   deploymentEnv <- asks $ getEnvFor DeploymentService
-  nEnv <- asks $ getEnvFor NotificationAPI
-  ts <- getUnixIntTime
   res <- withTokenVariable $ \token -> do
-    _ <- defaultRetrySClient nEnv $ postEventPayload (InstanceStatus {eventTimestamp=ts, eventTargetUser=fromMaybe "" deploymentUserId, eventStatus=status, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
     defaultRetryClient deploymentEnv (patchDeploymentInstance dId
       (DeploymentPatch {patchInstanceVMLinks=Nothing, patchInstanceState=Just status, patchInstanceNetworkMap=Nothing, patchInstanceDeployConfig=Nothing}) (BearerWrapper token))
   case res of

@@ -39,8 +39,6 @@ import           Deployment.Models.Deployment
 import qualified Jobservice.Client            as J
 import           Jobservice.Models
 import           Models
-import           Notification.Client
-import qualified Notification.Models          as N
 import           Service.Environment
 import           System.Random
 import           Utils.Time
@@ -61,8 +59,6 @@ handleTask _ (GroupDeployment tID groupName authorID) = do
     (Right users) -> do
       ts <- getUnixIntTime
       groupKey <- generateGroupKey tID authorID (Just ts)
-      nEnv <- asks $ getEnvFor NotificationAPI
-      _ <- withTokenVariable' $ \t -> defaultRetrySClient nEnv $ postEventPayload (N.GroupAction {eventTimestamp=ts, eventTargetAmount=length users, eventGroupType=N.GroupDeployment, eventGroup=Just groupKey, eventDeployment=tID, eventAuthor=authorID}) (BearerWrapper t)
       let usersId = map userID users
       existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
@@ -84,8 +80,6 @@ handleTask _ (GroupDestroy tID groupName authorID) = do
     (Right users) -> do
       ts <- getUnixIntTime
       groupKey <- generateGroupKey tID authorID (Just ts)
-      nEnv <- asks $ getEnvFor NotificationAPI
-      _ <- withTokenVariable' $ \t -> defaultRetrySClient nEnv $ postEventPayload (N.GroupAction {eventTimestamp=ts, eventTargetAmount=length users, eventGroupType=N.GroupDestroy, eventGroup=Just groupKey, eventDeployment=tID, eventAuthor=authorID}) (BearerWrapper t)
       let usersId = map userID users
       existingDeployments <- runDB $ selectList [
         DeploymentInstanceDataOwnerId <-. usersId,
@@ -95,7 +89,7 @@ handleTask _ (GroupDestroy tID groupName authorID) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDeployInstance {})) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDestroyInstance {})) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupRollback tID groupName snapName mask) = do
   $(logDebug) $ "Creating group rollback for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
@@ -180,7 +174,4 @@ createMissingDeployments tID tIDnum groupKey authorID = helper [] where
         , deploymentInstanceDataDeployConfig=Nothing
         }
       _ <- runDB $ insertKey (DeploymentInstanceDataKey key) instanceEntity
-      ts <- getUnixIntTime
-      nEnv <- asks $ getEnvFor NotificationAPI
-      _ <- withTokenVariable' $ \t -> defaultRetrySClient nEnv $ postEventPayload (N.InstanceCreated {eventTargetUser=userID, eventAuthor=authorID, eventDeployment=tIDnum, eventGroup=groupKey, eventTimestamp=ts}) (BearerWrapper t)
       helper (key:acc) users

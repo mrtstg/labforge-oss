@@ -74,7 +74,6 @@ instance ServiceEnvironment Config where
   getEnvFor DeploymentService = asks deploymentEnv
   getEnvFor JobserviceAPI     = asks jobserviceApiEnv
   getEnvFor ClusterManager    = asks clusterEnv
-  getEnvFor NotificationAPI   = asks notificationEnv
   getEnvFor _                 = error "Undefined environment"
 
 instance RedisConnection Config where

@@ -41,8 +41,6 @@ import           Handler.Utils
 import qualified Jobservice.Client                        as J
 import           Jobservice.Models
 import           Network.AMQP
-import           Notification.Client
-import qualified Notification.Models                      as N
 import qualified Proxmox.Client                           as P
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
@@ -164,10 +162,6 @@ deployInstance env m@(JobserviceMessageMeta {deploymentId=deploymentId, template
             _ <- generateAndDeployTransaction Deploy m deployConfig
             pure ()
       else do
-        nEnv <- asks $ getEnvFor NotificationAPI
-        ts <- getUnixIntTime
-        _ <- withTokenVariable $ \token -> do
-          defaultRetrySClient nEnv $ postEventPayload (N.InstanceStatus {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventStatus=instanceState, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
         pure ()
 deployInstance _ _ = error "Invalid message"
 
@@ -193,18 +187,10 @@ destroyInstance env m@(JobserviceMessageMeta {deploymentId=deploymentId, templat
           case d of
             Nothing -> pure ()
             (Just _) -> do
-              nEnv <- asks $ getEnvFor NotificationAPI
-              ts <- getUnixIntTime
-              _ <- withTokenVariable $ \token -> do
-                defaultRetrySClient nEnv $ postEventPayload (N.InstanceDeleted {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
               pure ()
         (Just deployConfig) -> do
           deployed <- generateAndDeployTransaction Destroy m deployConfig
           when deployed $ do
-            nEnv <- asks $ getEnvFor NotificationAPI
-            ts <- getUnixIntTime
-            _ <- withTokenVariable $ \token -> do
-              defaultRetrySClient nEnv $ postEventPayload (N.InstanceDeleted {eventTimestamp=ts, eventTargetUser=fromJust deploymentUserId, eventGroup=deploymentGroup, eventDeployment=tId, eventAuthor=deploymentAuthorId}) (BearerWrapper token)
             deleteRes <- withTokenVariable $ \t -> do
               defaultRetryClient deploymentEnv $ D.deleteDeploymentInstance deploymentId (BearerWrapper t)
             _ <- unpackError deleteRes errorF
