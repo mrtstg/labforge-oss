@@ -80,6 +80,7 @@ import           Text.Blaze.Html.Renderer.Text            (renderHtml)
 import           Text.Hamlet
 import           Text.Printf
 import           Utils
+import           Utils.Time                               (getUnixIntTime)
 
 type AuthHeader' = Header "Authorization" BearerWrapper
 
@@ -356,8 +357,9 @@ copyDeploymentPage did t = do
   _ <- canCreateDeployments t
   let ~(Just userToken) = t
   env <- asks $ getEnvFor DeploymentService
+  ts <- getUnixIntTime
   (DeploymentTemplate { .. }) <- globalDecoder' (defaultRetryClientC env $ C.getDeploymentTemplate did userToken)
-  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия", reqExistingNetworks=templateExistingNetworks, reqAvailableVMs=templateAvaiableVMs, reqSnapshotPolicy=templateSnapshotPolicy}) userToken)
+  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия [" <> (T.pack . show) ts <> "]", reqExistingNetworks=templateExistingNetworks, reqAvailableVMs=templateAvaiableVMs, reqSnapshotPolicy=templateSnapshotPolicy}) userToken)
   tempRedirectTo "/deployment/my"
 
 deleteDeploymentPage :: Int -> Maybe BearerWrapper -> AppT Html
