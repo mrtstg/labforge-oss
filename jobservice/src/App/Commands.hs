@@ -222,7 +222,6 @@ runCommand AppOpts { debugOn=debug } = let
     , clusterEnv=mkClientEnv clusterManager clusterUrl
     , rabbitConnection=amqpConn
     , maxDeployments = concurrentDeployments
-    , notificationEnv = mkClientEnv notificationManager notificationUrl
     }
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   activeDeploymentsCounter <- newTVarIO (0 :: Int)
