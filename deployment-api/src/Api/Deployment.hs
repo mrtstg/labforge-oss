@@ -210,7 +210,7 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
         })
       jobEnv <- asks $ getEnvFor JobserviceAPI
-      _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceTask Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t))
+      _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
       pure ()
 
 getDeploymentTemplate :: Int -> BearerWrapper -> AppT DeploymentTemplate
@@ -252,7 +252,7 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
           runDB $ deleteWhere [ DeploymentTemplateHideDeployment ==. templateKey ]
           runDB $ delete templateKey
           jobEnv <- asks $ getEnvFor JobserviceAPI
-          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceTask Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t))
+          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
           pure ()
 
 patchDeploymentTemplate :: Int -> DeploymentCreate -> BearerWrapper -> AppT ()
@@ -274,7 +274,7 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
           , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
           ]
         jobEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage (JobserviceTask Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t))
+        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
         pure ()
 
 requestDeploymentVMID :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
@@ -467,7 +467,7 @@ callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (Bear
         if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
           jobserviceEnv <- asks $ getEnvFor JobserviceAPI
           let meta = JobserviceMessageMeta {authorId=tokenUUID, actionGroup=Nothing, targetUserId=Just deploymentInstanceDataOwnerId, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}
-          let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just meta) m) (BearerWrapper t)
+          let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage' m (Just meta) (BearerWrapper t)
           withTokenVariable'' $ \t -> do
             case (doDelete, doRollback) of
               (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
@@ -576,7 +576,7 @@ callInstanceDestroy instanceKey (BearerWrapper token) = do
       if not isAdministrator then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}) (JobserviceDestroyInstance {})) (BearerWrapper t))
+        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (J.insertJobserviceMessage' (JobserviceDestroyInstance {}) (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}) (BearerWrapper t))
         pure ()
 
 generateGroupDeploymentFilter :: Maybe Text -> AppT [Filter DeploymentInstanceData]
@@ -951,8 +951,9 @@ takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
         locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
         when (isLeft locked || locked == Right True) $ deploymentLockedResponse
         let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
-        redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
-          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
+        let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
+        redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
+          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
 
 deleteVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 deleteVMPortSnapshot _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -975,8 +976,9 @@ deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
         locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
         when (isLeft locked || locked == Right True) deploymentLockedResponse
         let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
-        redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
-          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
+        let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
+        redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
+          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
 
 rollbackVMPort :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 rollbackVMPort _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -999,9 +1001,10 @@ rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
                 withTokenVariable'' $ \t' -> do
                   locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
                   when (isLeft locked || locked == Right True) deploymentLockedResponse
-                  redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
+                  let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
+                  redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
                     let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
-                    defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
+                    defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
 
 deploymentServer :: ServerT DeploymentAPI AppT
 deploymentServer = getPagedTemplates

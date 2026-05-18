@@ -9,12 +9,44 @@ module Jobservice.Models
   , jobserviceLockKey
   , JobserviceMessageMeta(..)
   , JobserviceTask(..)
+  , JobserviceTaskData(..)
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import           Data.Text         (Text)
 import           Servant.API
+
+data JobserviceTaskData = JobserviceTaskData
+  { jobserviceTaskKey       :: !Text
+  , jobserviceTaskStatus    :: !Text
+  , jobserviceTaskTimestamp :: !Int
+  , jobserviceTaskAuthor    :: !(Maybe Text)
+  , jobserviceTaskGroup     :: !(Maybe Text)
+  , jobserviceTask          :: !JobserviceMessage
+  , jobserviceTaskMeta      :: !(Maybe JobserviceMessageMeta)
+  } deriving (Eq, Show)
+
+instance ToJSON JobserviceTaskData where
+  toJSON (JobserviceTaskData { .. }) = object
+    [ "key" .= jobserviceTaskKey
+    , "status" .= jobserviceTaskStatus
+    , "timestamp" .= jobserviceTaskTimestamp
+    , "author" .= jobserviceTaskAuthor
+    , "group" .= jobserviceTaskGroup
+    , "task" .= jobserviceTask
+    , "meta" .= jobserviceTaskMeta
+    ]
+
+instance FromJSON JobserviceTaskData where
+  parseJSON = withObject "JobserviceTaskData" $ \v -> JobserviceTaskData
+    <$> v .: "key"
+    <*> v .: "status"
+    <*> v .: "timestamp"
+    <*> v .: "author"
+    <*> v .: "group"
+    <*> v .: "task"
+    <*> v .: "meta"
 
 data JobserviceLockType = AnyLock | GenericLock | SnapshotLock | PowerLock deriving (Show, Eq, Ord)
 
@@ -87,15 +119,16 @@ instance FromJSON JobserviceMessageMeta where
     <*> v .: "user"
     <*> v .: "author"
 
-data JobserviceTask = JobserviceTask (Maybe JobserviceMessageMeta) JobserviceMessage deriving (Show, Eq)
+data JobserviceTask = JobserviceTask (Maybe Text) (Maybe JobserviceMessageMeta) JobserviceMessage deriving (Show, Eq)
 
 instance FromJSON JobserviceTask where
   parseJSON = withObject "JobserviceTask" $ \v -> JobserviceTask
-    <$> v .:? "meta"
+    <$> v .:? "key"
+    <*> v .:? "meta"
     <*> v .: "data"
 
 instance ToJSON JobserviceTask where
-  toJSON (JobserviceTask meta data') = object ["meta" .= meta, "data" .= data']
+  toJSON (JobserviceTask key meta data') = object ["key" .= key, "meta" .= meta, "data" .= data']
 
 data JobserviceMessage = JobserviceUpdateUsedImages {}
                        | JobserviceAllocateNode  {}

@@ -161,7 +161,7 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                                       _ -> do
                                         jobserviceEnv <- asks $ getEnvFor JobserviceAPI
                                         jobRes <- withTokenVariable $ \t ->
-                                          defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage (JobserviceTask (Just m) (JobserviceDeployInstance {})) (BearerWrapper t))
+                                          defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage' (JobserviceDeployInstance {}) (Just m) (BearerWrapper t))
                                         j <- unpackError jobRes errorF
                                         case j of
                                           Nothing -> pure ()
