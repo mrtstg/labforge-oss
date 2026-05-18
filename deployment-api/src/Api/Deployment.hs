@@ -466,7 +466,7 @@ callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (Bear
       else do
         if not $ matchSnapshotRequirements (T.unpack snapName) then sendJSONError err400 (JSONError "badRequest" "Bad snapshot name" Null) else do
           jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-          let meta = JobserviceMessageMeta {deploymentAuthorId=tokenUUID, deploymentGroup=Nothing, deploymentUserId=Just deploymentInstanceDataOwnerId, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}
+          let meta = JobserviceMessageMeta {authorId=tokenUUID, actionGroup=Nothing, targetUserId=Just deploymentInstanceDataOwnerId, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}
           let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just meta) m) (BearerWrapper t)
           withTokenVariable'' $ \t -> do
             case (doDelete, doRollback) of
@@ -576,7 +576,7 @@ callInstanceDestroy instanceKey (BearerWrapper token) = do
       if not isAdministrator then sendJSONError err403 (JSONError "notOwner" "You're not owner of template!" Null)
       else do
         jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}) (JobserviceDestroyInstance {})) (BearerWrapper t))
+        _ <- withTokenVariable'' $ \t -> defaultRetryClient jobserviceEnv (insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}) (JobserviceDestroyInstance {})) (BearerWrapper t))
         pure ()
 
 generateGroupDeploymentFilter :: Maybe Text -> AppT [Filter DeploymentInstanceData]
@@ -950,7 +950,7 @@ takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
       withTokenVariable'' $ \t' -> do
         locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
         when (isLeft locked || locked == Right True) $ deploymentLockedResponse
-        let meta = JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
+        let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
           defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
 
@@ -974,7 +974,7 @@ deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
       withTokenVariable'' $ \t' -> do
         locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
         when (isLeft locked || locked == Right True) deploymentLockedResponse
-        let meta = JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
+        let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
           defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
 
@@ -1000,7 +1000,7 @@ rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
                   locked <- defaultRetryClient jobserviceEnv $ isDeploymentLocked dId AnyLock (BearerWrapper t')
                   when (isLeft locked || locked == Right True) deploymentLockedResponse
                   redisRateLockWrapper (T.unpack $ "snapshot-request-" <> vmPort <> "-" <> uid) 10 snapshotRequestLimit $ do
-                    let meta = JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
+                    let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
                     defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
 
 deploymentServer :: ServerT DeploymentAPI AppT

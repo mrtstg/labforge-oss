@@ -63,20 +63,20 @@ instance ToJSON JobserviceImageUsageData where
     ]
 
 data JobserviceMessageMeta = JobserviceMessageMeta
-  { deploymentId       :: !Text
-  , templateId         :: !Int
-  , deploymentGroup    :: !(Maybe Text)
-  , deploymentUserId   :: !(Maybe Text)
-  , deploymentAuthorId :: !(Maybe Text)
+  { deploymentId :: !Text
+  , templateId   :: !Int
+  , actionGroup  :: !(Maybe Text)
+  , targetUserId :: !(Maybe Text)
+  , authorId     :: !(Maybe Text)
   } deriving (Show, Eq, Ord)
 
 instance ToJSON JobserviceMessageMeta where
   toJSON (JobserviceMessageMeta { .. }) = object
     [ "deployment" .= deploymentId
     , "template" .= templateId
-    , "group" .= deploymentGroup
-    , "user" .= deploymentUserId
-    , "author" .= deploymentAuthorId
+    , "group" .= actionGroup
+    , "user" .= targetUserId
+    , "author" .= authorId
     ]
 
 instance FromJSON JobserviceMessageMeta where

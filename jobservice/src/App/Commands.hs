@@ -107,10 +107,10 @@ f deploymentsC (msg, env) = do
         (Just _) -> do
           $(logInfo) "Image task is locked. Skipping task."
           pure ()
-    (Right (JobserviceTask (Just meta@(JobserviceMessageMeta { deploymentUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
+    (Right (JobserviceTask (Just meta@(JobserviceMessageMeta { targetUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
       genericFormattedLock msg "allocate_node_lock" True $ do
         allocateNode (env, msg) meta
-    (Right (JobserviceTask (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, deploymentUserId = Just _ }) JobserviceDeployInstance {})) -> do
+    (Right (JobserviceTask (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDeployInstance {})) -> do
       deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
       deploymentLimit <- asks maxDeployments
       if deploymentsInProgress >= deploymentLimit then do
@@ -126,7 +126,7 @@ f deploymentsC (msg, env) = do
           deployInstance env meta
           (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
         pure ()
-    (Right (JobserviceTask (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, deploymentUserId = Just _ }) JobserviceDestroyInstance {})) -> do
+    (Right (JobserviceTask (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDestroyInstance {})) -> do
       _ <- genericDeploymentLock msg deploymentId True $ do
         deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
         deploymentLimit <- asks maxDeployments

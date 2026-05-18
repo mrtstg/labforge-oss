@@ -67,10 +67,10 @@ handleTask _ (GroupDeployment tID groupName authorID) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDeployInstance {})) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Just groupKey, authorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDeployInstance {})) (BearerWrapper token)) existingDeployments
       newDeploymentsKeys <- createMissingDeployments (DeploymentTemplateDataKey $ fromIntegral tID) tID (Just groupKey) authorID users
       newDeployments <- runDB $ selectList [ DeploymentInstanceDataId <-. map DeploymentInstanceDataKey newDeploymentsKeys ] []
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceAllocateNode {})) (BearerWrapper token)) newDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Just groupKey, authorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceAllocateNode {})) (BearerWrapper token)) newDeployments
 handleTask _ (GroupDestroy tID groupName authorID) = do
   $(logDebug) $ "Creating group destroy for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
@@ -89,7 +89,7 @@ handleTask _ (GroupDestroy tID groupName authorID) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Just groupKey, deploymentAuthorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDestroyInstance {})) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Just groupKey, authorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceDestroyInstance {})) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupRollback tID groupName snapName mask) = do
   $(logDebug) $ "Creating group rollback for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
@@ -105,7 +105,7 @@ handleTask _ (GroupRollback tID groupName snapName mask) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceRollback snapName mask)) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceRollback snapName mask)) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupMakeSnapshot tID groupName snapName mask) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -120,7 +120,7 @@ handleTask _ (GroupMakeSnapshot tID groupName snapName mask) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceSnapshot snapName False mask "")) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceSnapshot snapName False mask "")) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupDeleteSnapshot tID groupName snapName mask) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -135,7 +135,7 @@ handleTask _ (GroupDeleteSnapshot tID groupName snapName mask) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceSnapshot snapName True mask "")) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobserviceSnapshot snapName True mask "")) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupPower tID groupName powerOn mask) = do
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -152,7 +152,7 @@ handleTask _ (GroupPower tID groupName powerOn mask) = do
         DeploymentInstanceDataDeployConfig !=. Nothing
         ] []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {deploymentUserId=Just deploymentInstanceDataOwnerId, deploymentGroup=Nothing, deploymentAuthorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobservicePower powerOn mask)) (BearerWrapper token)) existingDeployments
+      mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage (JobserviceTask (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=Nothing, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (JobservicePower powerOn mask)) (BearerWrapper token)) existingDeployments
 handleTask _ r = do
   $(logInfo) $ (pack . show) r
   pure ()
