@@ -10,12 +10,21 @@ module Jobservice.Models
   , JobserviceMessageMeta(..)
   , JobserviceTask(..)
   , JobserviceTaskData(..)
+  , JobserviceTaskResponse(..)
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import           Data.Text         (Text)
 import           Servant.API
+
+newtype JobserviceTaskResponse = JobserviceTaskResponse Text deriving (Show, Eq, Ord)
+
+instance ToJSON JobserviceTaskResponse where
+  toJSON (JobserviceTaskResponse key) = object ["key" .= String key]
+
+instance FromJSON JobserviceTaskResponse where
+  parseJSON = withObject "JobserviceTaskResponse" $ \v -> JobserviceTaskResponse <$> v .: "key"
 
 data JobserviceTaskData = JobserviceTaskData
   { jobserviceTaskKey       :: !Text

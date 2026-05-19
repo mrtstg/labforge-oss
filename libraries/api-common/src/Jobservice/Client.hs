@@ -4,6 +4,11 @@ module Jobservice.Client
   , getImageUsage
   , isDeploymentLocked
   , insertJobserviceMessage'
+  , deleteTask
+  , getTaskCancel
+  , cancelTask
+  , getTask
+  , getPagedTasks
   ) where
 
 import           Api.Keycloak.Models
@@ -15,10 +20,15 @@ import           Servant.Client
 api :: Proxy JobserviceAPI
 api = Proxy
 
-insertJobserviceMessage' :: JobserviceMessage -> Maybe JobserviceMessageMeta -> BearerWrapper -> ClientM ()
+insertJobserviceMessage' :: JobserviceMessage -> Maybe JobserviceMessageMeta -> BearerWrapper -> ClientM JobserviceTaskResponse
 insertJobserviceMessage' msg meta = insertJobserviceMessage (JobserviceTask Nothing meta msg)
 
 insertJobserviceMessage
   :<|> getHeldImages
   :<|> getImageUsage
-  :<|> isDeploymentLocked = client api
+  :<|> isDeploymentLocked
+  :<|> deleteTask
+  :<|> getTaskCancel
+  :<|> cancelTask
+  :<|> getTask
+  :<|> getPagedTasks = client api

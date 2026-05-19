@@ -468,7 +468,7 @@ callInstanceSnapshot instanceKey (Just snapName) mask' doDelete doRollback (Bear
           jobserviceEnv <- asks $ getEnvFor JobserviceAPI
           let meta = JobserviceMessageMeta {authorId=tokenUUID, actionGroup=Nothing, targetUserId=Just deploymentInstanceDataOwnerId, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=instanceKey}
           let taskF t m= defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage' m (Just meta) (BearerWrapper t)
-          withTokenVariable'' $ \t -> do
+          void $ withTokenVariable'' $ \t -> do
             case (doDelete, doRollback) of
               (False, False) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=False, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
               (True, _) -> taskF t (JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=True, deploymentMask=fromMaybe "*" mask', deploymentSnapshotComment = ""})
@@ -953,7 +953,9 @@ takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
         let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
         redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
-          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
+          -- TODO: handle 429 error
+          _ <- defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
+          (pure . pure) ()
 
 deleteVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 deleteVMPortSnapshot _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -978,7 +980,8 @@ deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
         let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
         redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
-          defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
+          _ <- defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
+          (pure . pure) ()
 
 rollbackVMPort :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 rollbackVMPort _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -1004,7 +1007,8 @@ rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
                   let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
                   redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
                     let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
-                    defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
+                    _ <- defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
+                    (pure . pure) ()
 
 deploymentServer :: ServerT DeploymentAPI AppT
 deploymentServer = getPagedTemplates
