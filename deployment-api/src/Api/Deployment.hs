@@ -30,6 +30,7 @@ import           Api.Keycloak.Models.Introspect
 import           Api.Keycloak.Models.User
 import           Api.Keycloak.Utils
 import           Api.Retry
+import           Api.Utils
 import           Auth
 import           Auth.Client
 import           Auth.Token
@@ -953,9 +954,11 @@ takeVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
         let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
         redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
-          -- TODO: handle 429 error
-          _ <- defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
-          (pure . pure) ()
+          r <- defaultRetryClientC jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName False (T.pack $ configVMName vmData) (if not isAdmin then "usermade" else ""))) (BearerWrapper t')
+          case tryDecodeError r of
+            (DecodedError 429 e) -> sendJSONError err400 e
+            (DecodedResult _) -> (pure . pure) ()
+            _otherError -> sendJSONError err500 (JSONError "internalError" "Something went wrong" Null)
 
 deleteVMPortSnapshot :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 deleteVMPortSnapshot _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -980,8 +983,11 @@ deleteVMPortSnapshot vmPort (Just snapName) (BearerWrapper token) = do
         let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
         let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
         redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
-          _ <- defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
-          (pure . pure) ()
+          r <- defaultRetryClientC jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceSnapshot snapName True (T.pack $ configVMName vmData) "")) (BearerWrapper t')
+          case tryDecodeError r of
+            (DecodedError 429 e) -> sendJSONError err400 e
+            (DecodedResult _) -> (pure . pure) ()
+            _otherError -> sendJSONError err500 (JSONError "internalError" "Something went wrong" Null)
 
 rollbackVMPort :: Text -> Maybe Text -> BearerWrapper -> AppT ()
 rollbackVMPort _ Nothing _ = sendJSONError err400 (JSONError "badRequest" "Missing snapshot name" Null)
@@ -1007,8 +1013,11 @@ rollbackVMPort vmPort (Just snapName) (BearerWrapper token) = do
                   let taskKey = "snapshot-request-" <> vmPort <> "-" <> uid
                   redisRateLockWrapper (T.unpack taskKey) 10 snapshotRequestLimit $ do
                     let meta = JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Nothing, authorId=tokenUUID, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent, deploymentId=dId}
-                    _ <- defaultRetryClient jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
-                    (pure . pure) ()
+                    r <- defaultRetryClientC jobserviceEnv $ insertJobserviceMessage (JobserviceTask (Just taskKey) (Just meta) (JobserviceRollback snapName (T.pack $ configVMName vmData))) (BearerWrapper t')
+                    case tryDecodeError r of
+                      (DecodedError 429 e) -> sendJSONError err400 e
+                      (DecodedResult _) -> (pure . pure) ()
+                      _otherError -> sendJSONError err500 (JSONError "internalError" "Something went wrong" Null)
 
 deploymentServer :: ServerT DeploymentAPI AppT
 deploymentServer = getPagedTemplates
