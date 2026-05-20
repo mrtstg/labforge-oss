@@ -36,10 +36,37 @@ import           Config
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Data.Aeson
+import           Data.Text              (Text)
 import           Database.Persist.Sql
 import           Database.Persist.TH
+import           Jobservice.Models
 
-share [ mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase||]
+share [ mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+TaskData
+  Id Text
+  status Text
+  timestamp Int
+  author Text Maybe
+  group Text Maybe
+  task JobserviceMessage sqltype=jsonb
+  metadata JobserviceMessageMeta Maybe sqltype=jsonb
+  lastUpdate Int
+  deriving Show
+|]
+
+instance PersistField JobserviceMessage where
+  toPersistValue = toPersistValueJSON
+  fromPersistValue = fromPersistValueJSON
+
+instance PersistFieldSql JobserviceMessage where
+  sqlType _ = SqlOther "JSONB"
+
+instance PersistField JobserviceMessageMeta where
+  toPersistValue = toPersistValueJSON
+  fromPersistValue = fromPersistValueJSON
+
+instance PersistFieldSql JobserviceMessageMeta where
+  sqlType _ = SqlOther "JSONB"
 
 doMigration :: SqlPersistT IO ()
 doMigration = runMigration migrateAll

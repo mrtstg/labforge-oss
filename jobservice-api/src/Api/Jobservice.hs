@@ -20,29 +20,62 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE TypeOperators       #-}
 module Api.Jobservice
   ( jobserviceServer
+  , sendMessage
   ) where
 
 import           Api.Keycloak.Models
 import           Auth.Token
 import           Config
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
-import qualified Data.ByteString.Lazy.Char8 as LBS
-import           Data.Functor               ((<&>))
+import qualified Data.ByteString.Lazy.Char8  as LBS
+import           Data.Functor                ((<&>))
 import           Data.Maybe
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
+import           Data.UUID.V4                (nextRandom)
+import           Database
+import           Database.Persist
+import           Database.Persist.Postgresql
 import           Jobservice.Models
 import           Jobservice.Schema
 import           Models.JSONError
 import           Network.AMQP
 import           Redis.Common
 import           Servant
+import           Utils.Time
 
 jobserviceServer :: ServerT JobserviceAPI AppT
-jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage :<|> isDeploymentLocked
+jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage :<|> isDeploymentLocked :<|> deleteTask :<|> isTaskReachedStatus :<|> setTaskStatus :<|> getTask :<|> getPagedTasks
+
+deleteTask :: Text -> BearerWrapper -> AppT ()
+deleteTask taskId (BearerWrapper token) = do
+  _ <- requireRealmRoles token ["jobservice-send"]
+  runDB $ deleteWhere [ TaskDataId ==. TaskDataKey taskId ]
+
+isTaskReachedStatus :: Text -> Text -> BearerWrapper -> AppT Bool
+isTaskReachedStatus taskId status (BearerWrapper token) = do
+  _ <- requireRealmRoles token ["jobservice-send"]
+  task <- runDB $ get (TaskDataKey taskId)
+  case task of
+    Nothing                                      -> pure True
+    (Just (TaskData { taskDataStatus=status' })) -> do
+      ts <- getUnixIntTime
+      runDB $ updateWhere [ TaskDataId ==. TaskDataKey taskId ] [ TaskDataLastUpdate =. ts ]
+      pure $ status == status'
+
+setTaskStatus :: Text -> Text -> BearerWrapper -> AppT ()
+setTaskStatus taskId status (BearerWrapper token) = do
+  _ <- requireRealmRoles token ["jobservice-send"]
+  ts <- getUnixIntTime
+  runDB $ updateWhere [ TaskDataId ==. TaskDataKey taskId ] [ TaskDataStatus =. status, TaskDataLastUpdate =. ts ]
+
+getTask = undefined
+
+getPagedTasks = undefined
 
 isDeploymentLocked :: Text -> JobserviceLockType -> BearerWrapper -> AppT Bool
 isDeploymentLocked deploymentId AnyLock (BearerWrapper token) = do
@@ -53,16 +86,24 @@ isDeploymentLocked deploymentId specifiedKey (BearerWrapper token) = do
   let lockKey = T.unpack $ jobserviceLockKey specifiedKey deploymentId
   getValue' lockKey <&> isJust
 
-sendMessage :: JobserviceTask -> BearerWrapper -> AppT ()
-sendMessage msgPayload (BearerWrapper token) = do
+sendMessage :: JobserviceTask -> BearerWrapper -> AppT JobserviceTaskResponse
+sendMessage (JobserviceTask taskKey' meta msg') (BearerWrapper token) = do
   _ <- requireRealmRoles token ["jobservice-send"]
-  -- TODO: future validation
-  r <- asks rabbitConnection
-  chan <- liftIO $ openChannel r
-  let msg = newMsg { msgBody = encode msgPayload, msgDeliveryMode = Just NonPersistent }
-  _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
-  liftIO $ closeChannel chan
-  pure ()
+
+  keyTaken <- maybe (pure False) (\v -> runDB $ exists [ TaskDataId ==. TaskDataKey v ]) taskKey'
+  if keyTaken then sendJSONError (err400 { errHTTPCode = 429 }) (JSONError "taskFound" "Task key is taken" (object ["message" .= String "Подобная задача уже находится в очереди или выполняется"])) else do
+    taskKey <- maybe (liftIO nextRandom <&> (T.pack . show)) pure taskKey'
+    ts <- getUnixIntTime
+
+    r <- asks rabbitConnection
+    chan <- liftIO $ openChannel r
+    -- TODO: filling group and author
+    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=Nothing, taskDataAuthor=Nothing, taskDataLastUpdate=ts})
+    -- TODO: persistent?
+    let msg = newMsg { msgBody = encode (JobserviceTask (Just taskKey) meta msg'), msgDeliveryMode = Just NonPersistent }
+    _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
+    liftIO $ closeChannel chan
+    pure (JobserviceTaskResponse taskKey)
 
 getImageUsage :: Text -> BearerWrapper -> AppT [JobserviceImageUsageData]
 getImageUsage imageName (BearerWrapper token) = do

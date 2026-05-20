@@ -16,7 +16,7 @@ type JobserviceAPI = "api" :> "jobservice" :> "message" :> ReqBody '[JSON] Jobse
   :<|> "api" :> "jobservice" :> "image" :> Capture "imageName" Text :> "usage" :> AuthHeader :> Get '[JSON] [JobserviceImageUsageData]
   :<|> "api" :> "jobservice" :> "deployment" :> Capture "deploymentId" Text :> "lock" :> Capture "lockType" JobserviceLockType :> AuthHeader :> Get '[JSON] Bool
   :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> AuthHeader :> Delete '[JSON] ()
-  :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> "cancel" :> AuthHeader :> Get '[JSON] Bool
-  :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> "cancel" :> AuthHeader :> Post '[JSON] ()
+  :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> Capture "status" Text :> AuthHeader :> Get '[JSON] Bool
+  :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> Capture "status" Text :> AuthHeader :> Post '[JSON] ()
   :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> AuthHeader :> Get '[JSON] JobserviceTask
   :<|> "api" :> "jobservice" :> "task" :> QueryParam "page" Int :> AuthHeader :> Get '[JSON] (PagedResponse [JobserviceTask])

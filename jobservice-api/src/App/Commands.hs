@@ -17,6 +17,8 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE TemplateHaskell    #-}
 module App.Commands (runCommand) where
 
+import           Api.Jobservice
+import           Api.Keycloak.Models
 import           Api.Keycloak.Token
 import           App
 import           App.Types
@@ -55,7 +57,7 @@ createPool debug url = do
 f :: Config -> IO ()
 f cfg = forever $ do
   catch (void $ appTIO inner cfg) err
-  threadDelay 60_000_000
+  threadDelay 10_000_000
   where
   err :: SomeException -> IO ()
   err _ = pure ()
@@ -65,15 +67,16 @@ f cfg = forever $ do
     $(logInfo) "Checking images key"
     v <- getValue' jobserviceUsedImagesKey
     case v of
-      (Just _) -> $(logInfo) "Images key found"
+      (Just _) -> do
+        $(logInfo) "Images key found"
+        liftIO $ threadDelay 10_000_000
       Nothing -> do
         $(logInfo) "Creating images request"
-        r <- asks rabbitConnection
-        chan <- liftIO $ openChannel r
-        let msg = newMsg { msgBody = encode (JobserviceTask Nothing Nothing JobserviceUpdateUsedImages {}), msgDeliveryMode = Just NonPersistent }
-        _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
-        liftIO $ closeChannel chan
-        liftIO $ threadDelay (5 * 60_000_000)
+        r <- withTokenVariable $ \t -> do
+          sendMessage (JobserviceTask (Just "updateImages") Nothing JobserviceUpdateUsedImages {}) (BearerWrapper t)
+        case r of
+          (Left _)  -> pure ()
+          (Right _) -> liftIO $ threadDelay (5 * 60_000_000)
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug, appCommand=MakeMigrations } = do

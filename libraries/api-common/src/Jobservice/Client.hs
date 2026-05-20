@@ -5,8 +5,8 @@ module Jobservice.Client
   , isDeploymentLocked
   , insertJobserviceMessage'
   , deleteTask
-  , getTaskCancel
-  , cancelTask
+  , isTaskReachedStatus
+  , setTaskStatus
   , getTask
   , getPagedTasks
   ) where
@@ -28,7 +28,7 @@ insertJobserviceMessage
   :<|> getImageUsage
   :<|> isDeploymentLocked
   :<|> deleteTask
-  :<|> getTaskCancel
-  :<|> cancelTask
+  :<|> isTaskReachedStatus
+  :<|> setTaskStatus
   :<|> getTask
   :<|> getPagedTasks = client api
