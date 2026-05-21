@@ -49,10 +49,19 @@ import           Servant.Client
 import           Service.Config
 import           System.Environment
 import           System.Exit
+import           Utils.Time
 
 createPool :: Bool -> ByteString -> IO (Pool SqlBackend)
 createPool debug url = do
   (if debug then runStdoutLoggingT else flip runLoggingT (\_ _ _ _ -> pure ())) $ createPostgresqlPool url 10
+
+dropHangedTasks :: Int -> Config -> IO ()
+dropHangedTasks timeout cfg = forever $ do
+  _ <- flip appTIO cfg $ do
+    ts <- getUnixIntTime
+    let borderLifetime = ts - timeout
+    runDB $ deleteWhere [ TaskDataLastUpdate <=. borderLifetime ]
+  threadDelay 5_000_000
 
 f :: Config -> IO ()
 f cfg = forever $ do
@@ -102,6 +111,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
+  taskTimeout <- runLoggingT (lookupEnvDefault "TASK_MAX_LIFETIME" 60) logFunction
 
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
 
@@ -117,6 +127,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   let app' = app config
 
   _ <- async $ f config
+  _ <- async $ dropHangedTasks taskTimeout config
 
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"
   withStdoutLogger $ \aplogger -> do
