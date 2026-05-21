@@ -132,7 +132,7 @@ services:
       - 9090:9090
     restart: unless-stopped
   dev-cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: labforge-cadvisor
     hostname: cadvisor
     network_mode: host
