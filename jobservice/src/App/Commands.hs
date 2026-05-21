@@ -66,25 +66,26 @@ import           System.Exit
 import           System.Random
 import           Utils.Time
 
-genericFormattedLock :: Message -> Text -> Bool -> AppT a -> AppT ()
-genericFormattedLock msg key resendTask f' = let
+genericFormattedLock :: Envelope -> Message -> Text -> Bool -> AppT a -> AppT ()
+genericFormattedLock env msg key resendTask f' = let
   fail_ :: AppT ()
   fail_ = do
     $(logDebug) "Deployment action task is locked."
     $(logDebug) $ "Lock key " <> key <> " is found."
     when resendTask $ do
       $(logDebug) "Resending task."
-      recreateMessageWithDelay msg
+      recreateMessageWithDelay env msg
   in do
   redisNXLockWrapper (T.unpack key) 600 (getUnixIntTime <&> fromIntegral) fail_ (void f')
 
-genericDeploymentLock :: Message -> Text -> Bool -> AppT a -> AppT ()
-genericDeploymentLock msg deploymentId resendTask f' = do
+genericDeploymentLock :: Envelope -> Message -> Text -> Bool -> AppT a -> AppT ()
+genericDeploymentLock env msg deploymentId resendTask f' = do
   let lockKey = jobserviceLockKey GenericLock deploymentId
-  genericFormattedLock msg lockKey resendTask f'
+  genericFormattedLock env msg lockKey resendTask f'
 
-recreateMessageWithDelay :: Message -> AppT ()
-recreateMessageWithDelay msg = do
+recreateMessageWithDelay :: Envelope -> Message -> AppT ()
+recreateMessageWithDelay env msg = do
+  liftIO $ ackEnv env
   liftIO $ threadDelay 500_000
   r <- asks rabbitConnection
   chan <- liftIO $ openChannel r
@@ -148,21 +149,22 @@ f deploymentsC (msg, env) = do
     (Right (JobserviceTask taskKey' _ _)) -> do
       case decodeRes of
         (Right (JobserviceTask _ _ JobserviceUpdateUsedImages {})) -> do
-          genericFormattedLock msg "image_usage_lock" False $ do
+          genericFormattedLock env msg "image_usage_lock" False $ do
             cfg <- ask
             raceTask env taskKey' cfg $ cacheUsedImages
         (Right (JobserviceTask _ (Just meta@(JobserviceMessageMeta { targetUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
-          genericFormattedLock msg "allocate_node_lock" True $ do
+          genericFormattedLock env msg "allocate_node_lock" True $ do
             cfg <- ask
             raceTask env taskKey' cfg $ allocateNode (env, msg) meta
         (Right (JobserviceTask _ (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDeployInstance {})) -> do
-          deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+          --deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
           deploymentLimit <- asks maxDeployments
+          let deploymentsInProgress = 0
           if deploymentsInProgress >= deploymentLimit then do
             $(logInfo) "Active deployments limit. Recreating message"
-            recreateMessageWithDelay msg
+            recreateMessageWithDelay env msg
           else do
-            _ <- genericDeploymentLock msg deploymentId False $ do
+            _ <- genericDeploymentLock env msg deploymentId False $ do
               (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
               _ <- liftIO $ do
                 randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
@@ -173,12 +175,13 @@ f deploymentsC (msg, env) = do
               (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
             pure ()
         (Right (JobserviceTask _ (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDestroyInstance {})) -> do
-          _ <- genericDeploymentLock msg deploymentId True $ do
-            deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+          _ <- genericDeploymentLock env msg deploymentId True $ do
+            --deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+            let deploymentsInProgress = 0
             deploymentLimit <- asks maxDeployments
             if deploymentsInProgress >= deploymentLimit then do
               $(logInfo) "Active deployments limit. Recreating message"
-              recreateMessageWithDelay msg
+              recreateMessageWithDelay env msg
             else do
               (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
               _ <- liftIO $ do
@@ -190,15 +193,15 @@ f deploymentsC (msg, env) = do
               (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
           pure ()
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) (JobservicePower powerOn mask))) -> do
-          genericFormattedLock msg (jobserviceLockKey PowerLock deploymentId) False $ do
+          genericFormattedLock env msg (jobserviceLockKey PowerLock deploymentId) False $ do
             cfg <- ask
             raceTask env taskKey' cfg $ jobservicePower m env powerOn mask
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
-          genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
+          genericFormattedLock env msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
             cfg <- ask
             raceTask env taskKey' cfg $ jobserviceSnapshot m snapName delete mask comment
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceRollback {deploymentSnapshot=snapName, deploymentMask=mask})) -> do
-          genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
+          genericFormattedLock env msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
             cfg <- ask
             raceTask env taskKey' cfg $ jobserviceRollback m snapName mask
         (Right t) -> do
