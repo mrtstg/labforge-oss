@@ -18,5 +18,5 @@ type JobserviceAPI = "api" :> "jobservice" :> "message" :> ReqBody '[JSON] Jobse
   :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> AuthHeader :> Delete '[JSON] ()
   :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> Capture "status" Text :> AuthHeader :> Get '[JSON] Bool
   :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> Capture "status" Text :> AuthHeader :> Post '[JSON] ()
-  :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> AuthHeader :> Get '[JSON] JobserviceTask
-  :<|> "api" :> "jobservice" :> "task" :> QueryParam "page" Int :> AuthHeader :> Get '[JSON] (PagedResponse [JobserviceTask])
+  :<|> "api" :> "jobservice" :> "task" :> Capture "taskId" Text :> AuthHeader :> Get '[JSON] JobserviceTaskData
+  :<|> "api" :> "jobservice" :> "task" :> QueryParam "page" Int :> AuthHeader :> Get '[JSON] (PagedResponse [JobserviceTaskData])
