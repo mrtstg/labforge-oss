@@ -91,8 +91,8 @@ recreateMessageWithDelay msg = do
   _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
   liftIO $ closeChannel chan
 
-raceTask :: Maybe Text -> Config -> AppT m -> AppT ()
-raceTask taskKey' cfg task' = let
+raceTask :: Envelope -> Maybe Text -> Config -> AppT m -> AppT ()
+raceTask env taskKey' cfg task' = let
   err :: SomeException -> IO ()
   err _ = do
     _ <- flip appTIO cfg $ do
@@ -122,11 +122,20 @@ raceTask taskKey' cfg task' = let
     case taskKey' of
       Nothing -> void task'
       (Just taskKey) -> do
-        _ <- liftIO $ A.race (catch (void $ appTIO (raceLock taskKey) cfg) err) (catch (void $ appTIO task' cfg) err)
         jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable $ \t -> do
-           defaultRetryClient jobserviceEnv $ J.deleteTask (fromJust taskKey') (BearerWrapper t)
-        pure ()
+        isCancelled <- withTokenVariable $ \t -> do
+           defaultRetryClient jobserviceEnv $ J.isTaskReachedStatus taskKey "cancelled" (BearerWrapper t)
+        case isCancelled of
+          Right (Right False) -> do
+            _ <- liftIO $ A.race (catch (void $ appTIO (raceLock taskKey) cfg) err) (catch (void $ appTIO task' cfg) err)
+            _ <- withTokenVariable $ \t -> do
+               defaultRetryClient jobserviceEnv $ J.deleteTask taskKey (BearerWrapper t)
+            liftIO $ ackEnv env
+          Right (Right True) -> do
+            $(logWarn) $ "Task " <> taskKey <> " is already cancelled."
+            liftIO $ ackEnv env
+          _anyError -> do
+            liftIO $ nackEnv env
 
 f :: TVar Int -> (Message, Envelope) -> AppT ()
 f deploymentsC (msg, env) = do
@@ -141,11 +150,11 @@ f deploymentsC (msg, env) = do
         (Right (JobserviceTask _ _ JobserviceUpdateUsedImages {})) -> do
           genericFormattedLock msg "image_usage_lock" False $ do
             cfg <- ask
-            raceTask taskKey' cfg $ cacheUsedImages
+            raceTask env taskKey' cfg $ cacheUsedImages
         (Right (JobserviceTask _ (Just meta@(JobserviceMessageMeta { targetUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
           genericFormattedLock msg "allocate_node_lock" True $ do
             cfg <- ask
-            raceTask taskKey' cfg $ allocateNode (env, msg) meta
+            raceTask env taskKey' cfg $ allocateNode (env, msg) meta
         (Right (JobserviceTask _ (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDeployInstance {})) -> do
           deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
           deploymentLimit <- asks maxDeployments
@@ -160,7 +169,7 @@ f deploymentsC (msg, env) = do
                 threadDelay (randomDelay + min 30 (5_000_000 * deploymentsInProgress))
               $(logInfo) $ "Deploying " <> deploymentId
               cfg <- ask
-              _ <- raceTask taskKey' cfg $ deployInstance env meta
+              _ <- raceTask env taskKey' cfg $ deployInstance env meta
               (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
             pure ()
         (Right (JobserviceTask _ (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDestroyInstance {})) -> do
@@ -177,25 +186,24 @@ f deploymentsC (msg, env) = do
                 threadDelay randomDelay
               $(logInfo) $ "Destroying " <> deploymentId
               cfg <- ask
-              _ <- raceTask taskKey' cfg $ destroyInstance env meta
+              _ <- raceTask env taskKey' cfg $ destroyInstance env meta
               (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
           pure ()
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) (JobservicePower powerOn mask))) -> do
           genericFormattedLock msg (jobserviceLockKey PowerLock deploymentId) False $ do
             cfg <- ask
-            raceTask taskKey' cfg $ jobservicePower m env powerOn mask
+            raceTask env taskKey' cfg $ jobservicePower m env powerOn mask
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
           genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
             cfg <- ask
-            raceTask taskKey' cfg $ jobserviceSnapshot m snapName delete mask comment
+            raceTask env taskKey' cfg $ jobserviceSnapshot m snapName delete mask comment
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceRollback {deploymentSnapshot=snapName, deploymentMask=mask})) -> do
           genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
             cfg <- ask
-            raceTask taskKey' cfg $ jobserviceRollback m snapName mask
+            raceTask env taskKey' cfg $ jobserviceRollback m snapName mask
         (Right t) -> do
           $(logError) $ T.pack $ "Invalid task format: " <> show t
-  $(logDebug) "Finished message handle, acknowledging"
-  liftIO $ ackEnv env
+          liftIO $ ackEnv env
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = let
