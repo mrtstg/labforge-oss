@@ -97,9 +97,9 @@ sendMessage (JobserviceTask taskKey' meta msg') (BearerWrapper token) = do
 
     r <- asks rabbitConnection
     chan <- liftIO $ openChannel r
-    -- TODO: filling group and author
-    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=Nothing, taskDataAuthor=Nothing, taskDataLastUpdate=ts})
-    -- TODO: persistent?
+    let group' = actionGroup =<< meta
+    let author' = authorId =<< meta
+    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts})
     let msg = newMsg { msgBody = encode (JobserviceTask (Just taskKey) meta msg'), msgDeliveryMode = Just NonPersistent }
     _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
     liftIO $ closeChannel chan
