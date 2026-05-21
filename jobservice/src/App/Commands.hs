@@ -91,10 +91,13 @@ recreateMessageWithDelay msg = do
   _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
   liftIO $ closeChannel chan
 
-raceTask :: Maybe Text -> Config -> AppT m -> AppT (Either () ())
+raceTask :: Maybe Text -> Config -> AppT m -> AppT ()
 raceTask taskKey' cfg task' = let
   err :: SomeException -> IO ()
-  err _ = pure ()
+  err _ = do
+    _ <- flip appTIO cfg $ do
+      $(logWarn) $ "Task " <> fromMaybe "-" taskKey' <> " cancelled."
+    pure ()
 
   raceLock :: Text -> AppT ()
   raceLock taskKey = do
@@ -117,9 +120,13 @@ raceTask taskKey' cfg task' = let
 
   in do
     case taskKey' of
-      Nothing -> do task' *> (pure . pure) ()
+      Nothing -> void task'
       (Just taskKey) -> do
-        liftIO $ A.race (catch (void $ appTIO (raceLock taskKey) cfg) err) (catch (void $ appTIO task' cfg) err)
+        _ <- liftIO $ A.race (catch (void $ appTIO (raceLock taskKey) cfg) err) (catch (void $ appTIO task' cfg) err)
+        jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+        _ <- withTokenVariable $ \t -> do
+           defaultRetryClient jobserviceEnv $ J.deleteTask (fromJust taskKey') (BearerWrapper t)
+        pure ()
 
 f :: TVar Int -> (Message, Envelope) -> AppT ()
 f deploymentsC (msg, env) = do
@@ -133,7 +140,8 @@ f deploymentsC (msg, env) = do
       case decodeRes of
         (Right (JobserviceTask _ _ JobserviceUpdateUsedImages {})) -> do
           genericFormattedLock msg "image_usage_lock" False $ do
-            cacheUsedImages
+            cfg <- ask
+            raceTask taskKey' cfg $ cacheUsedImages
         (Right (JobserviceTask _ (Just meta@(JobserviceMessageMeta { targetUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
           genericFormattedLock msg "allocate_node_lock" True $ do
             cfg <- ask
@@ -168,25 +176,24 @@ f deploymentsC (msg, env) = do
                 randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
                 threadDelay randomDelay
               $(logInfo) $ "Destroying " <> deploymentId
-              destroyInstance env meta
+              cfg <- ask
+              _ <- raceTask taskKey' cfg $ destroyInstance env meta
               (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
           pure ()
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) (JobservicePower powerOn mask))) -> do
           genericFormattedLock msg (jobserviceLockKey PowerLock deploymentId) False $ do
-            jobservicePower m env powerOn mask
+            cfg <- ask
+            raceTask taskKey' cfg $ jobservicePower m env powerOn mask
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
           genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
-            jobserviceSnapshot m snapName delete mask comment
+            cfg <- ask
+            raceTask taskKey' cfg $ jobserviceSnapshot m snapName delete mask comment
         (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceRollback {deploymentSnapshot=snapName, deploymentMask=mask})) -> do
           genericFormattedLock msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
-            jobserviceRollback m snapName mask
+            cfg <- ask
+            raceTask taskKey' cfg $ jobserviceRollback m snapName mask
         (Right t) -> do
           $(logError) $ T.pack $ "Invalid task format: " <> show t
-      when (isJust taskKey') $ do
-        -- TODO: error report
-        jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-        void $ withTokenVariable $ \t -> do
-           defaultRetryClient jobserviceEnv $ J.deleteTask (fromJust taskKey') (BearerWrapper t)
   $(logDebug) "Finished message handle, acknowledging"
   liftIO $ ackEnv env
 
