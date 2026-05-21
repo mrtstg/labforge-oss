@@ -44,6 +44,7 @@ import           Jobservice.Models
 share [ mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 TaskData
   Id Text
+  confictKey Text Maybe
   status Text
   timestamp Int
   author Text Maybe

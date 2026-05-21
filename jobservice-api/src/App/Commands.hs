@@ -60,7 +60,8 @@ dropHangedTasks timeout cfg = forever $ do
   _ <- flip appTIO cfg $ do
     ts <- getUnixIntTime
     let borderLifetime = ts - timeout
-    runDB $ deleteWhere [ TaskDataLastUpdate <=. borderLifetime ]
+    runDB $ deleteWhere [ TaskDataStatus ==. "running", TaskDataLastUpdate <=. borderLifetime ]
+    runDB $ deleteWhere [ TaskDataStatus !=. "running", TaskDataLastUpdate <=. ts - 600 ]
   threadDelay 5_000_000
 
 f :: Config -> IO ()

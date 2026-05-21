@@ -23,7 +23,9 @@ module Api.Jobservice
   , sendMessage
   ) where
 
+import           Api                            (PagedResponse (..))
 import           Api.Keycloak.Models
+import           Api.Keycloak.Models.Introspect
 import           Auth.Token
 import           Config
 import           Control.Monad
@@ -31,12 +33,12 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
-import qualified Data.ByteString.Lazy.Char8  as LBS
-import           Data.Functor                ((<&>))
+import qualified Data.ByteString.Lazy.Char8     as LBS
+import           Data.Functor                   ((<&>))
 import           Data.Maybe
-import           Data.Text                   (Text)
-import qualified Data.Text                   as T
-import           Data.UUID.V4                (nextRandom)
+import           Data.Text                      (Text)
+import qualified Data.Text                      as T
+import           Data.UUID.V4                   (nextRandom)
 import           Database
 import           Database.Persist
 import           Database.Persist.Postgresql
@@ -75,7 +77,16 @@ setTaskStatus taskId status (BearerWrapper token) = do
 
 getTask = undefined
 
-getPagedTasks = undefined
+getPagedTasks :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [JobserviceTaskData])
+getPagedTasks pageN (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireToken token
+  let page = fromMaybe 1 pageN
+  let pageSize = 15
+  let limits = [ LimitTo pageSize, OffsetBy $ (page - 1) * pageSize, Asc TaskDataStatus, Asc TaskDataTimestamp ]
+  let filters = if "jobservice-task-admin" `elem` tokenRealmRoles then [] else [ TaskDataAuthor ==. tokenUUID ]
+  totalTasks <- runDB $ count filters
+  tasksData <- runDB $ selectList filters limits
+  pure PagedResponse {responseTotal=totalTasks, responsePageSize=pageSize, responseObjects=map (\(Entity (TaskDataKey taskKey) (TaskData { .. })) -> JobserviceTaskData {jobserviceTaskTimestamp=taskDataTimestamp, jobserviceTaskStatus=taskDataStatus, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskKey=taskKey, jobserviceTaskGroup=taskDataGroup, jobserviceTaskAuthor=taskDataAuthor, jobserviceTask=taskDataTask}) tasksData}
 
 isDeploymentLocked :: Text -> JobserviceLockType -> BearerWrapper -> AppT Bool
 isDeploymentLocked deploymentId AnyLock (BearerWrapper token) = do
@@ -87,19 +98,19 @@ isDeploymentLocked deploymentId specifiedKey (BearerWrapper token) = do
   getValue' lockKey <&> isJust
 
 sendMessage :: JobserviceTask -> BearerWrapper -> AppT JobserviceTaskResponse
-sendMessage (JobserviceTask taskKey' meta msg') (BearerWrapper token) = do
+sendMessage (JobserviceTask conflictKey meta msg') (BearerWrapper token) = do
   _ <- requireRealmRoles token ["jobservice-send"]
 
-  keyTaken <- maybe (pure False) (\v -> runDB $ exists [ TaskDataId ==. TaskDataKey v ]) taskKey'
-  if keyTaken then sendJSONError (err400 { errHTTPCode = 429 }) (JSONError "taskFound" "Task key is taken" (object ["message" .= String "Подобная задача уже находится в очереди или выполняется"])) else do
-    taskKey <- maybe (liftIO nextRandom <&> (T.pack . show)) pure taskKey'
+  keyTaken <- maybe (pure False) (\v -> runDB $ exists [ TaskDataConfictKey ==. Just v ]) conflictKey
+  if keyTaken then sendJSONError (err400 { errHTTPCode = 429 }) (JSONError "taskConflict" "Conflict key is taken" (object ["message" .= String "Подобная задача уже находится в очереди или выполняется"])) else do
+    taskKey <- liftIO nextRandom <&> (T.pack . show)
     ts <- getUnixIntTime
 
     r <- asks rabbitConnection
     chan <- liftIO $ openChannel r
     let group' = actionGroup =<< meta
     let author' = authorId =<< meta
-    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts})
+    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts, taskDataConfictKey=conflictKey})
     let msg = newMsg { msgBody = encode (JobserviceTask (Just taskKey) meta msg'), msgDeliveryMode = Just NonPersistent }
     _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
     liftIO $ closeChannel chan
