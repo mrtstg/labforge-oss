@@ -146,67 +146,63 @@ f deploymentsC (msg, env) = do
   case decodeRes of
     (Left e) -> do
       $(logError) $ "Decode error: " <> pack e
-    (Right (JobserviceTask taskKey' _ _)) -> do
-      case decodeRes of
-        (Right (JobserviceTask _ _ JobserviceUpdateUsedImages {})) -> do
-          genericFormattedLock env msg "image_usage_lock" False $ do
-            cfg <- ask
-            raceTask env taskKey' cfg $ cacheUsedImages
-        (Right (JobserviceTask _ (Just meta@(JobserviceMessageMeta { targetUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
-          genericFormattedLock env msg "allocate_node_lock" True $ do
-            cfg <- ask
-            raceTask env taskKey' cfg $ allocateNode (env, msg) meta
-        (Right (JobserviceTask _ (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDeployInstance {})) -> do
-          --deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
-          deploymentLimit <- asks maxDeployments
-          let deploymentsInProgress = 0
-          if deploymentsInProgress >= deploymentLimit then do
-            $(logInfo) "Active deployments limit. Recreating message"
-            recreateMessageWithDelay env msg
-          else do
-            _ <- genericDeploymentLock env msg deploymentId False $ do
-              (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
-              _ <- liftIO $ do
-                randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
-                threadDelay (randomDelay + min 30 (5_000_000 * deploymentsInProgress))
-              $(logInfo) $ "Deploying " <> deploymentId
-              cfg <- ask
-              _ <- raceTask env taskKey' cfg $ deployInstance env meta
-              (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
-            pure ()
-        (Right (JobserviceTask _ (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDestroyInstance {})) -> do
-          _ <- genericDeploymentLock env msg deploymentId True $ do
-            --deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
-            let deploymentsInProgress = 0
-            deploymentLimit <- asks maxDeployments
-            if deploymentsInProgress >= deploymentLimit then do
-              $(logInfo) "Active deployments limit. Recreating message"
-              recreateMessageWithDelay env msg
-            else do
-              (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
-              _ <- liftIO $ do
-                randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
-                threadDelay randomDelay
-              $(logInfo) $ "Destroying " <> deploymentId
-              cfg <- ask
-              _ <- raceTask env taskKey' cfg $ destroyInstance env meta
-              (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
-          pure ()
-        (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) (JobservicePower powerOn mask))) -> do
-          genericFormattedLock env msg (jobserviceLockKey PowerLock deploymentId) False $ do
-            cfg <- ask
-            raceTask env taskKey' cfg $ jobservicePower m env powerOn mask
-        (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
-          genericFormattedLock env msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
-            cfg <- ask
-            raceTask env taskKey' cfg $ jobserviceSnapshot m snapName delete mask comment
-        (Right (JobserviceTask _ (Just m@(JobserviceMessageMeta { .. })) JobserviceRollback {deploymentSnapshot=snapName, deploymentMask=mask})) -> do
-          genericFormattedLock env msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
-            cfg <- ask
-            raceTask env taskKey' cfg $ jobserviceRollback m snapName mask
-        (Right t) -> do
-          $(logError) $ T.pack $ "Invalid task format: " <> show t
-          liftIO $ ackEnv env
+      liftIO $ ackEnv env
+    (Right (JobserviceTask taskKey _ JobserviceUpdateUsedImages {})) -> do
+       cfg <- ask
+       raceTask env taskKey cfg $ cacheUsedImages
+    (Right (JobserviceTask taskKey (Just meta@(JobserviceMessageMeta { targetUserId = Just _ })) (JobserviceAllocateNode {}))) -> do
+      genericFormattedLock env msg "allocate_node_lock" True $ do
+        cfg <- ask
+        raceTask env taskKey cfg $ allocateNode (env, msg) meta
+    (Right (JobserviceTask taskKey (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDeployInstance {})) -> do
+      deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+      deploymentLimit <- asks maxDeployments
+      if deploymentsInProgress >= deploymentLimit then do
+        $(logInfo) "Active deployments limit. Recreating message"
+        recreateMessageWithDelay env msg
+      else do
+        _ <- genericDeploymentLock env msg deploymentId False $ do
+          (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
+          _ <- liftIO $ do
+            randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
+            threadDelay (randomDelay + min 30 (5_000_000 * deploymentsInProgress))
+          $(logInfo) $ "Deploying " <> deploymentId
+          cfg <- ask
+          _ <- raceTask env taskKey cfg $ deployInstance env meta
+          (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
+        pure ()
+    (Right (JobserviceTask taskKey (Just meta@JobserviceMessageMeta { deploymentId = deploymentId, targetUserId = Just _ }) JobserviceDestroyInstance {})) -> do
+      _ <- genericDeploymentLock env msg deploymentId True $ do
+        deploymentsInProgress <- liftIO $ readTVarIO deploymentsC
+        deploymentLimit <- asks maxDeployments
+        if deploymentsInProgress >= deploymentLimit then do
+          $(logInfo) "Active deployments limit. Recreating message"
+          recreateMessageWithDelay env msg
+        else do
+          (liftIO . atomically) $ modifyTVar' deploymentsC (+1)
+          _ <- liftIO $ do
+            randomDelay <- randomRIO (0_000_000, 5_000_000) :: IO Int
+            threadDelay randomDelay
+          $(logInfo) $ "Destroying " <> deploymentId
+          cfg <- ask
+          _ <- raceTask env taskKey cfg $ destroyInstance env meta
+          (liftIO . atomically) $ modifyTVar' deploymentsC (\v' -> v' - 1)
+      pure ()
+    (Right (JobserviceTask taskKey (Just m@(JobserviceMessageMeta { .. })) (JobservicePower powerOn mask))) -> do
+      genericFormattedLock env msg (jobserviceLockKey PowerLock deploymentId) False $ do
+        cfg <- ask
+        raceTask env taskKey cfg $ jobservicePower m env powerOn mask
+    (Right (JobserviceTask taskKey (Just m@(JobserviceMessageMeta { .. })) JobserviceSnapshot {deploymentSnapshot=snapName, deploymentDelete=delete, deploymentMask=mask, deploymentSnapshotComment=comment})) -> do
+      genericFormattedLock env msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
+        cfg <- ask
+        raceTask env taskKey cfg $ jobserviceSnapshot m snapName delete mask comment
+    (Right (JobserviceTask taskKey (Just m@(JobserviceMessageMeta { .. })) JobserviceRollback {deploymentSnapshot=snapName, deploymentMask=mask})) -> do
+      genericFormattedLock env msg (jobserviceLockKey SnapshotLock deploymentId) False $ do
+        cfg <- ask
+        raceTask env taskKey cfg $ jobserviceRollback m snapName mask
+    (Right t) -> do
+      $(logError) $ T.pack $ "Invalid task format: " <> show t
+      liftIO $ ackEnv env
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug } = let
