@@ -57,6 +57,7 @@ import           Database.Persist
 import qualified Deployment.Client                        as C
 import           Deployment.Models.Deployment
 import           Deployment.Models.Stats
+import qualified Jobservice.Client                        as J
 import qualified Jobservice.Client                        as Jobservice
 import           Jobservice.Models
 import           Kroki.Client
@@ -80,6 +81,7 @@ import           Text.Blaze.Html.Renderer.Text            (renderHtml)
 import           Text.Hamlet
 import           Text.Printf
 import           Utils
+import           Utils.Time
 import           Utils.Time                               (getUnixIntTime)
 
 type AuthHeader' = Header "Authorization" BearerWrapper
@@ -103,6 +105,8 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "instances" :> QueryParam "page" Int :> QueryParam "refresh" Int :> QueryParam "group" Text :> AuthHeader' :> Get '[HTML] Html
   :<|> "deployment" :> Capture "deploymentId" Int :> "copy" :> AuthHeader' :> Get '[HTML] Html
   :<|> "instance" :> Capture "instanceID" Text :> "power" :> AuthHeader' :> QueryParam "power" Int :> Get '[HTML] Html
+  :<|> "tasks" :> QueryParam "page" Int :> AuthHeader' :> Get '[HTML] Html
+  :<|> "tasks" :> Capture "taskId" Text :> "cancel" :> AuthHeader' :> Get '[HTML] Html
 
 globalDecoder' :: AppT (Either ClientError a) -> AppT a
 globalDecoder' v = do
@@ -143,6 +147,88 @@ pagesServer = indexPage
   :<|> deploymentInstancesPage
   :<|> copyDeploymentPage
   :<|> instancePowerPage
+  :<|> tasksPage
+  :<|> deleteTaskPage
+
+deleteTaskPage :: Text -> Maybe BearerWrapper -> AppT Html
+deleteTaskPage taskId t = do
+  token <- requireToken' t
+  let ~(Just userToken) = t
+  env <- asks $ getEnvFor JobserviceAPI
+  _ <- globalDecoder' $ defaultRetryClient env (J.deleteTask taskId userToken)
+  addMessageToSession token "Задача отправлена на досрочное закрытие."
+  tempRedirectTo "/tasks"
+
+tasksPage :: Maybe Int -> Maybe BearerWrapper -> AppT Html
+tasksPage pageN t = do
+  token <- requireToken' t
+  let page = fromMaybe 1 pageN
+  let ~(Just userToken) = t
+  env <- asks $ getEnvFor JobserviceAPI
+  r@(PagedResponse {responseObjects=tasks}) <- globalDecoder' $ defaultRetryClient env (J.getPagedTasks pageN userToken)
+  tasksUsers <- gatherUsers $ mapMaybe (maybe Nothing targetUserId . jobserviceTaskMeta) tasks
+  let checkUser meta = maybe "" briefDisplayName $ M.lookup (maybe "" (fromMaybe "" . targetUserId) meta) tasksUsers
+  let hasNext = hasNextPages page r
+  ts <- getUnixIntTime
+  (\v -> baseTemplate token Nothing (Just "Задачи") v (Just genericInstanceActionFormData)) [shamlet|
+<div .container>
+  $if null tasks
+    <h1 .title.is-3>
+      Нет доступных для просмотра задач!
+  $else
+    <div .is-flex.is-flex-direction-row.is-align-items-center>
+      <div>
+        <h1 .title.is-3> Задачи
+    <div>
+    <table .table.is-fullwidth>
+      <thead>
+        <tr>
+          <th> Задача
+          <th> Статус
+          <th> Время в работе
+          <th> Пользователь
+          <th> Развертывание
+          <th> Стенд
+          <th>
+      <tbody>
+        $forall (JobserviceTaskData { .. }) <- tasks
+          <tr>
+            <td> #{ describeJobserviceTaskKind jobserviceTask }
+            <td>
+              $if jobserviceTaskStatus == "running"
+                <b> Выполняется
+              $else
+                $if jobserviceTaskStatus == "queued"
+                  <i> В очереди
+                $else
+                  #{ jobserviceTaskStatus }
+            <td> #{ ts - jobserviceTaskTimestamp }
+            <td> #{ checkUser jobserviceTaskMeta }
+            <td>
+              $case jobserviceTaskMeta
+                $of Nothing
+                  -
+                $of (Just (JobserviceMessageMeta { .. }))
+                  <a href=/deployment/#{templateId}/instances> Открыть развертывание
+            <td>
+              $case jobserviceTaskMeta
+                $of Nothing
+                  -
+                $of (Just (JobserviceMessageMeta { .. }))
+                  <a href="/instance/#{deploymentId}"> Открыть стенд
+            <td>
+              <a href=/tasks/#{jobserviceTaskKey}/cancel> Закрыть
+    <nav .pagination.is-centered>
+      <ul .pagination-list>
+        $if page /= 1
+          <li>
+            <a .pagination-link href=/tasks?page=#{preEscapedToHtml $ page - 1}> #{page - 1}
+        <li>
+          <a .pagination-link.is-current> #{page}
+        $if hasNext
+          <li>
+            <a .pagination-link href=/tasks?page=#{preEscapedToHtml $ page + 1}> #{page + 1}
+|]
 
 deploymentInstancesPage :: Int -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe BearerWrapper -> AppT Html
 deploymentInstancesPage did pageN refreshFlag groupFlag t = do
@@ -158,9 +244,7 @@ deploymentInstancesPage did pageN refreshFlag groupFlag t = do
   allRoles <- withTokenVariable' $ \token' -> do
     globalDecoder' $ defaultRetryClientC authEnv (Auth.getAllGroups (BearerWrapper token'))
   let roleNames = map groupName allRoles
-  userData' <- withTokenVariable' $ \t -> do
-     mapM (defaultRetryClientC authEnv . flip Auth.getUserBriefInfo (BearerWrapper t) . briefDeploymentUser) instances
-  let userData = (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) userData'
+  userData <- gatherUsers (map briefDeploymentUser instances)
   let hasNext = hasNextPages page r
   let totallyEmpty = page == 1 && total == 0
   let group = fromMaybe "" groupFlag
@@ -750,9 +834,7 @@ deploymentListPage pageN t = do
   env <- asks $ getEnvFor DeploymentService
   d@(PagedResponse {responseTotal=totalDeployments, responseObjects=deployments}) <- globalDecoder' $ defaultRetryClientC env (C.getPagedDeploymentTemplates (Just page) userToken)
   let foreignOwners = map templateOwner $ filter (\t -> (Just . templateOwner) t /= tokenUUID) deployments
-  foreignOwners' <- withTokenVariable' $ \t -> do
-     mapM (defaultRetryClientC authEnv . flip Auth.getUserBriefInfo (BearerWrapper t)) foreignOwners
-  let foreignOwnersMap = (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) foreignOwners'
+  foreignOwnersMap <- gatherUsers foreignOwners
   let hasNext = hasNextPages page d
   let totallyEmpty = page == 1 && totalDeployments == 0
 

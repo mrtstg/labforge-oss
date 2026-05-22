@@ -17,18 +17,26 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 module Utils where
 
 import           Api
+import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect
+import           Api.Keycloak.Models.User
+import           Api.Keycloak.Utils
+import           Api.Retry
+import           Auth.Client
 import           Config
 import           Control.Concurrent.STM         (atomically)
 import           Control.Concurrent.STM.TVar
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8     as LBS
+import           Data.Either
 import qualified Data.Map                       as M
 import           Data.Maybe
 import           Data.Text                      (Text)
 import           Data.Text.Encoding
 import           Deployment.Models.Deployment
+import           Jobservice.Models
+import           Service.Environment
 import           Text.Printf
 
 prettyEncode :: (ToJSON a) => a -> String
@@ -68,3 +76,19 @@ unpackPage = max 1 . fromMaybe 1
 hasNextPages :: Int -> PagedResponse a -> Bool
 hasNextPages page (PagedResponse {responseTotal=totalAmount, responsePageSize=pageSize }) =
   totalAmount - page * pageSize > 0
+
+describeJobserviceTaskKind :: JobserviceMessage -> Text
+describeJobserviceTaskKind (JobserviceAllocateNode {}) = "Выделение данных развертывания"
+describeJobserviceTaskKind (JobserviceUpdateUsedImages {}) = "Обновление кеша использованных образов"
+describeJobserviceTaskKind (JobserviceDeployInstance {}) = "Развертывание стенда"
+describeJobserviceTaskKind (JobserviceDestroyInstance {}) = "Уничтожение стенда"
+describeJobserviceTaskKind (JobservicePower {deploymentPower=powerOn}) = if powerOn then "Включение виртуальных машин" else "Выключение виртуальных машин"
+describeJobserviceTaskKind (JobserviceRollback {deploymentSnapshot=snapshot}) = "Откат к снапшоту " <> snapshot
+describeJobserviceTaskKind (JobserviceSnapshot {deploymentSnapshot=snapshot,deploymentDelete=doDelete}) = if doDelete then "Удаление снапшота " <> snapshot else "Создание снапшота " <> snapshot
+
+gatherUsers :: [Text] -> AppT (M.Map Text BriefUser)
+gatherUsers userIds = do
+  authEnv <- asks $ getEnvFor AuthService
+  userData' <- withTokenVariable' $ \t -> do
+     mapM (defaultRetryClientC authEnv . flip getUserBriefInfo (BearerWrapper t)) userIds
+  pure $ (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) userData'
