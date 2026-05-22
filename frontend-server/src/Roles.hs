@@ -46,6 +46,9 @@ imageViewer = "image-view"
 imageAdmin :: Text
 imageAdmin = "image-admin"
 
+jobserviceTaskAdmin :: Text
+jobserviceTaskAdmin = "jobservice-task-admin"
+
 canCreateImages :: IntrospectResponse -> Bool
 canCreateImages InactiveToken        = False
 canCreateImages (ActiveToken { .. }) = imageAdmin `elem` tokenRealmRoles

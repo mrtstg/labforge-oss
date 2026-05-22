@@ -171,11 +171,12 @@ $doctype 5
             $of ActiveToken { .. }
               $if any (flip elem tokenRealmRoles) [grafanaAdmin, grafanaEditor, grafanaViewer]
                 <a .navbar-item href=/grafana/> Мониторинг
-              $if any (flip elem tokenRealmRoles) [deploymentAdmin, deploymentCreator, imageAdmin, imageViewer]
+              $if any (flip elem tokenRealmRoles) [deploymentAdmin, deploymentCreator, imageAdmin, imageViewer, jobserviceTaskAdmin]
                 <a .navbar-item href=/api/auth/portal> Портал
                 <div .navbar-item.has-dropdown.is-hoverable>
                   <div .navbar-link> Администрирование
                   <div .navbar-dropdown>
+                    <a .navbar-item href=/tasks> Задачи
                     $if any (flip elem tokenRealmRoles) [deploymentAdmin, deploymentCreator]
                       <a .navbar-item href=/deployment/create> Создать развертывание
                       <a .navbar-item href=/deployment/my> Мои развертывания
