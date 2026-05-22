@@ -53,8 +53,14 @@ jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage :<|> isDepl
 
 deleteTask :: Text -> BearerWrapper -> AppT ()
 deleteTask taskId (BearerWrapper token) = do
-  _ <- requireRealmRoles token ["jobservice-send"]
-  runDB $ deleteWhere [ TaskDataId ==. TaskDataKey taskId ]
+  ~(ActiveToken { .. }) <- requireToken token
+  taskData <- runDB $ get (TaskDataKey taskId)
+  case taskData of
+    Nothing -> pure ()
+    (Just (TaskData { .. })) -> do
+      if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor /= Just (fromMaybe "" tokenUUID) then do
+        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" Null)
+      else runDB $ deleteWhere [ TaskDataId ==. TaskDataKey taskId ]
 
 isTaskReachedStatus :: Text -> Text -> BearerWrapper -> AppT Bool
 isTaskReachedStatus taskId status (BearerWrapper token) = do
@@ -80,7 +86,7 @@ getTask taskId (BearerWrapper token) = do
   case taskData of
     Nothing -> sendJSONError err404 (JSONError "notFound" "Task not found" Null)
     (Just (TaskData { .. })) -> do
-      if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor == Just (fromMaybe "" tokenUUID) then do
+      if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor /= Just (fromMaybe "" tokenUUID) then do
         sendJSONError err403 (JSONError "forbidden" "You do not own this task!" Null)
       else pure (JobserviceTaskData {jobserviceTask=taskDataTask, jobserviceTaskAuthor=taskDataAuthor, jobserviceTaskGroup=taskDataGroup, jobserviceTaskKey=taskId, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskStatus=taskDataStatus, jobserviceTaskTimestamp=taskDataTimestamp})
 
