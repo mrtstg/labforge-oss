@@ -28,7 +28,6 @@ import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect
 import           Auth.Token
 import           Config
-import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
@@ -41,7 +40,6 @@ import qualified Data.Text                      as T
 import           Data.UUID.V4                   (nextRandom)
 import           Database
 import           Database.Persist
-import           Database.Persist.Postgresql
 import           Jobservice.Models
 import           Jobservice.Schema
 import           Models.JSONError
@@ -75,7 +73,16 @@ setTaskStatus taskId status (BearerWrapper token) = do
   ts <- getUnixIntTime
   runDB $ updateWhere [ TaskDataId ==. TaskDataKey taskId ] [ TaskDataStatus =. status, TaskDataLastUpdate =. ts ]
 
-getTask = undefined
+getTask :: Text -> BearerWrapper -> AppT JobserviceTaskData
+getTask taskId (BearerWrapper token) = do
+  ~(ActiveToken { .. }) <- requireToken token
+  taskData <- runDB $ get (TaskDataKey taskId)
+  case taskData of
+    Nothing -> sendJSONError err404 (JSONError "notFound" "Task not found" Null)
+    (Just (TaskData { .. })) -> do
+      if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor == Just (fromMaybe "" tokenUUID) then do
+        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" Null)
+      else pure (JobserviceTaskData {jobserviceTask=taskDataTask, jobserviceTaskAuthor=taskDataAuthor, jobserviceTaskGroup=taskDataGroup, jobserviceTaskKey=taskId, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskStatus=taskDataStatus, jobserviceTaskTimestamp=taskDataTimestamp})
 
 getPagedTasks :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [JobserviceTaskData])
 getPagedTasks pageN (BearerWrapper token) = do
