@@ -59,7 +59,7 @@ deleteTask taskId (BearerWrapper token) = do
     Nothing -> pure ()
     (Just (TaskData { .. })) -> do
       if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor /= Just (fromMaybe "" tokenUUID) then do
-        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" Null)
+        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" $ object ["message" .= String "Вы не владеете данной задачей."])
       else runDB $ deleteWhere [ TaskDataId ==. TaskDataKey taskId ]
 
 isTaskReachedStatus :: Text -> Text -> BearerWrapper -> AppT Bool
@@ -87,7 +87,7 @@ getTask taskId (BearerWrapper token) = do
     Nothing -> sendJSONError err404 (JSONError "notFound" "Task not found" Null)
     (Just (TaskData { .. })) -> do
       if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor /= Just (fromMaybe "" tokenUUID) then do
-        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" Null)
+        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" $ object ["message" .= String "Вы не владеете данной задачей."])
       else pure (JobserviceTaskData {jobserviceTask=taskDataTask, jobserviceTaskAuthor=taskDataAuthor, jobserviceTaskGroup=taskDataGroup, jobserviceTaskKey=taskId, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskStatus=taskDataStatus, jobserviceTaskTimestamp=taskDataTimestamp})
 
 getPagedTasks :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [JobserviceTaskData])
