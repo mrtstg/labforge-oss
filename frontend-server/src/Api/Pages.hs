@@ -166,8 +166,10 @@ tasksPage pageN t = do
   let ~(Just userToken) = t
   env <- asks $ getEnvFor JobserviceAPI
   r@(PagedResponse {responseObjects=tasks}) <- globalDecoder' $ defaultRetryClient env (J.getPagedTasks pageN userToken)
-  tasksUsers <- gatherUsers $ mapMaybe (maybe Nothing targetUserId . jobserviceTaskMeta) tasks
+  let userIds = nub $ mapMaybe (maybe Nothing targetUserId . jobserviceTaskMeta) tasks <> mapMaybe (maybe Nothing authorId . jobserviceTaskMeta) tasks
+  tasksUsers <- gatherUsers userIds
   let checkUser meta = maybe "" briefDisplayName $ M.lookup (maybe "" (fromMaybe "" . targetUserId) meta) tasksUsers
+  let checkAuthor meta = maybe "" briefDisplayName $ M.lookup (maybe "" (fromMaybe "" . authorId) meta) tasksUsers
   let hasNext = hasNextPages page r
   ts <- getUnixIntTime
   (\v -> baseTemplate token Nothing (Just "Задачи") v (Just genericInstanceActionFormData)) [shamlet|
@@ -185,7 +187,8 @@ tasksPage pageN t = do
         <tr>
           <th> Задача
           <th> Статус
-          <th> Время в работе
+          <th> Время существования
+          <th> Автор
           <th> Пользователь
           <th> Развертывание
           <th> Стенд
@@ -202,7 +205,8 @@ tasksPage pageN t = do
                   <i> В очереди
                 $else
                   #{ jobserviceTaskStatus }
-            <td> #{ ts - jobserviceTaskTimestamp }
+            <td> #{ prettifyTaskLifetime $ ts - jobserviceTaskTimestamp }
+            <td> #{ checkAuthor jobserviceTaskMeta }
             <td> #{ checkUser jobserviceTaskMeta }
             <td>
               $case jobserviceTaskMeta
@@ -217,7 +221,7 @@ tasksPage pageN t = do
                 $of (Just (JobserviceMessageMeta { .. }))
                   <a href="/instance/#{deploymentId}"> Открыть стенд
             <td>
-              <a href=/tasks/#{jobserviceTaskKey}/cancel> Закрыть
+              <a href=/tasks/#{jobserviceTaskKey}/cancel .button.is-outlined.is-warning> Прервать
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1

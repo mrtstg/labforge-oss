@@ -92,3 +92,11 @@ gatherUsers userIds = do
   userData' <- withTokenVariable' $ \t -> do
      mapM (defaultRetryClientC authEnv . flip getUserBriefInfo (BearerWrapper t)) userIds
   pure $ (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) userData'
+
+prettifyTaskLifetime :: Int -> String
+prettifyTaskLifetime seconds | seconds < 60 = show seconds <> " с."
+                             | seconds > 60 && seconds < 60 * 60 = show (seconds `div` 60) <> " м. " <> show (seconds `mod` 60) <> " с."
+                             | otherwise = do
+                               let minutes = seconds `div` 60
+                               let hours = minutes `div` 60
+                               show hours <> "ч. " <> show (minutes - hours * 60) <> "м. " <> show seconds <> " с."
