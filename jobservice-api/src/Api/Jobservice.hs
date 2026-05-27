@@ -94,7 +94,7 @@ getPagedTasks :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [JobserviceTa
 getPagedTasks pageN (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireToken token
   let page = fromMaybe 1 pageN
-  let pageSize = 15
+  let pageSize = 100
   let limits = [ LimitTo pageSize, OffsetBy $ (page - 1) * pageSize, Desc TaskDataStatus, Asc TaskDataTimestamp ]
   let filters = if "jobservice-task-admin" `elem` tokenRealmRoles then [] else [ TaskDataAuthor ==. tokenUUID ]
   totalTasks <- runDB $ count filters
