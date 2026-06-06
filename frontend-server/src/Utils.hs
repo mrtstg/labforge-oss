@@ -29,7 +29,6 @@ import           Control.Concurrent.STM.TVar
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.ByteString.Lazy.Char8     as LBS
-import           Data.Either
 import qualified Data.Map                       as M
 import           Data.Maybe
 import           Data.Text                      (Text)
@@ -56,13 +55,6 @@ addMessageToSession (ActiveToken { .. }) msg = do
           asks sessionMessages >>= \x -> liftIO . atomically $ modifyTVar x (M.insert uuid $ oldValue ++ [msg])
       pure ()
 
-iteratePagedResponse :: (Int -> AppT (PagedResponse [a])) -> AppT [a]
-iteratePagedResponse f' = helper f' 1 [] where
-  helper :: (Int -> AppT (PagedResponse [a])) -> Int -> [a] -> AppT [a]
-  helper f page acc = do
-    v <- f page
-    if hasNextPages page v then helper f (page + 1) (responseObjects v ++ acc) else pure (responseObjects v ++ acc)
-
 prettyDeployStatus :: DeploymentStatus -> String
 prettyDeployStatus Deployed   = "Развернут"
 prettyDeployStatus Deploying  = "Развертывается"
@@ -72,10 +64,6 @@ prettyDeployStatus Created    = "Ожидает развертывания"
 
 unpackPage :: Maybe Int -> Int
 unpackPage = max 1 . fromMaybe 1
-
-hasNextPages :: Int -> PagedResponse a -> Bool
-hasNextPages page (PagedResponse {responseTotal=totalAmount, responsePageSize=pageSize }) =
-  totalAmount - page * pageSize > 0
 
 describeJobserviceTaskKind :: JobserviceMessage -> Text
 describeJobserviceTaskKind (JobserviceAllocateNode {}) = "Выделение данных развертывания"
@@ -89,9 +77,7 @@ describeJobserviceTaskKind (JobserviceSnapshot {deploymentSnapshot=snapshot,depl
 gatherUsers :: [Text] -> AppT (M.Map Text BriefUser)
 gatherUsers userIds = do
   authEnv <- asks $ getEnvFor AuthService
-  userData' <- withTokenVariable' $ \t -> do
-     mapM (defaultRetryClientC authEnv . flip getUserBriefInfo (BearerWrapper t)) userIds
-  pure $ (M.fromList . map ((\e -> (userID e, e)) . fromRight undefined) . filter isRight) userData'
+  genericClientLoseGather userIds (\uid -> withTokenVariable' $ \t -> defaultRetryClientC authEnv $ getUserBriefInfo uid (BearerWrapper t))
 
 prettifyTaskLifetime :: Int -> String
 prettifyTaskLifetime seconds | seconds < 60 = show seconds <> " с."
