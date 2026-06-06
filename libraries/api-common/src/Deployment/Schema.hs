@@ -57,3 +57,4 @@ type DeploymentAPI = "api" :> "deployment" :> "templates" :> QueryParam "page" I
   :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> QueryParam "name" Text :> AuthHeader :> Delete '[JSON] ()
   :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> "list" :> AuthHeader :> Get '[JSON] [ProxmoxSnapshot]
   :<|> "api" :> "deployment" :> "vm" :> Capture "VmPort" Text :> "snapshot" :> "rollback" :> QueryParam "name" Text :> AuthHeader :> Get '[JSON] ()
+  :<|> "api" :> "deployment" :> "ownership" :> "deployment" :> Capture "userId" Text :> QueryParam "page" Int :> AuthHeader :> Get '[JSON] (PagedResponse [DeploymentTemplate])
