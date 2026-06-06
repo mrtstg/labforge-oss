@@ -31,3 +31,4 @@ type KeycloakAPI = "realms" :> RealmCapture :> "protocol" :> "openid-connect" :>
   :<|> "admin" :> "realms" :> RealmCapture :> "groups" :> GroupIDCapture :> "members" :> BriefParam :> FirstParam :> MaxParam :> AuthHeader :> Get '[JSON] [BriefUser]
   :<|> "admin" :> "realms" :> RealmCapture :> "users" :> UserIDCapture :> "groups" :> BriefParam :> FirstParam :> MaxParam :> AuthHeader :> Get '[JSON] [FoundGroup]
   :<|> "admin" :> "realms" :> RealmCapture :> "users" :> UserIDCapture :> AuthHeader :> Get '[JSON] BriefUser
+  :<|> "admin" :> "realms" :> RealmCapture :> "users" :> UserIDCapture :> "role-mappings" :> "realm" :> AuthHeader :> Get '[JSON] [RealmRole]

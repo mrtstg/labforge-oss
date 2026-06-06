@@ -10,6 +10,7 @@ module Auth.Client
   , getPagedGroupMembers
   , getAllGroupMembers
   , getUserBriefInfo
+  , getUserRealmRoles
   ) where
 
 import           Auth.Schema
@@ -36,4 +37,5 @@ postGrantRequest
   :<|> getPagedUserGroups
   :<|> getAllUserGroups
   :<|> getUserBriefInfo
-  :<|> _ = client api
+  :<|> _
+  :<|> getUserRealmRoles = client api

@@ -75,6 +75,7 @@ authServer =
   :<|> getFullUserGroups
   :<|> getUserBriefInfo'
   :<|> redirectOnPortal
+  :<|> getUserRealmRoles'
 
 getUserBriefInfo' :: Text -> BearerWrapper -> AppT BriefUser
 getUserBriefInfo' userId (BearerWrapper token) = do
@@ -196,6 +197,18 @@ deleteRole (BearerWrapper token) roleDeleteName = do
     (RealmRole { .. }:_) -> do
       withTokenVariable'' $ \t -> do
         runClientApp keycloakEnv $ deleteRealmRole keycloakRealm roleId (BearerWrapper t)
+
+getUserRealmRoles' :: Text -> BearerWrapper -> AppT [Text]
+getUserRealmRoles' userId (BearerWrapper token) = do
+  _ <- requireRealmRoles token ["role-read"]
+  Config { .. } <- ask
+  roles <- withTokenVariable' $ \serviceToken -> do
+    runClientApp keycloakEnv $ getUserRealmRoles keycloakRealm userId (BearerWrapper serviceToken)
+  case roles of
+    (Left e) -> do
+      $(logError) $ "Failed to get realm roles: " <> (T.pack . show) e
+      sendJSONError err500 (JSONError "keycloakError" "Error response from keycloak" Null)
+    (Right resp) -> pure (map roleName resp)
 
 getRoles :: BearerWrapper -> AppT [RealmRole]
 getRoles (BearerWrapper token) = do
