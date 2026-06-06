@@ -40,7 +40,7 @@ USERS_ROLES=(
     ""
     "validate-users,role-read,group-read,role-manage,user-read,realm-management.manage-realm,realm-management.view-realm,realm-management.query-realms,realm-management.realm-admin"
     "deployment-admin,image-view,deployment-alloc,deployment-instance-admin,jobservice-send,user-read,cluster-admin,jobservice-task-admin"
-    "jobservice-send,validate-users,jobservice-task-admin"
+    "jobservice-send,validate-users,jobservice-task-admin,user-read"
 )
 
 cd /opt/keycloak/bin/
