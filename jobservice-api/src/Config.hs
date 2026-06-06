@@ -61,6 +61,7 @@ data Config = Config
   , serviceCredentials :: !(Text, Text)
   , authToken          :: !(TokenVariable Text)
   , authEnv            :: !ClientEnv
+  , deploymentEnv      :: !ClientEnv
   , redisConnection    :: !Connection
   , authFunctions      :: TokenVariableFunctions Text
   , rabbitConnection   :: !R.Connection
@@ -70,8 +71,9 @@ instance RedisConnection Config where
   getRedisConnection = redisConnection
 
 instance ServiceEnvironment Config where
-  getEnvFor AuthService = authEnv
-  getEnvFor _           = error "undefined client env"
+  getEnvFor AuthService       = authEnv
+  getEnvFor DeploymentService = deploymentEnv
+  getEnvFor _                 = error "undefined client env"
 
 instance HasTokenVariable Config Text where
   getTokenVariable = authToken

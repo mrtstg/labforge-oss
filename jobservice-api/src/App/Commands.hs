@@ -112,6 +112,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
   (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
+  (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
   taskTimeout <- runLoggingT (lookupEnvDefault "TASK_MAX_LIFETIME" 60) logFunction
 
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
@@ -124,6 +125,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     , authFunctions=genericTokenFunctions logFunction creds (mkClientEnv authManager authUrl)
     , redisConnection=fromJust redisC
     , rabbitConnection = amqpConn
+    , deploymentEnv = mkClientEnv deploymentManager deploymentUrl
     }
   let app' = app config
 

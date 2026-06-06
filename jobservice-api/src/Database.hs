@@ -49,6 +49,7 @@ TaskData
   timestamp Int
   author Text Maybe
   group Text Maybe
+  templateId Int default=0
   task JobserviceMessage sqltype=jsonb
   metadata JobserviceMessageMeta Maybe sqltype=jsonb
   lastUpdate Int

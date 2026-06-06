@@ -23,9 +23,11 @@ module Api.Jobservice
   , sendMessage
   ) where
 
-import           Api                            (PagedResponse (..))
+import           Api
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect
+import           Api.Keycloak.Utils
+import           Api.Retry
 import           Auth.Token
 import           Config
 import           Control.Monad.IO.Class
@@ -40,25 +42,38 @@ import qualified Data.Text                      as T
 import           Data.UUID.V4                   (nextRandom)
 import           Database
 import           Database.Persist
+import           Deployment.Client
+import qualified Deployment.Models.Deployment   as M
 import           Jobservice.Models
 import           Jobservice.Schema
 import           Models.JSONError
 import           Network.AMQP
 import           Redis.Common
 import           Servant
+import           Service.Environment
 import           Utils.Time
 
 jobserviceServer :: ServerT JobserviceAPI AppT
 jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage :<|> isDeploymentLocked :<|> deleteTask :<|> isTaskReachedStatus :<|> setTaskStatus :<|> getTask :<|> getPagedTasks
 
+checkTaskAccess :: TaskData  -> IntrospectResponse -> AppT Bool
+checkTaskAccess _ InactiveToken = pure False
+checkTaskAccess (TaskData { .. }) (ActiveToken { .. }) = do
+  deploymentEnv <- asks $ getEnvFor DeploymentService
+  r <- iteratePagedResponse (\p -> withTokenVariable'' $ \t -> do
+    defaultRetryClientC deploymentEnv $ getUserOwnedDeployments (fromMaybe "" tokenUUID) (Just p) (BearerWrapper t)
+                            ) <&> map M.templateId
+  pure $ (taskDataTemplateId `elem` r) || "jobservice-task-admin" `elem` tokenRealmRoles || taskDataAuthor == Just (fromMaybe "" tokenUUID)
+
 deleteTask :: Text -> BearerWrapper -> AppT ()
 deleteTask taskId (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireToken token
+  ~i@(ActiveToken { .. }) <- requireToken token
   taskData <- runDB $ get (TaskDataKey taskId)
   case taskData of
     Nothing -> pure ()
-    (Just (TaskData { .. })) -> do
-      if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor /= Just (fromMaybe "" tokenUUID) then do
+    (Just t) -> do
+      isAccessed <- checkTaskAccess t i
+      if not isAccessed then
         sendJSONError err403 (JSONError "forbidden" "You do not own this task!" $ object ["message" .= String "Вы не владеете данной задачей."])
       else runDB $ deleteWhere [ TaskDataId ==. TaskDataKey taskId ]
 
@@ -81,22 +96,27 @@ setTaskStatus taskId status (BearerWrapper token) = do
 
 getTask :: Text -> BearerWrapper -> AppT JobserviceTaskData
 getTask taskId (BearerWrapper token) = do
-  ~(ActiveToken { .. }) <- requireToken token
+  ~i@(ActiveToken { .. }) <- requireToken token
   taskData <- runDB $ get (TaskDataKey taskId)
   case taskData of
     Nothing -> sendJSONError err404 (JSONError "notFound" "Task not found" Null)
-    (Just (TaskData { .. })) -> do
-      if "jobservice-task-admin" `notElem` tokenRealmRoles && taskDataAuthor /= Just (fromMaybe "" tokenUUID) then do
+    (Just t@(TaskData { .. })) -> do
+      isAccessed <- checkTaskAccess t i
+      if not isAccessed then do
         sendJSONError err403 (JSONError "forbidden" "You do not own this task!" $ object ["message" .= String "Вы не владеете данной задачей."])
       else pure (JobserviceTaskData {jobserviceTask=taskDataTask, jobserviceTaskAuthor=taskDataAuthor, jobserviceTaskGroup=taskDataGroup, jobserviceTaskKey=taskId, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskStatus=taskDataStatus, jobserviceTaskTimestamp=taskDataTimestamp})
 
 getPagedTasks :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [JobserviceTaskData])
 getPagedTasks pageN (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireToken token
+  deploymentEnv <- asks $ getEnvFor DeploymentService
+  r <- iteratePagedResponse (\p -> withTokenVariable'' $ \t -> do
+    defaultRetryClientC deploymentEnv $ getUserOwnedDeployments (fromMaybe "" tokenUUID) (Just p) (BearerWrapper t)
+                            ) <&> map M.templateId
   let page = fromMaybe 1 pageN
   let pageSize = 100
   let limits = [ LimitTo pageSize, OffsetBy $ (page - 1) * pageSize, Desc TaskDataStatus, Asc TaskDataTimestamp ]
-  let filters = if "jobservice-task-admin" `elem` tokenRealmRoles then [] else [ TaskDataAuthor ==. tokenUUID ]
+  let filters = if "jobservice-task-admin" `elem` tokenRealmRoles then [] else [ TaskDataAuthor ==. tokenUUID ] ||. [TaskDataTemplateId <-. r]
   totalTasks <- runDB $ count filters
   tasksData <- runDB $ selectList filters limits
   pure PagedResponse {responseTotal=totalTasks, responsePageSize=pageSize, responseObjects=map (\(Entity (TaskDataKey taskKey) (TaskData { .. })) -> JobserviceTaskData {jobserviceTaskTimestamp=taskDataTimestamp, jobserviceTaskStatus=taskDataStatus, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskKey=taskKey, jobserviceTaskGroup=taskDataGroup, jobserviceTaskAuthor=taskDataAuthor, jobserviceTask=taskDataTask}) tasksData}
@@ -123,7 +143,8 @@ sendMessage (JobserviceTask conflictKey meta msg') (BearerWrapper token) = do
     chan <- liftIO $ openChannel r
     let group' = actionGroup =<< meta
     let author' = authorId =<< meta
-    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts, taskDataConfictKey=conflictKey})
+    let template' = maybe 0 templateId meta
+    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts, taskDataConfictKey=conflictKey, taskDataTemplateId=template'})
     let msg = newMsg { msgBody = encode (JobserviceTask (Just taskKey) meta msg'), msgDeliveryMode = Just NonPersistent }
     _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
     liftIO $ closeChannel chan
