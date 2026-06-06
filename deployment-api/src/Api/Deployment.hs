@@ -28,6 +28,7 @@ import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect
 import           Api.Keycloak.Models.User
+import           Api.Keycloak.Token                       (withTokenVariable)
 import           Api.Keycloak.Utils
 import           Api.Retry
 import           Api.Utils
@@ -172,25 +173,48 @@ templateSearchFilter InactiveToken = error "Unreachable"
 templateSearchFilter (ActiveToken { .. }) = if deployTemplatesAdmin `elem` tokenRealmRoles then [] else
   [ DeploymentTemplateDataOwnerId ==. fromMaybe "" tokenUUID ]
 
+templateOffsetFilter :: Int -> [SelectOpt DeploymentTemplateData]
+templateOffsetFilter page = [OffsetBy $ (page - 1) * pageSize, LimitTo pageSize, Desc DeploymentTemplateDataId]
+
+processTemplates :: [Entity DeploymentTemplateData] -> [[Entity DeploymentTemplateHide]] -> [DeploymentTemplate]
+processTemplates templates hiddenGroups = map (\(e, g) -> DeploymentTemplate
+  { templateVMs=(deploymentTemplateDataVms . entityVal) e
+  , templateTitle=(deploymentTemplateDataTitle . entityVal) e
+  , templateOwner=(deploymentTemplateDataOwnerId . entityVal) e
+  , templateId=(fromIntegral . fromSqlKey . entityKey) e
+  , templateExistingNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
+  , templateAvaiableVMs=(deploymentTemplateDataAvailableVMs . entityVal) e
+  , templateHiddenFor=map (deploymentTemplateHideGroup . entityVal) g
+  , templateSnapshotPolicy=(deploymentTemplateDataSnapshotPolicy . entityVal) e
+  }) (zip templates hiddenGroups)
+
+getUserOwnedDeployments :: Text -> Maybe Int -> BearerWrapper -> AppT (PagedResponse [DeploymentTemplate])
+getUserOwnedDeployments "" _ _ = pure (PagedResponse 0 0 [])
+getUserOwnedDeployments userUUID pageN (BearerWrapper token) = do
+  ~t@(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], ["user-read"]]
+  let page = max 1 $ fromMaybe 1 pageN
+  authEnv <- asks $ getEnvFor AuthService
+  userRoles <- withTokenVariable' $ \t -> defaultRetryClientC authEnv $ getUserRealmRoles userUUID (BearerWrapper t)
+  let filters = [ DeploymentTemplateDataOwnerId ==. userUUID | deployTemplatesAdmin `notElem` either (const []) id userRoles]
+  templatesTotal <- runDB $ count filters
+  templates <- runDB $ selectList filters (templateOffsetFilter page)
+  hiddenGroups <- runDB $ mapM (\v -> selectList [ DeploymentTemplateHideDeployment ==. entityKey v ] []) templates
+  pure $ PagedResponse
+    { responseObjects = processTemplates templates hiddenGroups
+    , responsePageSize=pageSize
+    , responseTotal=templatesTotal
+    }
+
 getPagedDeploymentTemplates :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [DeploymentTemplate])
 getPagedDeploymentTemplates pageN (BearerWrapper token) = do
   ~t@(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
   let page = max 1 $ fromMaybe 1 pageN
   let filters = templateSearchFilter t
   templatesTotal <- runDB $ count filters
-  templates <- runDB $ selectList filters [OffsetBy $ (page - 1) * pageSize, LimitTo pageSize, Desc DeploymentTemplateDataId]
+  templates <- runDB $ selectList filters (templateOffsetFilter page)
   hiddenGroups <- runDB $ mapM (\v -> selectList [ DeploymentTemplateHideDeployment ==. entityKey v ] []) templates
   pure $ PagedResponse
-    { responseObjects = map (\(e, g) -> DeploymentTemplate
-      { templateVMs=(deploymentTemplateDataVms . entityVal) e
-      , templateTitle=(deploymentTemplateDataTitle . entityVal) e
-      , templateOwner=(deploymentTemplateDataOwnerId . entityVal) e
-      , templateId=(fromIntegral . fromSqlKey . entityKey) e
-      , templateExistingNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
-      , templateAvaiableVMs=(deploymentTemplateDataAvailableVMs . entityVal) e
-      , templateHiddenFor=map (deploymentTemplateHideGroup . entityVal) g
-      , templateSnapshotPolicy=(deploymentTemplateDataSnapshotPolicy . entityVal) e
-      }) (zip templates hiddenGroups)
+    { responseObjects = processTemplates templates hiddenGroups
     , responsePageSize=pageSize
     , responseTotal=templatesTotal
     }
@@ -1057,3 +1081,4 @@ deploymentServer = getPagedTemplates
   :<|> deleteVMPortSnapshot
   :<|> listVMPortSnapshots
   :<|> rollbackVMPort
+  :<|> getUserOwnedDeployments
