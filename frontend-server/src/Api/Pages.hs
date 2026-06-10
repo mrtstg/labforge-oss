@@ -82,7 +82,6 @@ import           Text.Hamlet
 import           Text.Printf
 import           Utils
 import           Utils.Time
-import           Utils.Time                               (getUnixIntTime)
 
 type AuthHeader' = Header "Authorization" BearerWrapper
 
@@ -107,6 +106,7 @@ type PagesAPI = AuthHeader' :> QueryParam "page" Int :> Get '[HTML] Html
   :<|> "instance" :> Capture "instanceID" Text :> "power" :> AuthHeader' :> QueryParam "power" Int :> Get '[HTML] Html
   :<|> "tasks" :> QueryParam "page" Int :> AuthHeader' :> Get '[HTML] Html
   :<|> "tasks" :> Capture "taskId" Text :> "cancel" :> AuthHeader' :> Get '[HTML] Html
+  :<|> "tasks" :> "group" :> Capture "groupId" Text :> "cancel" :> AuthHeader' :> Get '[HTML] Html
 
 globalDecoder' :: AppT (Either ClientError a) -> AppT a
 globalDecoder' v = do
@@ -149,6 +149,16 @@ pagesServer = indexPage
   :<|> instancePowerPage
   :<|> tasksPage
   :<|> deleteTaskPage
+  :<|> deleteTaskGroup
+
+deleteTaskGroup :: Text -> Maybe BearerWrapper -> AppT Html
+deleteTaskGroup groupId t = do
+  token <- requireToken' t
+  let ~(Just userToken) = t
+  env <- asks $ getEnvFor JobserviceAPI
+  _ <- globalDecoder' $ defaultRetryClient env (J.deleteGroupTask groupId userToken)
+  addMessageToSession token "Группа задач отправлена на закрытие."
+  tempRedirectTo "/tasks"
 
 deleteTaskPage :: Text -> Maybe BearerWrapper -> AppT Html
 deleteTaskPage taskId t = do
@@ -221,7 +231,13 @@ tasksPage pageN t = do
                 $of (Just (JobserviceMessageMeta { .. }))
                   <a href="/instance/#{deploymentId}"> Открыть стенд
             <td>
-              <a href=/tasks/#{jobserviceTaskKey}/cancel .button.is-outlined.is-warning> Прервать
+              <div .columns.is-gapless.is-multiline>
+                <div .is-6.column>
+                  <a href=/tasks/#{jobserviceTaskKey}/cancel .button.is-outlined.is-warning> Прервать
+                $case jobserviceTaskGroup
+                  $of (Just group)
+                    <div .is-6.column>
+                      <a href=/tasks/group/#{group}/cancel .button.is-outlined.is-danger> Удалить группу
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1
