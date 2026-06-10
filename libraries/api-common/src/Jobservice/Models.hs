@@ -27,13 +27,14 @@ instance FromJSON JobserviceTaskResponse where
   parseJSON = withObject "JobserviceTaskResponse" $ \v -> JobserviceTaskResponse <$> v .: "key"
 
 data JobserviceTaskData = JobserviceTaskData
-  { jobserviceTaskKey       :: !Text
-  , jobserviceTaskStatus    :: !Text
-  , jobserviceTaskTimestamp :: !Int
-  , jobserviceTaskAuthor    :: !(Maybe Text)
-  , jobserviceTaskGroup     :: !(Maybe Text)
-  , jobserviceTask          :: !JobserviceMessage
-  , jobserviceTaskMeta      :: !(Maybe JobserviceMessageMeta)
+  { jobserviceTaskKey             :: !Text
+  , jobserviceTaskStatus          :: !Text
+  , jobserviceTaskTimestamp       :: !Int
+  , jobserviceTaskAuthor          :: !(Maybe Text)
+  , jobserviceTaskGroup           :: !(Maybe Text)
+  , jobserviceTask                :: !JobserviceMessage
+  , jobserviceTaskMeta            :: !(Maybe JobserviceMessageMeta)
+  , jobserviceTaskStatusTimestamp :: !Int
   } deriving (Eq, Show)
 
 instance ToJSON JobserviceTaskData where
@@ -45,6 +46,7 @@ instance ToJSON JobserviceTaskData where
     , "group" .= jobserviceTaskGroup
     , "task" .= jobserviceTask
     , "meta" .= jobserviceTaskMeta
+    , "statusTimestamp" .= jobserviceTaskStatusTimestamp
     ]
 
 instance FromJSON JobserviceTaskData where
@@ -56,6 +58,7 @@ instance FromJSON JobserviceTaskData where
     <*> v .: "group"
     <*> v .: "task"
     <*> v .: "meta"
+    <*> v .:? "statusTimestamp" .!= 0
 
 data JobserviceLockType = AnyLock | GenericLock | SnapshotLock | PowerLock deriving (Show, Eq, Ord)
 

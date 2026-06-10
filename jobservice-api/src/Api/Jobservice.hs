@@ -114,7 +114,7 @@ setTaskStatus :: Text -> Text -> BearerWrapper -> AppT ()
 setTaskStatus taskId status (BearerWrapper token) = do
   _ <- requireRealmRoles token ["jobservice-send"]
   ts <- getUnixIntTime
-  runDB $ updateWhere [ TaskDataId ==. TaskDataKey taskId ] [ TaskDataStatus =. status, TaskDataLastUpdate =. ts ]
+  runDB $ updateWhere [ TaskDataId ==. TaskDataKey taskId ] [ TaskDataStatus =. status, TaskDataLastUpdate =. ts, TaskDataLastStatusChange =. ts ]
 
 getTask :: Text -> BearerWrapper -> AppT JobserviceTaskData
 getTask taskId (BearerWrapper token) = do
@@ -126,7 +126,7 @@ getTask taskId (BearerWrapper token) = do
       isAccessed <- checkTaskAccess t i
       if not isAccessed then do
         sendJSONError err403 (JSONError "forbidden" "You do not own this task!" $ object ["message" .= String "Вы не владеете данной задачей."])
-      else pure (JobserviceTaskData {jobserviceTask=taskDataTask, jobserviceTaskAuthor=taskDataAuthor, jobserviceTaskGroup=taskDataGroup, jobserviceTaskKey=taskId, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskStatus=taskDataStatus, jobserviceTaskTimestamp=taskDataTimestamp})
+      else pure (JobserviceTaskData {jobserviceTask=taskDataTask, jobserviceTaskAuthor=taskDataAuthor, jobserviceTaskGroup=taskDataGroup, jobserviceTaskKey=taskId, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskStatus=taskDataStatus, jobserviceTaskTimestamp=taskDataTimestamp, jobserviceTaskStatusTimestamp=taskDataLastStatusChange})
 
 getPagedTasks :: Maybe Int -> BearerWrapper -> AppT (PagedResponse [JobserviceTaskData])
 getPagedTasks pageN (BearerWrapper token) = do
@@ -137,11 +137,11 @@ getPagedTasks pageN (BearerWrapper token) = do
                             ) <&> map M.templateId
   let page = fromMaybe 1 pageN
   let pageSize = 100
-  let limits = [ LimitTo pageSize, OffsetBy $ (page - 1) * pageSize, Desc TaskDataStatus, Asc TaskDataTimestamp ]
+  let limits = [ LimitTo pageSize, OffsetBy $ (page - 1) * pageSize, Desc TaskDataStatus, Asc TaskDataTimestamp, Asc TaskDataLastStatusChange ]
   let filters = if "jobservice-task-admin" `elem` tokenRealmRoles then [] else [ TaskDataAuthor ==. tokenUUID ] ||. [TaskDataTemplateId <-. r]
   totalTasks <- runDB $ count filters
   tasksData <- runDB $ selectList filters limits
-  pure PagedResponse {responseTotal=totalTasks, responsePageSize=pageSize, responseObjects=map (\(Entity (TaskDataKey taskKey) (TaskData { .. })) -> JobserviceTaskData {jobserviceTaskTimestamp=taskDataTimestamp, jobserviceTaskStatus=taskDataStatus, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskKey=taskKey, jobserviceTaskGroup=taskDataGroup, jobserviceTaskAuthor=taskDataAuthor, jobserviceTask=taskDataTask}) tasksData}
+  pure PagedResponse {responseTotal=totalTasks, responsePageSize=pageSize, responseObjects=map (\(Entity (TaskDataKey taskKey) (TaskData { .. })) -> JobserviceTaskData {jobserviceTaskTimestamp=taskDataTimestamp, jobserviceTaskStatus=taskDataStatus, jobserviceTaskMeta=taskDataMetadata, jobserviceTaskKey=taskKey, jobserviceTaskGroup=taskDataGroup, jobserviceTaskAuthor=taskDataAuthor, jobserviceTask=taskDataTask, jobserviceTaskStatusTimestamp=taskDataLastStatusChange}) tasksData}
 
 isDeploymentLocked :: Text -> JobserviceLockType -> BearerWrapper -> AppT Bool
 isDeploymentLocked deploymentId AnyLock (BearerWrapper token) = do
@@ -166,7 +166,7 @@ sendMessage (JobserviceTask conflictKey meta msg') (BearerWrapper token) = do
     let group' = actionGroup =<< meta
     let author' = authorId =<< meta
     let template' = maybe 0 templateId meta
-    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts, taskDataConfictKey=conflictKey, taskDataTemplateId=template'})
+    _ <- runDB $ insertKey (TaskDataKey taskKey) (TaskData {taskDataTimestamp=ts, taskDataTask=msg', taskDataStatus="queued", taskDataMetadata=meta, taskDataGroup=group', taskDataAuthor=author', taskDataLastUpdate=ts, taskDataConfictKey=conflictKey, taskDataTemplateId=template', taskDataLastStatusChange=ts})
     let msg = newMsg { msgBody = encode (JobserviceTask (Just taskKey) meta msg'), msgDeliveryMode = Just NonPersistent }
     _ <- liftIO $ publishMsg chan "jobserviceExchange" "" msg
     liftIO $ closeChannel chan

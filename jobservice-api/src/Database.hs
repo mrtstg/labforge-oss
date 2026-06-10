@@ -52,6 +52,7 @@ TaskData
   templateId Int default=0
   task JobserviceMessage sqltype=jsonb
   metadata JobserviceMessageMeta Maybe sqltype=jsonb
+  lastStatusChange Int default=0
   lastUpdate Int
   deriving Show
 |]
