@@ -55,6 +55,7 @@ import qualified Data.Text.Encoding                       as T
 import qualified Data.Text.Lazy                           as LT
 import           Database.Persist
 import qualified Deployment.Client                        as C
+import qualified Deployment.Client                        as Deployment
 import           Deployment.Models.Deployment
 import           Deployment.Models.Stats
 import qualified Jobservice.Client                        as J
@@ -175,11 +176,15 @@ tasksPage pageN t = do
   let page = fromMaybe 1 pageN
   let ~(Just userToken) = t
   env <- asks $ getEnvFor JobserviceAPI
+  deploymentEnv <- asks $ getEnvFor DeploymentService
   r@(PagedResponse {responseObjects=tasks}) <- globalDecoder' $ defaultRetryClient env (J.getPagedTasks pageN userToken)
   let userIds = nub $ mapMaybe (maybe Nothing targetUserId . jobserviceTaskMeta) tasks <> mapMaybe (maybe Nothing authorId . jobserviceTaskMeta) tasks
+  let deploymentIds = mapMaybe (maybe Nothing (pure . Jobservice.Models.templateId) . jobserviceTaskMeta) tasks
+  deploymentMap <- genericClientLoseGather deploymentIds (\did -> withTokenVariable' $ \t -> defaultRetryClientC deploymentEnv $ Deployment.getDeploymentTemplate did (BearerWrapper t))
   tasksUsers <- gatherUsers userIds
   let checkUser meta = maybe "" briefDisplayName $ M.lookup (maybe "" (fromMaybe "" . targetUserId) meta) tasksUsers
   let checkAuthor meta = maybe "" briefDisplayName $ M.lookup (maybe "" (fromMaybe "" . authorId) meta) tasksUsers
+  let checkTemplate meta = maybe "-" templateTitle $ M.lookup (maybe 0 Jobservice.Models.templateId meta) deploymentMap
   let hasNext = hasNextPages page r
   ts <- getUnixIntTime
   (\v -> baseTemplate token Nothing (Just "Задачи") v (Just genericInstanceActionFormData)) [shamlet|
@@ -197,7 +202,7 @@ tasksPage pageN t = do
         <tr>
           <th> Задача
           <th> Статус
-          <th> Время существования
+          <th> Время в статусе (суммарное)
           <th> Автор
           <th> Пользователь
           <th> Развертывание
@@ -215,7 +220,7 @@ tasksPage pageN t = do
                   <i> В очереди
                 $else
                   #{ jobserviceTaskStatus }
-            <td> #{ prettifyTaskLifetime $ ts - jobserviceTaskTimestamp }
+            <td> #{prettifyTaskLifetime $ ts - jobserviceTaskStatusTimestamp} (#{ prettifyTaskLifetime $ ts - jobserviceTaskTimestamp })
             <td> #{ checkAuthor jobserviceTaskMeta }
             <td> #{ checkUser jobserviceTaskMeta }
             <td>
@@ -223,7 +228,7 @@ tasksPage pageN t = do
                 $of Nothing
                   -
                 $of (Just (JobserviceMessageMeta { .. }))
-                  <a href=/deployment/#{templateId}/instances> Открыть развертывание
+                  <a href=/deployment/#{templateId}/instances> #{checkTemplate jobserviceTaskMeta}
             <td>
               $case jobserviceTaskMeta
                 $of Nothing

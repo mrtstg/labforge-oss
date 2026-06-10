@@ -35,7 +35,7 @@ REALM_CLIENTS=(
 USERS_ROLES=(
     "validate-users,cluster-admin"
     "validate-users,role-read,group-read,role-manage,cluster-admin,user-read,jobservice-send,image-view"
-    "validate-users,group-read,user-read"
+    "validate-users,group-read,user-read,deployment-admin"
     "validate-users,deployment-admin"
     ""
     "validate-users,role-read,group-read,role-manage,user-read,realm-management.manage-realm,realm-management.view-realm,realm-management.query-realms,realm-management.realm-admin"
