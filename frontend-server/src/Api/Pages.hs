@@ -196,53 +196,52 @@ tasksPage pageN t = do
     <div .is-flex.is-flex-direction-row.is-align-items-center>
       <div>
         <h1 .title.is-3> Задачи
-    <div>
-    <table .table.is-fullwidth>
-      <thead>
-        <tr>
-          <th> Задача
-          <th> Статус
-          <th> Время в статусе (суммарное)
-          <th> Автор
-          <th> Пользователь
-          <th> Развертывание
-          <th> Стенд
-          <th>
-      <tbody>
-        $forall (JobserviceTaskData { .. }) <- tasks
+    <div .table-container>
+      <table .table.is-fullwidth>
+        <thead>
           <tr>
-            <td> #{ describeJobserviceTaskKind jobserviceTask }
-            <td>
-              $if jobserviceTaskStatus == "running"
-                <b> Выполняется
-              $else
-                $if jobserviceTaskStatus == "queued"
-                  <i> В очереди
+            <th> Задача
+            <th> Статус
+            <th> Время в статусе (суммарное)
+            <th> Автор
+            <th> Пользователь
+            <th> Развертывание
+            <th> Стенд
+            <th>
+            <th>
+        <tbody>
+          $forall (JobserviceTaskData { .. }) <- tasks
+            <tr>
+              <td> #{ describeJobserviceTaskKind jobserviceTask }
+              <td>
+                $if jobserviceTaskStatus == "running"
+                  <b> Выполняется
                 $else
-                  #{ jobserviceTaskStatus }
-            <td> #{prettifyTaskLifetime $ ts - jobserviceTaskStatusTimestamp} (#{ prettifyTaskLifetime $ ts - jobserviceTaskTimestamp })
-            <td> #{ checkAuthor jobserviceTaskMeta }
-            <td> #{ checkUser jobserviceTaskMeta }
-            <td>
-              $case jobserviceTaskMeta
-                $of Nothing
-                  -
-                $of (Just (JobserviceMessageMeta { .. }))
-                  <a href=/deployment/#{templateId}/instances> #{checkTemplate jobserviceTaskMeta}
-            <td>
-              $case jobserviceTaskMeta
-                $of Nothing
-                  -
-                $of (Just (JobserviceMessageMeta { .. }))
-                  <a href="/instance/#{deploymentId}"> Открыть стенд
-            <td>
-              <div .columns.is-gapless.is-multiline>
-                <div .is-6.column>
-                  <a href=/tasks/#{jobserviceTaskKey}/cancel .button.is-outlined.is-warning> Прервать
+                  $if jobserviceTaskStatus == "queued"
+                    <i> В очереди
+                  $else
+                    #{ jobserviceTaskStatus }
+              <td> #{prettifyTaskLifetime $ ts - jobserviceTaskStatusTimestamp} (#{ prettifyTaskLifetime $ ts - jobserviceTaskTimestamp })
+              <td> #{ checkAuthor jobserviceTaskMeta }
+              <td> #{ checkUser jobserviceTaskMeta }
+              <td>
+                $case jobserviceTaskMeta
+                  $of Nothing
+                    -
+                  $of (Just (JobserviceMessageMeta { .. }))
+                    <a href=/deployment/#{templateId}/instances> #{checkTemplate jobserviceTaskMeta}
+              <td>
+                $case jobserviceTaskMeta
+                  $of Nothing
+                    -
+                  $of (Just (JobserviceMessageMeta { .. }))
+                    <a href="/instance/#{deploymentId}"> Открыть стенд
+              <td>
+                <a href=/tasks/#{jobserviceTaskKey}/cancel .button.is-outlined.is-warning> Прервать
+              <td>
                 $case jobserviceTaskGroup
                   $of (Just group)
-                    <div .is-6.column>
-                      <a href=/tasks/group/#{group}/cancel .button.is-outlined.is-danger> Удалить группу
+                    <a href=/tasks/group/#{group}/cancel .button.is-outlined.is-danger> Удалить группу
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1

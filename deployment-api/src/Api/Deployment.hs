@@ -541,9 +541,10 @@ switchTemplateVisibility templateId (Just group) (BearerWrapper token) = do
       pure ()
 
 -- TODO: unify with function upper
-callGroupDestroy :: Int -> Maybe Text -> BearerWrapper -> AppT ()
-callGroupDestroy tID groupName (BearerWrapper token) = do
+callGroupDestroy :: Int -> Maybe Text -> Maybe Int -> BearerWrapper -> AppT ()
+callGroupDestroy tID groupName forceFlag (BearerWrapper token) = do
   ~t@(ActiveToken { .. }) <- requireToken token
+  let force = fromMaybe 0 forceFlag /= 0
   case groupName of
     Nothing -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
     (Just "") -> sendJSONError err400 (JSONError "badRequest" "Group name is not set" Null)
@@ -561,7 +562,7 @@ callGroupDestroy tID groupName (BearerWrapper token) = do
             (Left _) -> sendJSONError err400 (JSONError "badRequest" "Cant get group members" Null)
             (Right _) -> do
               $(logInfo) $ "Sending group deployment of template " <> (T.pack . show) tID <> " for group " <> group
-              putTask tasksPool (GroupDestroy tID group tokenUUID)
+              putTask tasksPool (GroupDestroy tID group tokenUUID force)
               pure ()
 
 callGroupPower :: Int -> Maybe Text -> Maybe Text -> Bool -> BearerWrapper -> AppT ()

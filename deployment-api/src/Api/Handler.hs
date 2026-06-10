@@ -71,7 +71,7 @@ handleTask _ (GroupDeployment tID groupName authorID) = do
       newDeploymentsKeys <- createMissingDeployments (DeploymentTemplateDataKey $ fromIntegral tID) tID (Just groupKey) authorID users
       newDeployments <- runDB $ selectList [ DeploymentInstanceDataId <-. map DeploymentInstanceDataKey newDeploymentsKeys ] []
       mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage' ((JobserviceAllocateNode {})) (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Just groupKey, authorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (BearerWrapper token)) newDeployments
-handleTask _ (GroupDestroy tID groupName authorID) = do
+handleTask _ (GroupDestroy tID groupName authorID forceDestroy) = do
   $(logDebug) $ "Creating group destroy for " <> groupName <> "(" <> (pack . show) tID <> ")"
   authEnv <- asks $ getEnvFor AuthService
   groupMembersResp <- withTokenVariable' $ \t -> runClientApp authEnv $ getAllGroupMembers groupName (BearerWrapper t)
@@ -81,13 +81,16 @@ handleTask _ (GroupDestroy tID groupName authorID) = do
       ts <- getUnixIntTime
       groupKey <- generateGroupKey tID authorID (Just ts)
       let usersId = map userID users
-      existingDeployments <- runDB $ selectList [
+      existingDeployments <- runDB $ selectList (if forceDestroy then [
+        DeploymentInstanceDataOwnerId <-. usersId,
+        DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID)
+        ] else [
         DeploymentInstanceDataOwnerId <-. usersId,
         DeploymentInstanceDataParent ==. DeploymentTemplateDataKey (fromIntegral tID),
         DeploymentInstanceDataState !=. Destroying,
         DeploymentInstanceDataState !=. Deploying,
         DeploymentInstanceDataDeployConfig !=. Nothing
-        ] []
+        ]) []
       jobserviceEnv <- asks $ getEnvFor JobserviceAPI
       mapM_ (\(Entity (DeploymentInstanceDataKey t) (DeploymentInstanceData { .. })) -> withTokenVariable $ \token -> defaultRetryClient jobserviceEnv $ J.insertJobserviceMessage' (JobserviceDestroyInstance {}) (Just JobserviceMessageMeta {targetUserId=Just deploymentInstanceDataOwnerId, actionGroup=Just groupKey, authorId=authorID, deploymentId=t, templateId=(fromIntegral . fromSqlKey) deploymentInstanceDataParent}) (BearerWrapper token)) existingDeployments
 handleTask _ (GroupRollback tID groupName snapName mask) = do

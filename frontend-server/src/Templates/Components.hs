@@ -92,9 +92,10 @@ genericGroupActionFormData group = [shamlet|
       group: "#{preEscapedToMarkup defaultGroup}",
       snapname: "",
       mask: "",
+      force: false,
       sendRequest() {
         if (this.action == "deploy" || this.action == "destroy") {
-          let url = "/api/deployment/deployments/" + deploymentId + "/" + this.action + "/group?group=" + encodeURIComponent(this.group)
+          let url = "/api/deployment/deployments/" + deploymentId + "/" + this.action + "/group?group=" + encodeURIComponent(this.group) + "&force=" + (this.force && this.action == "destroy" ? '1' : '0')
           fetch(url).then(r => {
             unwrapError(r, () => { this.addNotification("Отправлен запрос на " + (this.action == "deploy" ? "развертывание" : "свертывание") + " для группы " + this.group) }, (e) => this.addNotification(e))
           }).catch(err => {
@@ -188,6 +189,11 @@ genericGroupActionForm templateId groups = [shamlet|
       <label .label> Название снапшота
       <div .control>
         <input .input type=text x-model="snapname">
+  <template *{[("x-if", "action == 'destroy'")]}>
+    <div>
+      <div .control>
+        <label .checkbox>
+          <input .checkbox type=checkbox x-model="force"> Форсировать удаление (игнорирование статусов развертывания)
   <button .button.is-fullwidth @click="sendRequest"> Выполнить
 |]
 
