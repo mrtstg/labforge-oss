@@ -9,6 +9,7 @@ module Jobservice.Client
   , setTaskStatus
   , getTask
   , getPagedTasks
+  , deleteGroupTask
   ) where
 
 import           Api.Keycloak.Models
@@ -31,4 +32,5 @@ insertJobserviceMessage
   :<|> isTaskReachedStatus
   :<|> setTaskStatus
   :<|> getTask
-  :<|> getPagedTasks = client api
+  :<|> getPagedTasks
+  :<|> deleteGroupTask = client api

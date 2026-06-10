@@ -54,7 +54,16 @@ import           Service.Environment
 import           Utils.Time
 
 jobserviceServer :: ServerT JobserviceAPI AppT
-jobserviceServer = sendMessage :<|> getHeldImages :<|> getImageUsage :<|> isDeploymentLocked :<|> deleteTask :<|> isTaskReachedStatus :<|> setTaskStatus :<|> getTask :<|> getPagedTasks
+jobserviceServer = sendMessage
+  :<|> getHeldImages
+  :<|> getImageUsage
+  :<|> isDeploymentLocked
+  :<|> deleteTask
+  :<|> isTaskReachedStatus
+  :<|> setTaskStatus
+  :<|> getTask
+  :<|> getPagedTasks
+  :<|> deleteTaskGroup
 
 checkTaskAccess :: TaskData  -> IntrospectResponse -> AppT Bool
 checkTaskAccess _ InactiveToken = pure False
@@ -64,6 +73,19 @@ checkTaskAccess (TaskData { .. }) (ActiveToken { .. }) = do
     defaultRetryClientC deploymentEnv $ getUserOwnedDeployments (fromMaybe "" tokenUUID) (Just p) (BearerWrapper t)
                             ) <&> map M.templateId
   pure $ (taskDataTemplateId `elem` r) || "jobservice-task-admin" `elem` tokenRealmRoles || taskDataAuthor == Just (fromMaybe "" tokenUUID)
+
+deleteTaskGroup :: Text -> BearerWrapper -> AppT ()
+deleteTaskGroup groupId (BearerWrapper token) = do
+  ~i@(ActiveToken { .. }) <- requireToken token
+  -- now, we assuming that all tasks in group have same access level related to user
+  firstTask <- runDB $ selectFirst [ TaskDataGroup ==. Just groupId ] []
+  case firstTask of
+    Nothing             -> pure ()
+    (Just (Entity _ t)) -> do
+      isAccessed <- checkTaskAccess t i
+      if not isAccessed then
+        sendJSONError err403 (JSONError "forbidden" "You do not own this task!" $ object ["message" .= String "Вы не владеете данной задачей."])
+      else runDB $ deleteWhere [ TaskDataGroup ==. Just groupId ]
 
 deleteTask :: Text -> BearerWrapper -> AppT ()
 deleteTask taskId (BearerWrapper token) = do
