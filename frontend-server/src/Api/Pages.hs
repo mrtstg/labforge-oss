@@ -349,9 +349,14 @@ deploymentInstancesPage did pageN refreshFlag groupFlag t = do
             <a .pagination-link href=/deployment/#{did}/instances?page=#{preEscapedToHtml $ page + 1}&group=#{encodeText group}> #{page + 1}
 $if refresh
   <script>
-    setTimeout(function() {
-      location.reload();
-    }, 5000);
+    $if totallyEmpty
+      const url = new URL(window.location.href);
+      url.searchParams.set('refresh', '0');
+      window.location.href = url.href;
+    $else
+      setTimeout(function() {
+        location.reload();
+      }, 5000);
 |]
 
 deleteInstancePage :: Text -> Maybe BearerWrapper -> AppT Html
