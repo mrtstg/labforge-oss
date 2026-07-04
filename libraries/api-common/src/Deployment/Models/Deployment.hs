@@ -11,10 +11,12 @@ module Deployment.Models.Deployment
   , DeploymentSnapshotPolicy(..)
   ) where
 
+import           Control.Applicative
 import           Data.Aeson
-import qualified Data.Map                        as M
+import qualified Data.Map                             as M
 import           Data.Text
 import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Config.Network
 import           Proxmox.Deploy.Models.Config.VM
 
 newtype PowerState = PowerState Bool deriving (Show, Eq)
@@ -48,11 +50,11 @@ instance FromJSON DeploymentSnapshotPolicy where
     <*> v .: "deleteAny"
 
 data DeploymentCreate = DeploymentCreate
-  { reqTitle            :: !Text
-  , reqVMs              :: ![ConfigVM]
-  , reqAvailableVMs     :: ![Text]
-  , reqExistingNetworks :: ![Text]
-  , reqSnapshotPolicy   :: !DeploymentSnapshotPolicy
+  { reqTitle          :: !Text
+  , reqVMs            :: ![ConfigVM]
+  , reqAvailableVMs   :: ![Text]
+  , reqNetworks       :: ![ConfigNetwork]
+  , reqSnapshotPolicy :: !DeploymentSnapshotPolicy
   } deriving (Show, Eq)
 
 instance ToJSON DeploymentCreate where
@@ -60,7 +62,7 @@ instance ToJSON DeploymentCreate where
     [ "title" .= reqTitle
     , "vms" .= reqVMs
     , "availableVMs" .= reqAvailableVMs
-    , "existingNetworks" .= reqExistingNetworks
+    , "networks" .= reqNetworks
     , "snapshot" .= reqSnapshotPolicy
     ]
 
@@ -69,18 +71,18 @@ instance FromJSON DeploymentCreate where
     <$> v .: "title"
     <*> v .: "vms"
     <*> v .: "availableVMs"
-    <*> v .: "existingNetworks"
+    <*> (v .: "existingNetworks" <|> v .: "networks")
     <*> v .: "snapshot"
 
 data DeploymentTemplate = DeploymentTemplate
-  { templateId               :: !Int
-  , templateOwner            :: !Text
-  , templateTitle            :: !Text
-  , templateVMs              :: ![ConfigVM]
-  , templateAvaiableVMs      :: ![Text]
-  , templateExistingNetworks :: ![Text]
-  , templateHiddenFor        :: ![Text]
-  , templateSnapshotPolicy   :: !DeploymentSnapshotPolicy
+  { templateId             :: !Int
+  , templateOwner          :: !Text
+  , templateTitle          :: !Text
+  , templateVMs            :: ![ConfigVM]
+  , templateAvaiableVMs    :: ![Text]
+  , templateNetworks       :: ![ConfigNetwork]
+  , templateHiddenFor      :: ![Text]
+  , templateSnapshotPolicy :: !DeploymentSnapshotPolicy
   } deriving (Show, Eq)
 
 instance FromJSON DeploymentTemplate where
@@ -90,7 +92,7 @@ instance FromJSON DeploymentTemplate where
     <*> v .: "title"
     <*> v .: "vms"
     <*> v .: "availableVMs"
-    <*> v .: "existingNetworks"
+    <*> (v .: "existingNetworks" <|> v .: "networks")
     <*> v .: "hiddenFor"
     <*> v .: "snapshot"
 
@@ -101,7 +103,7 @@ instance ToJSON DeploymentTemplate where
     , "title" .= templateTitle
     , "vms" .= templateVMs
     , "availableVMs" .= templateAvaiableVMs
-    , "existingNetworks" .= templateExistingNetworks
+    , "networks" .= templateNetworks
     , "hiddenFor" .= templateHiddenFor
     , "snapshot" .= templateSnapshotPolicy
     ]

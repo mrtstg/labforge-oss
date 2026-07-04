@@ -472,7 +472,7 @@ copyDeploymentPage did t = do
   env <- asks $ getEnvFor DeploymentService
   ts <- getUnixIntTime
   (DeploymentTemplate { .. }) <- globalDecoder' (defaultRetryClientC env $ C.getDeploymentTemplate did userToken)
-  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия [" <> (T.pack . show) ts <> "]", reqExistingNetworks=templateExistingNetworks, reqAvailableVMs=templateAvaiableVMs, reqSnapshotPolicy=templateSnapshotPolicy}) userToken)
+  _ <- globalDecoder' (defaultRetryClientC env $ C.createDeploymentTemplate (DeploymentCreate {reqVMs=templateVMs, reqTitle=templateTitle <> " - копия [" <> (T.pack . show) ts <> "]", reqNetworks=templateNetworks, reqAvailableVMs=templateAvaiableVMs, reqSnapshotPolicy=templateSnapshotPolicy}) userToken)
   tempRedirectTo "/deployment/my"
 
 deleteDeploymentPage :: Int -> Maybe BearerWrapper -> AppT Html

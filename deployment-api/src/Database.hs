@@ -36,15 +36,15 @@ import           Config
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Data.Aeson
-import qualified Data.ByteString.Char8           as BS
-import qualified Data.ByteString.Lazy.Char8      as LBS
-import qualified Data.Map                        as M
+import qualified Data.ByteString.Char8                as BS
+import qualified Data.Map                             as M
 import           Data.Text
-import qualified Data.Text                       as T
+import qualified Data.Text                            as T
 import           Database.Persist.Sql
 import           Database.Persist.TH
 import           Deployment.Models.Deployment
 import           Proxmox.Deploy.Models.Config
+import           Proxmox.Deploy.Models.Config.Network
 import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Types
 
@@ -58,7 +58,7 @@ DeploymentTemplateData
   title Text
   vms [ConfigVM] sqltype=jsonb
   availableVMs [Text] sqltype=jsonb
-  existingNetworks [Text] sqltype=jsonb
+  existingNetworks [ConfigNetwork] sqltype=jsonb
   snapshotPolicy DeploymentSnapshotPolicy sqltype=jsonb default='{"quota":0,"useAny":false,"deleteAny":false,"deleteOwned":false}'
   UniqueTitle
   deriving Show Eq
@@ -128,6 +128,16 @@ instance PersistField DeployConfig where
   fromPersistValue = fromPersistValueJSON
 
 instance PersistFieldSql DeployConfig where
+  sqlType _ = SqlOther "JSONB"
+
+instance PersistField [ConfigNetwork] where
+  toPersistValue = toPersistValueJSON
+  fromPersistValue (PersistByteString bs) = case (eitherDecode . BS.fromStrict) bs of
+                                              (Left e)  -> (Left . T.pack) e
+                                              (Right r) -> pure r
+  fromPersistValue v = error (show v)
+
+instance PersistFieldSql [ConfigNetwork] where
   sqlType _ = SqlOther "JSONB"
 
 instance PersistField [ConfigVM] where

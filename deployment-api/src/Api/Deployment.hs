@@ -182,7 +182,7 @@ processTemplates templates hiddenGroups = map (\(e, g) -> DeploymentTemplate
   , templateTitle=(deploymentTemplateDataTitle . entityVal) e
   , templateOwner=(deploymentTemplateDataOwnerId . entityVal) e
   , templateId=(fromIntegral . fromSqlKey . entityKey) e
-  , templateExistingNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
+  , templateNetworks=(deploymentTemplateDataExistingNetworks . entityVal) e
   , templateAvaiableVMs=(deploymentTemplateDataAvailableVMs . entityVal) e
   , templateHiddenFor=map (deploymentTemplateHideGroup . entityVal) g
   , templateSnapshotPolicy=(deploymentTemplateDataSnapshotPolicy . entityVal) e
@@ -230,7 +230,7 @@ createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
         { deploymentTemplateDataVms=reqVMs
         , deploymentTemplateDataTitle=reqTitle
         , deploymentTemplateDataOwnerId=fromJust tokenUUID
-        , deploymentTemplateDataExistingNetworks=reqExistingNetworks
+        , deploymentTemplateDataExistingNetworks=reqNetworks
         , deploymentTemplateDataAvailableVMs=reqAvailableVMs
         , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
         })
@@ -252,7 +252,7 @@ getDeploymentTemplate tID (BearerWrapper token) = do
         groups <- runDB $ selectList [ DeploymentTemplateHideDeployment ==. templateKey ] [] <&> map (deploymentTemplateHideGroup . entityVal)
         pure $ DeploymentTemplate
           { templateAvaiableVMs = deploymentTemplateDataAvailableVMs
-          , templateExistingNetworks = deploymentTemplateDataExistingNetworks
+          , templateNetworks = deploymentTemplateDataExistingNetworks
           , templateId = tID
           , templateOwner = deploymentTemplateDataOwnerId
           , templateTitle = deploymentTemplateDataTitle
@@ -295,7 +295,7 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
           [ DeploymentTemplateDataTitle =. reqTitle
           , DeploymentTemplateDataVms =. reqVMs
           , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
-          , DeploymentTemplateDataExistingNetworks =. reqExistingNetworks
+          , DeploymentTemplateDataExistingNetworks =. reqNetworks
           , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
           ]
         jobEnv <- asks $ getEnvFor JobserviceAPI
