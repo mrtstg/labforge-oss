@@ -16,11 +16,14 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE RecordWildCards   #-}
 module Proxmox.Deploy.Models.Config.Network
   ( ConfigNetwork(..)
+  , isSDNNetwork
+  , isExistingNetwork
   ) where
 
 import           Control.Applicative
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap   as KV
+import qualified Data.Text           as T
 
 data ConfigSubnetRange = ConfigSubnetRange
   { configSubnetRangeStart :: !String
@@ -76,6 +79,14 @@ data ConfigNetwork = ExistingNetwork
   , configNetworkVLANAware :: !(Maybe Bool)
   } deriving (Show, Eq, Ord)
 
+isSDNNetwork :: ConfigNetwork -> Bool
+isSDNNetwork (SDNNetwork {}) = True
+isSDNNetwork _               = False
+
+isExistingNetwork :: ConfigNetwork -> Bool
+isExistingNetwork (ExistingNetwork {}) = True
+isExistingNetwork _                    = False
+
 instance ToJSON ConfigNetwork where
   toJSON (ExistingNetwork { .. }) = object [ "type" .= String "existing", "name" .= configNetworkName ]
   toJSON (SDNNetwork { .. }) = object
@@ -87,7 +98,8 @@ instance ToJSON ConfigNetwork where
     ]
 
 instance FromJSON ConfigNetwork where
-  parseJSON = let
+  parseJSON (String network) = pure $ ExistingNetwork (T.unpack network)
+  parseJSON otherValue = let
     existingNetworkParser v = ExistingNetwork
       <$> v .: "name"
     sdnNetworkParser v = SDNNetwork
@@ -95,7 +107,7 @@ instance FromJSON ConfigNetwork where
       <*> v .: "zone"
       <*> v .: "name"
       <*> v .:? "vlanaware"
-    in withObject "ConfigNetwork" $ \v -> case KV.lookup "type" v of
+    in flip (withObject "ConfigNetwork") otherValue $ \v -> case KV.lookup "type" v of
     Nothing           -> existingNetworkParser v
     (Just "existing") -> existingNetworkParser v
     (Just "sdn")      -> sdnNetworkParser v
