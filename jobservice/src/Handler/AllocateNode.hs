@@ -112,7 +112,12 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                       Nothing -> pure ()
                       (Just vmids) -> do
                         $(logInfo) $ "[" <> deploymentId <> "] Allocated VMIDs"
-                        let sdnNetworksNames = nub . filter (`notElem` templateExistingNetworks) . map (T.pack . configVMNetworkName) $ foldMap (fromMaybe [] . configVMNetworks) templateVMs
+                        let existingNets = map (ExistingNetwork . configNetworkName) $ filter isExistingNetwork templateNetworks
+                        let configuredNets = map configNetworkName templateNetworks
+                        -- legacy fallback to old stands data where no SDN networks declared
+                        let legacySdnNetworksNames = nub . filter (`notElem` configuredNets) . map configVMNetworkName $ foldMap (fromMaybe [] . configVMNetworks) templateVMs
+
+                        let sdnNetworksNames = nub $ (map configNetworkName . filter isSDNNetwork $ templateNetworks) ++ legacySdnNetworksNames
                         networkAllocateRes'' <- withTokenVariable $ \t -> do
                           defaultRetryClientC deploymentEnv (D.requestDeploymentNetwork nodeName deploymentId (Just $ length sdnNetworksNames) (BearerWrapper t))
                         networkAllocateRes' <- unpackError networkAllocateRes'' errorF
@@ -121,8 +126,8 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                           (Just sdnNames) -> do
                             $(logInfo) $ "[" <> deploymentId <> "] Allocated SDN networks"
                             sdnZone <- asks (T.unpack . deploySDNZone)
-                            let namesMap = M.mapKeys T.unpack . M.fromList $ zip sdnNetworksNames sdnNames
-                            let networks = map (ExistingNetwork . T.unpack) templateExistingNetworks ++ map (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) sdnNames
+                            let namesMap = M.mapKeys T.unpack . M.fromList $ zip (map T.pack sdnNetworksNames) sdnNames
+                            let networks = existingNets ++ map (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) sdnNames
                             let replacedNetworksVM = map (renameNet namesMap) templateVMs
                             displayAllocRes'' <- withTokenVariable $ \t -> do
                               defaultRetryClientC deploymentEnv (D.requestDeploymentDisplay nodeName deploymentId (Just $ length templateVMs) (BearerWrapper t))
