@@ -67,6 +67,7 @@ import           Network.URI.Encode                       (encodeText)
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Models.Config.DeployAgent
+import           Proxmox.Deploy.Models.Config.Network
 import           Proxmox.Deploy.Models.Config.Template
 import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Models.NetworkInterface
@@ -494,10 +495,16 @@ deploymentEditPage tid t = do
   let names = prettyEncode $ map configTemplateName templates
   let availableInterfaces = (LBS.unpack . encode) [E1000, E1000E, VIRTIO, VMXNET3]
 
+  -- legacy fallback
+  let declaredNets = map configNetworkName (templateNetworks template)
+  let vmsNetworks = nub $ map configVMNetworkName $ foldMap (fromMaybe [] . configVMNetworks) (templateVMs template)
+  let missingNetworks = map (\v -> SDNNetwork {configNetworkZone="", configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=v}) $ filter (`notElem` declaredNets) vmsNetworks
+
+
   let vmsEncoded = prettyEncode $ map (\(v, (Object objMap)) -> Object (KM.insert "available" (Bool $ (T.pack . configVMName) v `elem` templateAvaiableVMs template) objMap)) $ map (\x -> (x, toJSON x)) (templateVMs template)
-  baseTemplate token Nothing (Just "Редактирование развертывания") genericDeploymentForm (Just $ h names availableInterfaces template vmsEncoded) where
+  baseTemplate token Nothing (Just "Редактирование развертывания") genericDeploymentForm (Just $ h names availableInterfaces template vmsEncoded missingNetworks) where
     title' = T.replace "\"" "\\\""
-    h names availableInterfaces template@(DeploymentTemplate { .. }) vms = [shamlet|
+    h names availableInterfaces template@(DeploymentTemplate { .. }) vms missingNetworks = [shamlet|
 <script>
   ^{unwrapErrorFunction}
   document.addEventListener('alpine:init', () => {
@@ -508,8 +515,8 @@ deploymentEditPage tid t = do
       snapshotPolicy: #{(preEscapedToMarkup . prettyEncode) templateSnapshotPolicy},
       addVM() { this.vms.push({clone_from: this.templates[0], available: true, networks: [], delay: 0, clean_networks: true, running: true, cores: 1, memory: 1024, cpu_limit: 1, name: "", storage: ""}) },
       deleteVM(i) { this.vms.splice(i, 1) },
-      existingNetworks: #{preEscapedToMarkup $ prettyEncode templateExistingNetworks},
-      removeENet(i) { this.existingNetworks.splice(i, 1) },
+      networks: #{preEscapedToMarkup $ prettyEncode (templateNetworks ++ missingNetworks)},
+      removeENet(i) { this.networks.splice(i, 1) },
       moveVM(index, delta) {
         if (this.vms.length < 2 || index + delta < 0 || index + delta >= this.vms.length - 1) {
           return;
@@ -520,7 +527,7 @@ deploymentEditPage tid t = do
       },
       sendRequest() {
         var availableVMs = this.vms.filter(i => i.available).map(i => i.name);
-        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, existingNetworks: this.existingNetworks, vms: this.vms, snapshot: this.snapshotPolicy});
+        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, networks: this.networks, vms: this.vms, snapshot: this.snapshotPolicy});
         fetch("/api/deployment/deployments/#{templateId}", {
           method: "PATCH",
           body: payload,
@@ -577,7 +584,7 @@ deploymentEditPage tid t = do
            }
         }
       },
-      addNetwork(vm) { if (this.netname.length > 0) { vm.networks.push({name: this.netname, type: this.nettype, number: null, cloudinit_address: null, cloudinit_gateway: null}); this.netname = ''; this.nettype = this.interfaces[0]; } },
+      addNetwork(vm) { if (this.netname.length > 0) { vm.networks.push({name: this.netname, type: this.nettype, number: null, cloudinit_address: null, cloudinit_gateway: null}); this.nettype = this.interfaces[0]; } },
       removeNetwork(vm, index) { vm.networks.splice(index, 1) }
     }))
   })
@@ -611,11 +618,11 @@ deploymentCreatePage t = do
         var d = this.vms.splice(i, 1)[0];
         this.vms.splice(index + delta, 0, d);
       },
-      existingNetworks: [],
-      removeENet(i) { this.existingNetworks.splice(i, 1) },
+      networks: [],
+      removeENet(i) { this.networks.splice(i, 1) },
       sendRequest() {
         var availableVMs = this.vms.filter(i => i.available).map(i => i.name);
-        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, existingNetworks: this.existingNetworks, vms: this.vms, snapshot: this.snapshotPolicy});
+        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, networks: this.networks, vms: this.vms, snapshot: this.snapshotPolicy});
         fetch("/api/deployment/deployments", {
           method: "POST",
           body: payload,
@@ -658,7 +665,7 @@ deploymentCreatePage t = do
            vmData.networks[netIndex]['cloudinit_gateway'] = null
         }
       },
-      addNetwork(vm) { if (this.netname.length > 0) { vm.networks.push({name: this.netname, type: this.nettype, number: null, cloudinit_address: null, cloudinit_gateway: null}); this.netname = ''; this.nettype = this.interfaces[0]; } },
+      addNetwork(vm) { if (this.netname.length > 0) { vm.networks.push({name: this.netname, type: this.nettype, number: null, cloudinit_address: null, cloudinit_gateway: null}); this.nettype = this.interfaces[0]; } },
       removeNetwork(vm, index) { vm.networks.splice(index, 1) }
     }))
   })

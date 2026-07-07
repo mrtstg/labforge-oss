@@ -257,14 +257,17 @@ genericDeploymentForm = let
   netIndexKey :: [(String, String)]
   netIndexKey = [(":key", "netIndex")]
 
+  netTypeBind :: String -> [(String, String)]
+  netTypeBind v = [(":selected", "net.type == " <> "'" <> v <> "'")]
+
   netSelectBind :: [(String, String)]
   netSelectBind = [(":selected", "vms[index]['networks'][netIndex]['type'] == avtype")]
 
+  netNameBind :: [(String, String)]
+  netNameBind = [(":selected", "vms[index]['networks'][netIndex]['name'] == network.name")]
+
   netNumberBind :: [(String, String)]
   netNumberBind = [(":selected", "vms[index]['networks'][netIndex]['number'] == i - 1")]
-
-  templateBind :: [(String, String)]
-  templateBind = [(":selected", "vms[index]['clone_from'] == template")]
   in [shamlet|
 <div .container x-data>
   <form .form.is-fullwidth x-data="formData" @submit.prevent="">
@@ -354,7 +357,11 @@ genericDeploymentForm = let
                 <button .button.is-danger.ml-5 @click="removeDisk(diskIndex)"> Удалить
           <p .label> Добавление сетей
           <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth x-data="netForm(undefined, undefined)">
-            <input .input type="text" x-model="netname">
+            <div .select.is-fullwidth>
+              <select x-model="netname">
+                <option value=""> Выберите сеть
+                <template x-for="network in networks">
+                  <option x-text="network.name">
             <div .select>
               <select x-model="nettype">
                 <template x-for="avtype in interfaces">
@@ -364,7 +371,11 @@ genericDeploymentForm = let
             <div x-data="netForm(vms[index], netIndex)">
               <p .label> Сеть <span x-text="netObj['name']">
               <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
-                <input .input type="text" x-model="vms[index]['networks'][netIndex]['name']">
+                <div .select.is-fullwidth>
+                  <select x-model="vms[index]['networks'][netIndex]['name']">
+                    <option value=""> Выберите сеть
+                    <template x-for="network in networks">
+                      <option x-text="network.name" *{netNameBind}>
                 <div .select>
                   <select x-model.number="vms[index]['networks'][netIndex]['number']">
                     <option value=""> -
@@ -412,15 +423,18 @@ genericDeploymentForm = let
           <input .checkbox type=checkbox x-model="snapshotPolicy['deleteAny']">
           Пользователь может удалять любые снапшоты, а не только созданные им
     <div .block x-data="{input: ''}">
-      <h2 .subtitle.is-5> Список существующих сетей
-      <p> Такие сети не создаются, а используют bridge с тем же именем.
+      <h2 .subtitle.is-5> Список сетей
       <div .control>
         <label .label> Имя сети
         <input .input type="text" x-model="input">
-      <button .button.is-fullwidth @click="if (input.length > 0 && !existingNetworks.includes(input)) { existingNetworks.push(input); input = '' }"}> Добавить
-      <template x-for="(net, netIndex) in existingNetworks" *{netIndexKey}>
+      <button .button.is-fullwidth @click="if (input.length > 0 && !networks.map(x => x.name).includes(input)) { networks.push({'type': 'sdn', 'name': input, 'zone': ''}); input = '' }"}> Добавить
+      <template x-for="(net, netIndex) in networks" *{netIndexKey}>
         <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
-          <p .pr-5 x-text="net">
+          <p .pr-2 x-text="net.name">
+          <div .select.is-fullwidth>
+            <select x-model="net.type">
+              <option value="existing" *{netTypeBind "existing"}> Существующий bridge
+              <option value="sdn" *{netTypeBind "sdn"}> SDN-сеть
           <button .button.is-danger @click="removeENet(netIndex)"> Удалить
     <button .button.is-success.is-fullwidth @click="sendRequest"> Создать стенд
 |]
