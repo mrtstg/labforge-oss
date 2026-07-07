@@ -45,7 +45,8 @@ import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Either                              (fromRight, isLeft)
 import           Data.Functor                             ((<&>))
-import           Data.List                                (find, sortOn)
+import           Data.List                                (find, nub, sort,
+                                                           sortOn)
 import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Ord                                 (Down (..))
@@ -219,24 +220,31 @@ getPagedDeploymentTemplates pageN (BearerWrapper token) = do
     , responseTotal=templatesTotal
     }
 
+isNetworksDeclared :: DeploymentCreate -> Bool
+isNetworksDeclared (DeploymentCreate { .. }) = do
+  let declaredNets = sort $ map configNetworkName reqNetworks
+  let vmNets = (sort . nub) $ foldMap (map configVMNetworkName . fromMaybe [] . configVMNetworks) reqVMs
+  declaredNets == vmNets
+
 createDeploymentTemplate :: DeploymentCreate -> BearerWrapper -> AppT ()
-createDeploymentTemplate (DeploymentCreate { .. }) (BearerWrapper token) = do
+createDeploymentTemplate p@(DeploymentCreate { .. }) (BearerWrapper token) = do
   ~(ActiveToken { .. }) <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplatesCreator]]
   if isNothing tokenUUID then sendJSONError err401 (JSONError "invalidToken" "Token has no UUID" Null) else do
     titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle ]
     if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
-      _ <- runDB $ insert
-        (DeploymentTemplateData
-        { deploymentTemplateDataVms=reqVMs
-        , deploymentTemplateDataTitle=reqTitle
-        , deploymentTemplateDataOwnerId=fromJust tokenUUID
-        , deploymentTemplateDataExistingNetworks=reqNetworks
-        , deploymentTemplateDataAvailableVMs=reqAvailableVMs
-        , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
-        })
-      jobEnv <- asks $ getEnvFor JobserviceAPI
-      _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
-      pure ()
+      if not (isNetworksDeclared p) then sendJSONError err400 (JSONError "missingNetworks" "Not all networks are declared" (object [ "message" .= String "В стенде используются необьявленные сети!"])) else do
+        _ <- runDB $ insert
+          (DeploymentTemplateData
+          { deploymentTemplateDataVms=reqVMs
+          , deploymentTemplateDataTitle=reqTitle
+          , deploymentTemplateDataOwnerId=fromJust tokenUUID
+          , deploymentTemplateDataExistingNetworks=reqNetworks
+          , deploymentTemplateDataAvailableVMs=reqAvailableVMs
+          , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
+          })
+        jobEnv <- asks $ getEnvFor JobserviceAPI
+        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
+        pure ()
 
 getDeploymentTemplate :: Int -> BearerWrapper -> AppT DeploymentTemplate
 getDeploymentTemplate tID (BearerWrapper token) = do
@@ -281,7 +289,7 @@ deleteDeploymentTemplate tID (BearerWrapper token) = do
           pure ()
 
 patchDeploymentTemplate :: Int -> DeploymentCreate -> BearerWrapper -> AppT ()
-patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
+patchDeploymentTemplate tID p@(DeploymentCreate { .. }) (BearerWrapper token) = do
   t <- requireToken token
   let instanceKey = DeploymentTemplateDataKey . fromIntegral $ tID
   template' <- runDB $ exists [DeploymentTemplateDataId ==. instanceKey ]
@@ -291,16 +299,17 @@ patchDeploymentTemplate tID (DeploymentCreate { .. }) (BearerWrapper token) = do
     else do
       titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle, DeploymentTemplateDataId !=. instanceKey ]
       if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
-        runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
-          [ DeploymentTemplateDataTitle =. reqTitle
-          , DeploymentTemplateDataVms =. reqVMs
-          , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
-          , DeploymentTemplateDataExistingNetworks =. reqNetworks
-          , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
-          ]
-        jobEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
-        pure ()
+        if not (isNetworksDeclared p) then sendJSONError err400 (JSONError "missingNetworks" "Not all networks are declared" (object [ "message" .= String "В стенде используются необьявленные сети!"])) else do
+          runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
+            [ DeploymentTemplateDataTitle =. reqTitle
+            , DeploymentTemplateDataVms =. reqVMs
+            , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
+            , DeploymentTemplateDataExistingNetworks =. reqNetworks
+            , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
+            ]
+          jobEnv <- asks $ getEnvFor JobserviceAPI
+          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
+          pure ()
 
 requestDeploymentVMID :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
 requestDeploymentVMID _ _ Nothing (BearerWrapper token) = do
