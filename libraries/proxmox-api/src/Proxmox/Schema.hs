@@ -18,6 +18,7 @@ import           Network.HTTP.Conduit
 import           Proxmox.Models
 import           Proxmox.Models.Network     (ProxmoxNetwork,
                                              ProxmoxNetworkFilter,
+                                             ProxmoxNetworkResponse,
                                              ProxmoxNetworkType)
 import           Proxmox.Models.Node
 import           Proxmox.Models.SDNNetwork
@@ -49,7 +50,7 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "cluster" :> "sdn" :> Put '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "config" :> Get '[JSON] (ProxmoxResponse (Maybe ProxmoxVMConfig))
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> Get '[JSON] (ProxmoxResponse [ProxmoxVM])
-  :<|> "nodes" :> NodeNameCapture :> "network" :> QueryParam "type" ProxmoxNetworkFilter :> Get '[JSON] (ProxmoxResponse [ProxmoxNetwork])
+  :<|> "nodes" :> NodeNameCapture :> "network" :> QueryParam "type" ProxmoxNetworkFilter :> Get '[JSON] ProxmoxNetworkResponse
   :<|> "nodes" :> Get '[JSON] (ProxmoxResponse [ProxmoxNode])
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "status" :> "start" :> Post '[JSON] (ProxmoxResponse ())
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "status" :> "stop" :> Post '[JSON] (ProxmoxResponse ())

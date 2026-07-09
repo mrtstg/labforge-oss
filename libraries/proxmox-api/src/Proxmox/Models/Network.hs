@@ -1,15 +1,27 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Proxmox.Models.Network
   ( ProxmoxNetworkType(..)
   , ProxmoxNetwork(..)
   , ProxmoxNetworkFilter(..)
+  , ProxmoxNetworkResponse(..)
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import           Data.Text         (Text, pack, unpack)
 import           Servant.API       (ToHttpApiData (..))
+
+data ProxmoxNetworkResponse = ProxmoxNetworkResponse
+  { proxmoxNetworks       :: ![ProxmoxNetwork]
+  , proxmoxNetworkChanges :: !(Maybe String)
+  } deriving (Show, Eq)
+
+instance FromJSON ProxmoxNetworkResponse where
+  parseJSON = withObject "ProxmoxNetworkResponse" $ \v -> ProxmoxNetworkResponse
+    <$> v .: "data"
+    <*> v .:? "changes"
 
 data ProxmoxNetworkFilter = AnyBridge | AnyLocalBridge | TypedNetwork ProxmoxNetworkType deriving (Eq, Ord)
 

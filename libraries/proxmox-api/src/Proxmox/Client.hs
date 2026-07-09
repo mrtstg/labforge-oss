@@ -198,7 +198,7 @@ getNodeVMsMap node = getNodeVMs node >>= f where
 -- shortcut for getting networks for plugging vms into
 getBridgeNodeNetworks :: Text -> ClientM [ProxmoxNetwork]
 getBridgeNodeNetworks node = do
-  (ProxmoxResponse { proxmoxData = nets }) <- getNodeNetworks node (Just AnyBridge)
+  (ProxmoxNetworkResponse { proxmoxNetworks = nets }) <- getNodeNetworks node (Just AnyBridge)
   return nets
 
 getActiveNodes :: ClientM [ProxmoxNode]
