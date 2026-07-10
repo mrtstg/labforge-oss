@@ -6,12 +6,32 @@ module Proxmox.Models.Network
   , ProxmoxNetwork(..)
   , ProxmoxNetworkFilter(..)
   , ProxmoxNetworkResponse(..)
+  , ProxmoxNetworkCreate(..)
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
 import           Data.Text         (Text, pack, unpack)
 import           Servant.API       (ToHttpApiData (..))
+
+data ProxmoxNetworkCreate = ProxmoxNetworkCreate
+  { networkCreateInterface :: !String
+  , networkCreateType      :: !ProxmoxNetworkType
+  , networkCreateAutostart :: !Bool
+  } deriving (Show, Eq)
+
+instance ToJSON ProxmoxNetworkCreate where
+  toJSON (ProxmoxNetworkCreate { .. }) = object
+    [ "iface" .= networkCreateInterface
+    , "type" .= networkCreateType
+    , "autostart" .= networkCreateAutostart
+    ]
+
+instance FromJSON ProxmoxNetworkCreate where
+  parseJSON = withObject "ProxmoxNetworkCreate" $ \v -> ProxmoxNetworkCreate
+    <$> v .: "iface"
+    <*> v .: "type"
+    <*> v .: "autostart"
 
 data ProxmoxNetworkResponse = ProxmoxNetworkResponse
   { proxmoxNetworks       :: ![ProxmoxNetwork]
@@ -48,6 +68,9 @@ instance FromJSON ProxmoxNetworkType where
     "OVSIntPort" -> pure OVSIntPort
     "vnet" -> pure Vnet
     anyOther -> pure $ Unknown anyOther
+
+instance ToJSON ProxmoxNetworkType where
+  toJSON = String . pack . show
 
 instance Show ProxmoxNetworkType where
   show Bridge      = "bridge"

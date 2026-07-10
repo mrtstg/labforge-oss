@@ -1,5 +1,5 @@
 name:                proxmox-api
-version:             0.1.2.5
+version:             0.1.2.6
 github:              "learnew2/proxmox-api"
 license:             BSD-3-Clause
 author:              "Ilya Zamaratskikh"

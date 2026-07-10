@@ -17,6 +17,7 @@ import           Data.Text
 import           Network.HTTP.Conduit
 import           Proxmox.Models
 import           Proxmox.Models.Network     (ProxmoxNetwork,
+                                             ProxmoxNetworkCreate,
                                              ProxmoxNetworkFilter,
                                              ProxmoxNetworkResponse,
                                              ProxmoxNetworkType)
@@ -68,6 +69,9 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> QueryParam "content" Text :> QueryParam "vmid" Int :> Get '[JSON] (ProxmoxResponse [ProxmoxStorageContent])
   :<|> "nodes" :> NodeNameCapture :> "storage" :> StorageCapture :> "content" :> ReqBody '[JSON] ProxmoxAllocateRequest :> Post '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "qemu" :> VMIDCapture :> "config" :> ReqBody '[JSON] (M.Map String Value) :> Post '[JSON] (ProxmoxResponse String)
+  :<|> "nodes" :> NodeNameCapture :> "network" :> Put '[JSON] (ProxmoxResponse String)
+  :<|> "nodes" :> NodeNameCapture :> "network" :> Capture "ifaceName" Text :> Delete '[JSON] (ProxmoxResponse ())
+  :<|> "nodes" :> NodeNameCapture :> "network" :> ReqBody '[JSON] ProxmoxNetworkCreate :> Post '[JSON] (ProxmoxResponse ())
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT
