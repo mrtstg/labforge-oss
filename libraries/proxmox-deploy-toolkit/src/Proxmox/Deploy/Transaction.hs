@@ -33,6 +33,7 @@ import           Control.Monad.Logger
 import           Control.Monad.State
 import           Control.Monad.Trans.Writer
 import           Data.Aeson                               (Value (..))
+import           Data.Either
 import           Data.Functor                             ((<&>))
 import           Data.Functor.Identity
 import           Data.List                                (isInfixOf, nub,
@@ -42,6 +43,7 @@ import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
 import qualified Data.Text                                as T
+import           Parsers.Network
 import           Proxmox.Agent.Client
 import           Proxmox.Client
 import           Proxmox.Deploy.Models.Config
@@ -111,6 +113,16 @@ sdnNetworkCreated vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\
 
 sdnNetworkDeclaredOrCreated :: String -> ProxmoxResponse [ProxmoxSDNNetwork] -> Bool
 sdnNetworkDeclaredOrCreated vnetName (ProxmoxResponse { proxmoxData = networks }) = any (\x -> sdnNetworkName x == vnetName) networks
+
+bridgeCreatedOrPending :: String -> ProxmoxNetworkResponse -> Bool
+bridgeCreatedOrPending bridgeName (ProxmoxNetworkResponse {proxmoxNetworkChanges=changes, proxmoxNetworks=networks}) = do
+  let isPending = fromRight False $ interfacePendingState (T.pack $ fromMaybe "" changes) bridgeName
+  isPending || any ((==) bridgeName . proxmoxNetworkInterface) networks
+
+bridgeDestroyedOrPending :: String -> ProxmoxNetworkResponse -> Bool
+bridgeDestroyedOrPending bridgeName (ProxmoxNetworkResponse {proxmoxNetworkChanges=changes, proxmoxNetworks=networks}) = do
+  let isPending = fromRight True $ interfacePendingState (T.pack $ fromMaybe "" changes) bridgeName
+  not isPending || all ((/=) bridgeName . proxmoxNetworkInterface) networks
 
 -- looks up for transaction data and deploy config for vmid
 getVMID :: String -> TransactionData -> DeployConfig -> Maybe Int
@@ -185,8 +197,8 @@ powerVMWrapper ts vmid = do
             liftIO $ threadDelay 3_000_000
             powerVMWrapper nts vmid
 
-applySDNWrapper :: StatefulTransactionT ()
-applySDNWrapper = do
+applySDNWrapper :: ClientM a -> StatefulTransactionT ()
+applySDNWrapper reloadFunction = do
   (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
   _ <- waitForClient
     300_000_000
@@ -196,7 +208,7 @@ applySDNWrapper = do
     (defaultRetryClient' transactionProxmoxState $ getActiveNodeTasks nodeName (Just "srvreload") Nothing)
     null
   posixTimeInt <- getUnixIntTime
-  _ <- defaultRetryClient' transactionProxmoxState applySDNSettings
+  _ <- defaultRetryClient' transactionProxmoxState reloadFunction
   r <- waitForClient
     5_000_000
     "Waiting for completing network reload time"
@@ -205,8 +217,8 @@ applySDNWrapper = do
     (defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just posixTimeInt) Nothing (Just ArchiveTasks) Nothing (Just "srvreload") Nothing Nothing)
     (\(ProxmoxResponse tasks _) -> not . null $ tasks)
   case r of
-    (Left _)      -> applySDNWrapper
-    (Right False) -> applySDNWrapper
+    (Left _)      -> applySDNWrapper reloadFunction
+    (Right False) -> applySDNWrapper reloadFunction
     (Right _)     -> pure ()
 
 executeTransactionAction :: TransactionAction -> StatefulTransactionT ()
@@ -525,7 +537,51 @@ executeTransactionAction (ConfigureVMRaw vmName payload) = do
 executeTransactionAction (TransactionDelayAfter secondsPause action) = do
   () <- executeTransactionAction action
   (liftIO . threadDelay . (* 1_000_000)) secondsPause
-executeTransactionAction ApplySDNNetworks = applySDNWrapper
+executeTransactionAction ApplySDNNetworks = applySDNWrapper applySDNSettings
+executeTransactionAction UpdateNodeNetworks = do
+  (TransactionState { transactionDeployConfig = (DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}) }) <- get
+  -- TODO: rename SDN wrapper since its not only sdn now
+  applySDNWrapper (applyNodeNetworks nodeName)
+executeTransactionAction (DestroyBridge (ProxmoxNetworkCreate { .. })) = do
+  (TransactionState { transactionDeployConfig = (DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}), .. }) <- get
+  (ProxmoxNetworkResponse { .. }) <- (defaultRetryClient' transactionProxmoxState) (getNodeNetworks nodeName Nothing) >>= defaultClientErrorWrapper
+  let bridgeExists = any ((==) networkCreateInterface . proxmoxNetworkInterface) proxmoxNetworks || interfacePendingState (T.pack $ fromMaybe "" proxmoxNetworkChanges) networkCreateInterface == Right True
+  if not bridgeExists then do
+    $(logWarn) $ T.pack $ "Linux bridge " <> show networkCreateInterface <> " already does not exists"
+  else do
+    $(logInfo) $ T.pack $ "Deleting bridge interface " <> show networkCreateInterface
+    _ <- (defaultRetryClient' transactionProxmoxState) (deleteNodeInterface nodeName (T.pack networkCreateInterface)) >>= defaultClientErrorWrapper
+    bridgeResult <- waitForClient
+      60_000_000
+      ("Bridge interface " <> (T.pack . show) networkCreateInterface <> " is still exists. Waiting...")
+      20
+      1_000_000
+      (defaultRetryClient' transactionProxmoxState $ getNodeNetworks nodeName Nothing)
+      (bridgeDestroyedOrPending networkCreateInterface)
+    case bridgeResult of
+      (Left e) -> throwError (ClientError e)
+      (Right True) -> $(logInfo) $ T.pack $ "Deleted bridge interface " <> show networkCreateInterface
+      (Right False) -> throwError (BridgeNotFound networkCreateInterface) -- TODO: maybe other error?
+executeTransactionAction (CreateBridge networkCreate@(ProxmoxNetworkCreate { .. })) = do
+  (TransactionState { transactionDeployConfig = (DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}), .. }) <- get
+  (ProxmoxNetworkResponse { .. }) <- (defaultRetryClient' transactionProxmoxState) (getNodeNetworks nodeName Nothing) >>= defaultClientErrorWrapper
+  let bridgeExists = any ((==) networkCreateInterface . proxmoxNetworkInterface) proxmoxNetworks || interfacePendingState (T.pack $ fromMaybe "" proxmoxNetworkChanges) networkCreateInterface == Right True
+  if bridgeExists then do
+    $(logWarn) $ T.pack $ "Linux bridge " <> show networkCreateInterface <> " already exists"
+  else do
+    $(logInfo) $ T.pack $ "Creating bridge interface " <> show networkCreateInterface
+    _ <- (defaultRetryClient' transactionProxmoxState) (createNodeInterface nodeName networkCreate) >>= defaultClientErrorWrapper
+    bridgeResult <- waitForClient
+      60_000_000
+      ("Bridge interface " <> (T.pack . show) networkCreateInterface <> " is not created. Waiting...")
+      20
+      1_000_000
+      (defaultRetryClient' transactionProxmoxState $ getNodeNetworks nodeName Nothing)
+      (bridgeCreatedOrPending networkCreateInterface)
+    case bridgeResult of
+      (Left e) -> throwError (ClientError e)
+      (Right True) -> $(logInfo) $ T.pack $ "Created bridge interface " <> show networkCreateInterface
+      (Right False) -> throwError (BridgeNotFound networkCreateInterface) -- TODO: maybe other error?
 executeTransactionAction (DeploySDNNetwork networkCreate@(ProxmoxSDNNetworkCreate { sdnNetworkCreateName = vnetName })) = let
   getAllSDNNetworks :: StatefulTransactionT (Either ClientError (ProxmoxResponse [ProxmoxSDNNetwork]))
   getAllSDNNetworks = do
@@ -643,6 +699,13 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
   helper [] acc = (pure . reverse) acc
   helper ((NetworkExists (ExistingNetwork networkName)):ts) acc = if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts acc else
     throwError (BridgeNotFound networkName)
+  helper ((NetworkExists (BridgeNetwork {configNetworkName=networkName, configNetworkAutostart=configNetworkAutostart})):ts) acc = do
+    let networkCreate = ProxmoxNetworkCreate {networkCreateType=Bridge, networkCreateInterface=networkName, networkCreateAutostart=configNetworkAutostart}
+    if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts acc else do
+      helper ts (UpdateNodeNetworks:CreateBridge networkCreate:acc)
+  helper ((NetworkNotExists (BridgeNetwork {configNetworkName=networkName, configNetworkAutostart=configNetworkAutostart})):ts) acc = do
+    let networkCreate = ProxmoxNetworkCreate {networkCreateType=Bridge, networkCreateInterface=networkName, networkCreateAutostart=configNetworkAutostart}
+    if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts (UpdateNodeNetworks:DestroyBridge networkCreate:acc) else helper ts acc
   helper ((NetworkExists SDNNetwork { .. }):ts) acc = do
     let sdnCreate = ProxmoxSDNNetworkCreate
           { sdnNetworkCreateZone=configNetworkZone

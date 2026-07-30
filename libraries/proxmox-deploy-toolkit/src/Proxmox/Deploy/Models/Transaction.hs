@@ -43,6 +43,7 @@ import           Proxmox.Deploy.Models.Config.Network
 import           Proxmox.Deploy.Models.Config.Template
 import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Types
+import           Proxmox.Models.Network
 import           Proxmox.Models.SDNNetwork
 import           Proxmox.Models.Snapshot
 import           Proxmox.Models.VMClone
@@ -86,6 +87,9 @@ data TransactionAction
   | RollbackVM String String
   | ApplySDNNetworks
   | AllocateDisk String ConfigVMDisk
+  | CreateBridge ProxmoxNetworkCreate
+  | DestroyBridge ProxmoxNetworkCreate
+  | UpdateNodeNetworks
   deriving (Show, Eq)
 
 data DeployTarget = Deploy | Destroy deriving (Show, Eq)

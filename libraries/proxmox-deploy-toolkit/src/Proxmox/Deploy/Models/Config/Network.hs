@@ -18,6 +18,7 @@ module Proxmox.Deploy.Models.Config.Network
   ( ConfigNetwork(..)
   , isSDNNetwork
   , isExistingNetwork
+  , isBridgeNetwork
   ) where
 
 import           Control.Applicative
@@ -77,6 +78,10 @@ data ConfigNetwork = ExistingNetwork
   , configNetworkZone      :: !String
   , configNetworkName      :: !String
   , configNetworkVLANAware :: !(Maybe Bool)
+  } |
+  BridgeNetwork
+  { configNetworkName      :: !String
+  , configNetworkAutostart :: !Bool
   } deriving (Show, Eq, Ord)
 
 isSDNNetwork :: ConfigNetwork -> Bool
@@ -87,6 +92,10 @@ isExistingNetwork :: ConfigNetwork -> Bool
 isExistingNetwork (ExistingNetwork {}) = True
 isExistingNetwork _                    = False
 
+isBridgeNetwork :: ConfigNetwork -> Bool
+isBridgeNetwork (BridgeNetwork {}) = True
+isBridgeNetwork _                  = False
+
 instance ToJSON ConfigNetwork where
   toJSON (ExistingNetwork { .. }) = object [ "type" .= String "existing", "name" .= configNetworkName ]
   toJSON (SDNNetwork { .. }) = object
@@ -95,6 +104,11 @@ instance ToJSON ConfigNetwork where
     , "subnets" .= configNetworkSubnets
     , "zone" .= configNetworkZone
     , "vlanaware" .= configNetworkVLANAware
+    ]
+  toJSON (BridgeNetwork { .. }) = object
+    [ "type" .= String "bridge"
+    , "name" .= configNetworkName
+    , "autostart" .= configNetworkAutostart
     ]
 
 instance FromJSON ConfigNetwork where
@@ -107,8 +121,12 @@ instance FromJSON ConfigNetwork where
       <*> v .: "zone"
       <*> v .: "name"
       <*> v .:? "vlanaware"
+    bridgeNetworkParser v = BridgeNetwork
+      <$> v .: "name"
+      <*> v .:? "autostart" .!= True
     in flip (withObject "ConfigNetwork") otherValue $ \v -> case KV.lookup "type" v of
     Nothing           -> existingNetworkParser v
     (Just "existing") -> existingNetworkParser v
     (Just "sdn")      -> sdnNetworkParser v
+    (Just "bridge")   -> bridgeNetworkParser v
     _anyOther         -> fail $ "Invalid network type value: " <> show _anyOther
