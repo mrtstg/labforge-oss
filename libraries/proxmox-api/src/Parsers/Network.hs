@@ -18,12 +18,12 @@ interfacePendingState changesConfig interfaceName = do
     _anyOther -> Left $ "Interface " <> interfaceName <> " did not changed state."
 
 parseChangesConfig :: Text -> Either String [ChangesLine]
-parseChangesConfig = parseOnly (manyTill (choice [interfaceLineParser, otherLineParser]) endOfInput)
+parseChangesConfig = parseOnly (manyTill (choice [interfaceLineParser, otherLineParser]) endOfInput) . (<> "\n")
 
 interfaceLineParser :: Parser ChangesLine
 interfaceLineParser = do
   sym <- satisfy (`elem` ['+', '-'])
-  _ <- string "iface"
+  _ <- manyTill space (string "iface")
   _ <- many1 space
   iface <- manyTill anyChar space
   _ <- manyTill anyChar endOfLine
