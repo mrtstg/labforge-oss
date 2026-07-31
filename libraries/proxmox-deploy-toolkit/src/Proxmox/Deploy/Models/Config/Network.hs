@@ -82,6 +82,7 @@ data ConfigNetwork = ExistingNetwork
   BridgeNetwork
   { configNetworkName      :: !String
   , configNetworkAutostart :: !Bool
+  , configNetworkComments  :: !String
   } deriving (Show, Eq, Ord)
 
 isSDNNetwork :: ConfigNetwork -> Bool
@@ -109,6 +110,7 @@ instance ToJSON ConfigNetwork where
     [ "type" .= String "bridge"
     , "name" .= configNetworkName
     , "autostart" .= configNetworkAutostart
+    , "comments" .= configNetworkComments
     ]
 
 instance FromJSON ConfigNetwork where
@@ -124,6 +126,7 @@ instance FromJSON ConfigNetwork where
     bridgeNetworkParser v = BridgeNetwork
       <$> v .: "name"
       <*> v .:? "autostart" .!= True
+      <*> v .:? "comments" .!= ""
     in flip (withObject "ConfigNetwork") otherValue $ \v -> case KV.lookup "type" v of
     Nothing           -> existingNetworkParser v
     (Just "existing") -> existingNetworkParser v

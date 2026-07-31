@@ -699,12 +699,12 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
   helper [] acc = (pure . reverse) acc
   helper ((NetworkExists (ExistingNetwork networkName)):ts) acc = if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts acc else
     throwError (BridgeNotFound networkName)
-  helper ((NetworkExists (BridgeNetwork {configNetworkName=networkName, configNetworkAutostart=configNetworkAutostart})):ts) acc = do
-    let networkCreate = ProxmoxNetworkCreate {networkCreateType=Bridge, networkCreateInterface=networkName, networkCreateAutostart=configNetworkAutostart}
+  helper ((NetworkExists (BridgeNetwork {configNetworkName=networkName, configNetworkAutostart=configNetworkAutostart,configNetworkComments=comments})):ts) acc = do
+    let networkCreate = ProxmoxNetworkCreate {networkCreateType=Bridge, networkCreateInterface=networkName, networkCreateAutostart=configNetworkAutostart,networkCreateComments=comments}
     if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts acc else do
       helper ts (UpdateNodeNetworks:CreateBridge networkCreate:acc)
-  helper ((NetworkNotExists (BridgeNetwork {configNetworkName=networkName, configNetworkAutostart=configNetworkAutostart})):ts) acc = do
-    let networkCreate = ProxmoxNetworkCreate {networkCreateType=Bridge, networkCreateInterface=networkName, networkCreateAutostart=configNetworkAutostart}
+  helper ((NetworkNotExists (BridgeNetwork {configNetworkName=networkName, configNetworkAutostart=configNetworkAutostart, configNetworkComments=comments})):ts) acc = do
+    let networkCreate = ProxmoxNetworkCreate {networkCreateType=Bridge, networkCreateInterface=networkName, networkCreateAutostart=configNetworkAutostart,networkCreateComments=comments}
     if any ((==) networkName . proxmoxNetworkInterface) bridges then helper ts (UpdateNodeNetworks:DestroyBridge networkCreate:acc) else helper ts acc
   helper ((NetworkExists SDNNetwork { .. }):ts) acc = do
     let sdnCreate = ProxmoxSDNNetworkCreate

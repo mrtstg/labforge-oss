@@ -18,20 +18,22 @@ data ProxmoxNetworkCreate = ProxmoxNetworkCreate
   { networkCreateInterface :: !String
   , networkCreateType      :: !ProxmoxNetworkType
   , networkCreateAutostart :: !Bool
+  , networkCreateComments  :: !String
   } deriving (Show, Eq)
 
 instance ToJSON ProxmoxNetworkCreate where
-  toJSON (ProxmoxNetworkCreate { .. }) = object
+  toJSON (ProxmoxNetworkCreate { .. }) = object $
     [ "iface" .= networkCreateInterface
     , "type" .= networkCreateType
     , "autostart" .= networkCreateAutostart
-    ]
+    ] <> if null networkCreateComments then [] else ["comments" .= (String . pack) networkCreateComments]
 
 instance FromJSON ProxmoxNetworkCreate where
   parseJSON = withObject "ProxmoxNetworkCreate" $ \v -> ProxmoxNetworkCreate
     <$> v .: "iface"
     <*> v .: "type"
     <*> v .: "autostart"
+    <*> v .:? "comments" .!= ""
 
 data ProxmoxNetworkResponse = ProxmoxNetworkResponse
   { proxmoxNetworks       :: ![ProxmoxNetwork]
