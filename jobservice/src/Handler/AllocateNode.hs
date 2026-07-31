@@ -59,6 +59,18 @@ renameNet namesMap vmData@(TemplatedConfigVM { configVMNetworks = Just nets }) =
     Nothing  -> d
     (Just v) -> d { configVMNetworkName = v }
 
+renameNetworks :: M.Map String String -> [ConfigNetwork] -> (String -> ConfigNetwork) -> (String -> ConfigNetwork) -> [ConfigNetwork]
+renameNetworks namesMap networks sdnConstructor bridgeConstructor = f [] networks where
+  f :: [ConfigNetwork] -> [ConfigNetwork] -> [ConfigNetwork]
+  f acc [] = acc
+  f acc (net:nets) = case M.lookup (configNetworkName net) namesMap of
+    Nothing -> f (net:acc) nets
+    (Just newName) -> do
+      case net of
+        (SDNNetwork {})        -> f (sdnConstructor newName:acc) nets
+        (BridgeNetwork {})     -> f (bridgeConstructor newName:acc) nets
+        a@(ExistingNetwork {}) -> f (a:acc) nets
+
 allocateNode :: (Envelope, Message) -> JobserviceMessageMeta -> AppT ()
 allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
   let errorF = defaultErrorFallback m env
@@ -86,7 +98,8 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
               Nothing -> pure ()
               (Just (DeploymentTemplate { .. })) -> do
                 $(logInfo) $ "[" <> deploymentId <> "] Got deployment template"
-                let vmTags = map T.unpack [templateTitle, fromMaybe "" userFirstName <> " " <> fromMaybe "" userLastName]
+                let userTag = fromMaybe "" userFirstName <> " " <> fromMaybe "" userLastName
+                let vmTags = map T.unpack [templateTitle, userTag]
                 clusterEnv <- asks $ getEnvFor ClusterManager
                 nodeRequest'' <- withTokenVariable $ \t -> do
                   defaultRetryClientC clusterEnv $ C.getDeployNode (BearerWrapper t)
@@ -127,7 +140,7 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                             $(logInfo) $ "[" <> deploymentId <> "] Allocated networks"
                             sdnZone <- asks (T.unpack . deploySDNZone)
                             let namesMap = M.mapKeys T.unpack . M.fromList $ zip (map T.pack networkToRename) networksNames
-                            let networks = existingNets ++ map (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) networksNames
+                            let networks = renameNetworks namesMap templateNetworks (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) (\n -> BridgeNetwork {configNetworkComments=T.unpack $ userTag <> ";" <> templateTitle, configNetworkAutostart=True, configNetworkName=n})
                             let replacedNetworksVM = map (renameNet namesMap) templateVMs
                             displayAllocRes'' <- withTokenVariable $ \t -> do
                               defaultRetryClientC deploymentEnv (D.requestDeploymentDisplay nodeName deploymentId (Just $ length templateVMs) (BearerWrapper t))
