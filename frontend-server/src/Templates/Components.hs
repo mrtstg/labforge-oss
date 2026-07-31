@@ -433,8 +433,9 @@ genericDeploymentForm = let
           <p .pr-2 x-text="net.name">
           <div .select.is-fullwidth>
             <select x-model="net.type">
-              <option value="existing" *{netTypeBind "existing"}> Существующий bridge
+              <option value="existing" *{netTypeBind "existing"}> Существующий интерфейс
               <option value="sdn" *{netTypeBind "sdn"}> SDN-сеть
+              <option value="bridge" *{netTypeBind "bridge"}> Linux Bridge
           <button .button.is-danger @click="removeENet(netIndex)"> Удалить
     <button .button.is-success.is-fullwidth @click="sendRequest"> Создать стенд
 |]
