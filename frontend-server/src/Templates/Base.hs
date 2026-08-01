@@ -112,7 +112,7 @@ $doctype 5
         <template x-for="(message, index) in notifications">
           <div .my-1.mx-3>
             <article .message>
-              <div .message-body.is-clickable x-text=message @click="deleteNotification(index)">
+              <div .message-body.is-clickable x-html="message.replaceAll('\n', '<br>')" @click="deleteNotification(index)">
       ^{body}
   $case afterBody
     $of (Just afterHtml)
@@ -197,7 +197,7 @@ $doctype 5
         <template x-for="(message, index) in notifications">
           <div .my-1.mx-3>
             <article .message>
-              <div .message-body.is-clickable x-text=message @click="deleteNotification(index)">
+              <div .message-body.is-clickable x-html="message.replaceAll('\n', '<br>')" @click="deleteNotification(index)">
       ^{body}
     <footer .class.mt-auto.p-3>
       <div .content.has-text-centered>
