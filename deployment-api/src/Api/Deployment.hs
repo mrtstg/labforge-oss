@@ -45,8 +45,8 @@ import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Either                              (fromRight, isLeft)
 import           Data.Functor                             ((<&>))
-import           Data.List                                (find, nub, sort,
-                                                           sortOn)
+import           Data.List                                (find, intercalate,
+                                                           nub, sort, sortOn)
 import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Ord                                 (Down (..))
@@ -220,11 +220,19 @@ getPagedDeploymentTemplates pageN (BearerWrapper token) = do
     , responseTotal=templatesTotal
     }
 
-isNetworksDeclared :: DeploymentCreate -> Bool
+isNetworksDeclared :: DeploymentCreate -> Either ([String], [String]) ()
 isNetworksDeclared (DeploymentCreate { .. }) = do
-  let declaredNets = sort $ map configNetworkName reqNetworks
-  let vmNets = (sort . nub) $ foldMap (map configVMNetworkName . fromMaybe [] . configVMNetworks) reqVMs
-  declaredNets == vmNets
+  let declaredNets = map configNetworkName reqNetworks
+  let vmNets = nub $ foldMap (map configVMNetworkName . fromMaybe [] . configVMNetworks) reqVMs
+  case (filter (`notElem` declaredNets) vmNets, filter (`notElem` vmNets) declaredNets) of
+    ([], []) -> pure ()
+    (a, b)   -> Left (a, b)
+
+createNetworkDeclareError :: ([String], [String]) -> JSONError
+createNetworkDeclareError ([], []) = JSONError "invalidNetworks" "Internal server error" (object ["message" .= String "Внутренняя ошибка проверка сетей."])
+createNetworkDeclareError ([], overdeclaredNetworks) = JSONError "invalidNetworks" "Some networks is declared, but not used" (object [ "message" .= String ("В стенде объявлены лишние сети: " <> T.pack (intercalate ", " overdeclaredNetworks))])
+createNetworkDeclareError (missingNetworks, []) = JSONError "invalidNetworks" "Not all networks are declared" (object [ "message" .= String ("В стенде используются необьявленные сети: " <> T.pack (intercalate ", " missingNetworks))])
+createNetworkDeclareError (missingNetworks, overdeclaredNetworks) = JSONError "invalidNetworks" "Configuration contains not declared and not used networks" (object [ "message" .= String ("В стенде объявлены лишние сети: " <> T.pack (intercalate ", " overdeclaredNetworks) <> "\nВ стенде используются необьявленные сети: " <> T.pack (intercalate ", " missingNetworks))])
 
 createDeploymentTemplate :: DeploymentCreate -> BearerWrapper -> AppT ()
 createDeploymentTemplate p@(DeploymentCreate { .. }) (BearerWrapper token) = do
@@ -232,19 +240,21 @@ createDeploymentTemplate p@(DeploymentCreate { .. }) (BearerWrapper token) = do
   if isNothing tokenUUID then sendJSONError err401 (JSONError "invalidToken" "Token has no UUID" Null) else do
     titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle ]
     if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
-      if not (isNetworksDeclared p) then sendJSONError err400 (JSONError "missingNetworks" "Not all networks are declared" (object [ "message" .= String "В стенде используются необьявленные сети!"])) else do
-        _ <- runDB $ insert
-          (DeploymentTemplateData
-          { deploymentTemplateDataVms=reqVMs
-          , deploymentTemplateDataTitle=reqTitle
-          , deploymentTemplateDataOwnerId=fromJust tokenUUID
-          , deploymentTemplateDataExistingNetworks=reqNetworks
-          , deploymentTemplateDataAvailableVMs=reqAvailableVMs
-          , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
-          })
-        jobEnv <- asks $ getEnvFor JobserviceAPI
-        _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
-        pure ()
+      case isNetworksDeclared p of
+        (Left e) -> sendJSONError err400 (createNetworkDeclareError e)
+        (Right _) -> do
+          _ <- runDB $ insert
+            (DeploymentTemplateData
+            { deploymentTemplateDataVms=reqVMs
+            , deploymentTemplateDataTitle=reqTitle
+            , deploymentTemplateDataOwnerId=fromJust tokenUUID
+            , deploymentTemplateDataExistingNetworks=reqNetworks
+            , deploymentTemplateDataAvailableVMs=reqAvailableVMs
+            , deploymentTemplateDataSnapshotPolicy=reqSnapshotPolicy
+            })
+          jobEnv <- asks $ getEnvFor JobserviceAPI
+          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
+          pure ()
 
 getDeploymentTemplate :: Int -> BearerWrapper -> AppT DeploymentTemplate
 getDeploymentTemplate tID (BearerWrapper token) = do
@@ -299,17 +309,19 @@ patchDeploymentTemplate tID p@(DeploymentCreate { .. }) (BearerWrapper token) = 
     else do
       titleTaken <- runDB $ exists [ DeploymentTemplateDataTitle ==. reqTitle, DeploymentTemplateDataId !=. instanceKey ]
       if titleTaken then sendJSONError err400 (JSONError "titleTaken" "Title is not unique" (object [ "message" .= String "Название шаблона занято" ])) else do
-        if not (isNetworksDeclared p) then sendJSONError err400 (JSONError "missingNetworks" "Not all networks are declared" (object [ "message" .= String "В стенде используются необьявленные сети!"])) else do
-          runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
-            [ DeploymentTemplateDataTitle =. reqTitle
-            , DeploymentTemplateDataVms =. reqVMs
-            , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
-            , DeploymentTemplateDataExistingNetworks =. reqNetworks
-            , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
-            ]
-          jobEnv <- asks $ getEnvFor JobserviceAPI
-          _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
-          pure ()
+        case isNetworksDeclared p of
+          (Left e) -> sendJSONError err400 (createNetworkDeclareError e)
+          (Right _) -> do
+            runDB $ updateWhere [ DeploymentTemplateDataId ==. instanceKey ]
+              [ DeploymentTemplateDataTitle =. reqTitle
+              , DeploymentTemplateDataVms =. reqVMs
+              , DeploymentTemplateDataAvailableVMs =. reqAvailableVMs
+              , DeploymentTemplateDataExistingNetworks =. reqNetworks
+              , DeploymentTemplateDataSnapshotPolicy =. reqSnapshotPolicy
+              ]
+            jobEnv <- asks $ getEnvFor JobserviceAPI
+            _ <- withTokenVariable'' $ \t -> defaultRetryClientC jobEnv (insertJobserviceMessage' JobserviceUpdateUsedImages {} Nothing (BearerWrapper t))
+            pure ()
 
 requestDeploymentVMID :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
 requestDeploymentVMID _ _ Nothing (BearerWrapper token) = do
