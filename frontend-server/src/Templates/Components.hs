@@ -157,7 +157,7 @@ genericInstanceActionForm instanceKey = [shamlet|
       <label .label> Название снапшота
       <div .control>
         <input .input type=text x-model="snapname">
-  <button .button.is-fullwidth @click="sendRequest"> Выполнить
+  <button type=button .button.is-fullwidth @click="sendRequest"> Выполнить
 |]
 
 genericGroupActionForm :: Int -> [FoundGroup] -> Html
@@ -194,7 +194,7 @@ genericGroupActionForm templateId groups = [shamlet|
       <div .control>
         <label .checkbox>
           <input .checkbox type=checkbox x-model="force"> Форсировать удаление (игнорирование статусов развертывания)
-  <button .button.is-fullwidth @click="sendRequest"> Выполнить
+  <button type=button .button.is-fullwidth @click="sendRequest"> Выполнить
 |]
 
 imageUsageModalForm :: Int -> [JobserviceImageUsageData] -> Html
@@ -202,7 +202,7 @@ imageUsageModalForm amount usages = let
   modalValues = [(":class", "showed ? 'is-active' : ''")]
   in [shamlet|
 <div x-data="{ showed: false }">
-  <button .button @click="showed = true"> #{amount}
+  <button type=button .button @click="showed = true"> #{amount}
   <div .modal *{modalValues}>
     <div .modal-background>
     <div .modal-content>
@@ -211,7 +211,7 @@ imageUsageModalForm amount usages = let
         <ul>
           $forall usage <- usages
             <li> #{ usedImageDeploymentName usage } - #{ usedImageDeploymentUserName usage }
-    <button @click="showed = false" .modal-close.is-large aria-label=close>
+    <button type=button @click="showed = false" .modal-close.is-large aria-label=close>
   |]
 
 genericLargeFrontendSelectForm :: String -> String -> Html
@@ -221,7 +221,7 @@ genericLargeFrontendSelectForm bindTo iterOver = let
   in [shamlet|
 <div x-data="{ showed: false, searchText: '' }">
   <div .control.is-fullwidth>
-    <input .input.is-clickable type=text placeholder="Нажмите для выбора" readonly x-model=#{preEscapedToMarkup bindTo} @click="showed = true">
+    <input .input.is-clickable type=text placeholder="Нажмите для выбора" readonly x-bind:value=#{preEscapedToMarkup bindTo} @click="showed = true">
   <div .modal *{modalValues}>
     <div .modal-background>
     <div .modal-content>
@@ -229,8 +229,8 @@ genericLargeFrontendSelectForm bindTo iterOver = let
         <input .input.is-clickable type=text placeholder=Поиск x-model=searchText>
         <template x-for="v in #{preEscapedToMarkup iterOver}">
           <template x-if="v.includes(searchText)">
-            <button .is-meduim.is-fullwidth.button.py-2.my-2 *{variantValues} x-text=v>
-    <button @click="showed = false" .modal-close.is-large aria-label=close>
+            <button type=button .is-medium.is-fullwidth.button.py-2.my-2 *{variantValues} x-text=v>
+    <button type=button @click="showed = false" .modal-close.is-large aria-label=close>
 |]
 
 genericLargeSelectForm :: String -> [Text] -> Html
@@ -246,8 +246,8 @@ genericLargeSelectForm bindTo values = let
     <div .modal-content>
       <div .card>
         $forall v <- values
-          <button .is-meduim.is-fullwidth.button.py-2.my-2 *{variantValues v}> #{v}
-    <button @click="showed = false" .modal-close.is-large aria-label=close>
+          <button type=button .is-medium.is-fullwidth.button.py-2.my-2 *{variantValues v}> #{v}
+    <button type=button @click="showed = false" .modal-close.is-large aria-label=close>
 |]
 
 genericDeploymentForm = let
@@ -343,7 +343,7 @@ genericDeploymentForm = let
                     <option x-text="avtype">
               <input .input type=text x-model="size" placeholder="Размер диска">
               <input .input type=text x-model="storage" placeholder="Целевое хранилище">
-            <button .button @click="addDisk"> Добавить диск
+            <button type=button .button @click="addDisk"> Добавить диск
             <p .label x-show="obj.disks.length > 0"> Добавленные диски
             <template x-for="(diskData, diskIndex) in vms[index]['disks']">
               <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
@@ -354,7 +354,7 @@ genericDeploymentForm = let
                   <span x-text="diskData.size">
                   <span> на хранилище
                   <span x-text="diskData.storage">
-                <button .button.is-danger.ml-5 @click="removeDisk(diskIndex)"> Удалить
+                <button type=button .button.is-danger.ml-5 @click="removeDisk(diskIndex)"> Удалить
           <p .label> Добавление сетей
           <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth x-data="netForm(undefined, undefined)">
             <div .select.is-fullwidth>
@@ -366,7 +366,7 @@ genericDeploymentForm = let
               <select x-model="nettype">
                 <template x-for="avtype in interfaces">
                   <option x-text="avtype">
-            <button .button @click="addNetwork(vms[index])"> Подключить
+            <button type=button .button @click="addNetwork(vms[index])"> Подключить
           <template x-for="(netObj, netIndex) in vms[index]['networks']">
             <div x-data="netForm(vms[index], netIndex)">
               <p .label> Сеть <span x-text="netObj['name']">
@@ -390,20 +390,20 @@ genericDeploymentForm = let
                     <option value=""> Не устанавливать адрес
                     <option value="dhcp"> DHCP
                     <option value="manual"> Ручной адрес
-                <button .button @click="removeNetwork(vms[index], netObj)"> Удалить
+                <button type=button .button @click="removeNetwork(vms[index], netObj)"> Удалить
               <template x-if="cloud_opts == 'manual' && vms[index]['networks'][netIndex]['number'] != null">
                 <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
                   <input .input type="text" placeholder="IP-адрес" x-model.string="vms[index]['networks'][netIndex]['cloudinit_address']" minlength="7">
                   <input .input type="text" placeholder="Шлюз" x-model.string="vms[index]['networks'][netIndex]['cloudinit_gateway']" minlength="7">
           <div .is-flex.is-flex-direction-row.is-align-items-center>
             <div .p-3>
-              <button .button.is-danger @click="deleteVM(index)"> Удалить VM
+              <button type=button .button.is-danger @click="deleteVM(index)"> Удалить VM
             <div .p-3>
-              <button .button @click="moveVM(index, -1)"> Передвинуть выше
+              <button type=button .button @click="moveVM(index, -1)"> Передвинуть выше
             <div .p-3>
-              <button .button @click="moveVM(index, 1)"> Передвинуть ниже
+              <button type=button .button @click="moveVM(index, 1)"> Передвинуть ниже
     <div .block>
-      <button .button.is-fullwidth @click="addVM()"> Добавить ВМ
+      <button type=button .button.is-fullwidth @click="addVM()"> Добавить ВМ
     <div .block>
       <h2 .subtitle.is-5> Политика пользовательских снапшотов
       <div .control>
@@ -427,7 +427,7 @@ genericDeploymentForm = let
       <div .control>
         <label .label> Имя сети
         <input .input type="text" x-model="input">
-      <button .button.is-fullwidth @click="if (input.length > 0 && !networks.map(x => x.name).includes(input)) { networks.push({'type': 'sdn', 'name': input, 'zone': ''}); input = '' }"}> Добавить
+      <button type=button .button.is-fullwidth @click="if (input.length > 0 && !networks.map(x => x.name).includes(input)) { networks.push({'type': 'sdn', 'name': input, 'zone': ''}); input = '' }"}> Добавить
       <template x-for="(net, netIndex) in networks" *{netIndexKey}>
         <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
           <p .pr-2 x-text="net.name">
@@ -436,6 +436,6 @@ genericDeploymentForm = let
               <option value="existing" *{netTypeBind "existing"}> Существующий интерфейс
               <option value="sdn" *{netTypeBind "sdn"}> SDN-сеть
               <option value="bridge" *{netTypeBind "bridge"}> Linux Bridge
-          <button .button.is-danger @click="removeENet(netIndex)"> Удалить
-    <button .button.is-success.is-fullwidth @click="sendRequest"> Создать стенд
+          <button type=button .button.is-danger @click="removeENet(netIndex)"> Удалить
+    <button type=button .button.is-success.is-fullwidth @click="sendRequest"> Создать стенд
 |]
