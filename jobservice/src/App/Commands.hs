@@ -19,7 +19,6 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE TemplateHaskell     #-}
 module App.Commands (runCommand) where
 
-import           Api
 import           Api.Keycloak.Models
 import           Api.Keycloak.Token
 import           Api.Retry
@@ -27,35 +26,27 @@ import           App.Types
 import           Auth.Token
 import           Config
 import           Control.Concurrent
-import qualified Control.Concurrent.Async        as A
+import qualified Control.Concurrent.Async      as A
 import           Control.Concurrent.Async.Pool
 import           Control.Concurrent.STM
-import           Control.Concurrent.STM.TVar
 import           Control.Exception
-import           Control.Monad                   (forever, when)
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Aeson
-import qualified Data.ByteString.Lazy.Char8      as LBS
-import           Data.Functor                    ((<&>))
-import           Data.List                       (nub)
+import           Data.Functor                  ((<&>))
 import           Data.Maybe
-import           Data.Text                       (Text, pack)
-import qualified Data.Text                       as T
-import           Deployment.Client
-import           Deployment.Models.Deployment
+import           Data.Text                     (Text, pack)
+import qualified Data.Text                     as T
 import           Handler.AllocateNode
 import           Handler.Deployment
 import           Handler.ImageUsage
 import           Handler.Power
 import           Handler.Snapshot
 import           Jobservice.Client
-import qualified Jobservice.Client               as J
+import qualified Jobservice.Client             as J
 import           Jobservice.Models
 import           Network.AMQP
-import           Proxmox.Deploy.Models.Config.VM
-import           Redis.Common
 import           Redis.Environment
 import           Redis.Lock
 import           Servant.Client
@@ -244,11 +235,10 @@ runCommand AppOpts { debugOn=debug } = let
     (requireEnv "DEPLOY_SDN_ZONE" ($(logError) "DEPLOY_SDN_ZONE is not set" >> (liftIO . exitWith) (ExitFailure 1))) logFunction
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
-  (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
-  (depUrl, depManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
-  (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
-  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
-  (notificationUrl, notificationManager) <- runLoggingT (requireServiceEnv "NOTIFICATION") logFunction
+  (authUrl, authManager) <- runLoggingT (requireServiceEnv AuthService) logFunction
+  (depUrl, depManager) <- runLoggingT (requireServiceEnv DeploymentService) logFunction
+  (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv JobserviceAPI) logFunction
+  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv ClusterManager) logFunction
 
   threadsAmount <- runLoggingT (lookupEnvDefault "THREADS_AMOUNT" 4) logFunction
   concurrentDeployments <- runLoggingT (lookupEnvDefault "CONCURRENT_DEPLOYMENTS" 2) logFunction

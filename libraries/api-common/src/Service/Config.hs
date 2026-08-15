@@ -23,6 +23,7 @@ import           Data.Text                   (Text, pack, unpack)
 import           Network.HTTP.Client.Conduit
 import           Network.Socket
 import           Servant.Client
+import           Service.Environment
 import           Service.Ssl
 import           System.Environment
 import           System.Exit
@@ -76,8 +77,9 @@ lookupEnvDefault envKey def = do
         pure def
       (Just v'') -> pure v''
 
-requireServiceEnv :: (MonadIO m, MonadCatch m) => String -> LoggingT m (BaseUrl, Manager)
-requireServiceEnv prefix = let
+requireServiceEnv :: (MonadIO m, MonadCatch m) => ServiceType -> LoggingT m (BaseUrl, Manager)
+requireServiceEnv serviceType = let
+  prefix = serviceTypeToPrefix serviceType
   urlKey = prefix <> "_URL"
   sslKey = prefix <> "_IGNORE_SSL"
   timeoutKey = prefix <> "_TIMEOUT"

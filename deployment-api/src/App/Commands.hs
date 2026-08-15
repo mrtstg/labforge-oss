@@ -40,6 +40,7 @@ import           Pool
 import           Redis.Environment
 import           Servant.Client
 import           Service.Config
+import           Service.Environment
 import           System.Environment
 import           System.Exit
 
@@ -66,9 +67,9 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
 
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
-  (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
-  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
-  (jobUrl, jobManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
+  (authUrl, authManager) <- runLoggingT (requireServiceEnv AuthService) logFunction
+  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv ClusterManager) logFunction
+  (jobUrl, jobManager) <- runLoggingT (requireServiceEnv JobserviceAPI) logFunction
 
   redisConn <- redisConnectionFromEnv
   when (isNothing redisConn) $ do

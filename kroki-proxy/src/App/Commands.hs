@@ -35,6 +35,7 @@ import           Redis.Common
 import           Redis.Environment
 import           Servant.Client
 import           Service.Config
+import           Service.Environment
 import           System.Environment
 import           System.Exit
 
@@ -50,9 +51,9 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
 
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
-  (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
-  (krokiUrl, krokiManager) <- runLoggingT (requireServiceEnv "KROKI_SERVER") logFunction
-  (deployUrl, deployManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
+  (authUrl, authManager) <- runLoggingT (requireServiceEnv AuthService) logFunction
+  (krokiUrl, krokiManager) <- runLoggingT (requireServiceEnv KrokiServer) logFunction
+  (deployUrl, deployManager) <- runLoggingT (requireServiceEnv DeploymentService) logFunction
   let authEnv = mkClientEnv authManager authUrl
   redisC <- redisConnectionFromEnv
   case redisC of

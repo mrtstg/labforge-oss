@@ -21,20 +21,17 @@ import           App.Types
 import           Config
 import           Control.Monad
 import           Control.Monad.Logger
-import           Control.Monad.Logger        (LogLevel (..))
-import           Data.Functor                ((<&>))
+import           Data.Functor             ((<&>))
 import           Data.Maybe
-import qualified Data.Text                   as T
-import           Network.HTTP.Client.Conduit (defaultManagerSettings)
-import           Network.HTTP.Conduit
+import qualified Data.Text                as T
 import           Network.Wai.Handler.Warp
 import           Network.Wai.Logger
-import           Redis.Environment           (redisConnectionFromEnv)
-import           Servant.Client              (mkClientEnv, parseBaseUrl)
+import           Redis.Environment        (redisConnectionFromEnv)
+import           Servant.Client           (mkClientEnv)
 import           Service.Config
+import           Service.Environment
 import           System.Environment
 import           System.Exit
-import           Text.Read
 
 runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn=debug, appCommand=MakeMigrations } = pure ()
@@ -45,7 +42,7 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port _ } = do
   cookieAge <- lookupEnv "AUTH_COOKIE_AGE" <&> read . fromMaybe "86400"
   debugEnv <- lookupEnv "DEBUG" <&> fmap (== "1")
   let logFunction = if debug || debugEnv == Just True then defaultLogF else filterLogF LevelInfo
-  (keycloakUrl, keycloakManager) <- runLoggingT (requireServiceEnv "KEYCLOAK") logFunction
+  (keycloakUrl, keycloakManager) <- runLoggingT (requireServiceEnv Keycloak) logFunction
   redisConn <- redisConnectionFromEnv
   when (isNothing redisConn) $ do
     putStrLn "Failed to init redis connection"

@@ -34,6 +34,7 @@ import           Network.Wai.Handler.Warp
 import           Network.Wai.Logger
 import           Servant.Client
 import           Service.Config
+import           Service.Environment
 import           System.Environment
 
 runCommand :: AppOpts -> IO ()
@@ -46,11 +47,11 @@ runCommand AppOpts { debugOn=debug, port=port } = do
 
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
-  (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
-  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv "CLUSTER") logFunction
-  (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
-  (krokiUrl, krokiManager) <- runLoggingT (requireServiceEnv "KROKI") logFunction
-  (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv "JOBSERVICE") logFunction
+  (authUrl, authManager) <- runLoggingT (requireServiceEnv AuthService) logFunction
+  (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv ClusterManager) logFunction
+  (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv DeploymentService) logFunction
+  (krokiUrl, krokiManager) <- runLoggingT (requireServiceEnv KrokiProxy) logFunction
+  (jobserviceUrl, jobserviceManager) <- runLoggingT (requireServiceEnv JobserviceAPI) logFunction
 
   messages <- newTVarIO M.empty
   let config = Config { serviceCredentials=creds

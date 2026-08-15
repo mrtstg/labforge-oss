@@ -27,18 +27,14 @@ import           Config
 import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Exception
-import           Control.Monad               (void, when)
 import           Control.Monad.Logger
 import           Control.Monad.Reader
-import           Data.Aeson
 import           Data.ByteString.Char8       (ByteString)
-import qualified Data.ByteString.Lazy.Char8  as BLS
 import           Data.Maybe
 import           Data.Pool                   (Pool)
 import           Data.Text                   (pack)
 import           Database
 import           Database.Persist.Postgresql
-import           Database.Persist.Sqlite
 import           Jobservice.Models
 import           Network.AMQP
 import           Network.Wai.Handler.Warp
@@ -47,6 +43,7 @@ import           Redis.Common
 import           Redis.Environment
 import           Servant.Client
 import           Service.Config
+import           Service.Environment
 import           System.Environment
 import           System.Exit
 import           Utils.Time
@@ -111,8 +108,8 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
 
   creds <- runLoggingT requireKeycloakClient logFunction
   tokenV <- createTokenVar
-  (authUrl, authManager) <- runLoggingT (requireServiceEnv "AUTH") logFunction
-  (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv "DEPLOYMENT") logFunction
+  (authUrl, authManager) <- runLoggingT (requireServiceEnv AuthService) logFunction
+  (deploymentUrl, deploymentManager) <- runLoggingT (requireServiceEnv DeploymentService) logFunction
   taskTimeout <- runLoggingT (lookupEnvDefault "TASK_MAX_LIFETIME" 60) logFunction
 
   amqpConn <- runLoggingT (requireRabbitMQCreds openConnection') logFunction
