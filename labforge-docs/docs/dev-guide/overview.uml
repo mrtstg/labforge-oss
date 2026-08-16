@@ -66,6 +66,8 @@ Grafana --> Prometheus
 "frontend-server" --> "kroki-proxy"
 "frontend-server" --> "cluster-manager"
 "frontend-server" --> "deployment-api"
+"frontend-server" --> "jobservice-api"
+"frontend-server" --> "auth-service"
 
 "deployment-api" --> "cluster-manager"
 "deployment-api" -down-> "jobservice-api"
@@ -73,6 +75,7 @@ Grafana --> Prometheus
 "deployment-api" --> "Proxmox API"
 "deployment-api" --> Redis
 "deployment-api" --> "proxmox-fs-agent"
+"deployment-api" --> "auth-service"
 
 "auth-service" --> Keycloak
 "auth-service" --> Redis
@@ -80,12 +83,17 @@ Keycloak --> ldap
 
 "cluster-manager" --> PostgreSQL
 "cluster-manager" -- "Proxmox API"
+"cluster-manager" --> "deployment-api"
+"cluster-manager" --> "auth-service"
 
 "jobservice" -up-> RabbitMQ
 "jobservice" --> "deployment-api"
+"jobservice" --> "cluster-manager"
+"jobservice" --> "jobservice-api"
 
 "jobservice-api" --> RabbitMQ
 "jobservice-api" --> Redis
+"jobservice-api" --> "deployment-api"
 
 "websockify-go" --> vnc
 @enduml

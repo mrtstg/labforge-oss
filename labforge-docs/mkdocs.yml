@@ -41,6 +41,9 @@ nav:
   - Руководство разработки:
     - Общее описание системы: dev-guide/index.md
     - Конфигурация сервисов: dev-guide/configuration.md
+    - Справочник по API: dev-guide/api.md
+    - Общие библиотеки: dev-guide/libraries.md
+    - "jobservice: конвейер развертывания": dev-guide/jobservice.md
     - Реализация VNC-подключения к ВМ: dev-guide/remote.md
   - Руководство пользователя: 
     - Вход и работа со стендами: user-guide/index.md
