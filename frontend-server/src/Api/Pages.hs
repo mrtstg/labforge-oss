@@ -546,10 +546,14 @@ deploymentEditPage tid t = do
       number: 0,
       allowedDiskTypes: ['ide', 'sata', 'scsi', 'virtio'],
       selectedType: "ide",
-      size: "",
+      size: "1G",
       storage: "",
       addDisk() { if (this.number >= 0 && this.size.length > 0 && this.storage.length > 0)
-        { vmData.disks.push({number: this.number, type: this.selectedType, size: this.size, storage: this.storage })
+        { if (!vmData.disks.map(el => el.number).includes(this.number)) {
+          vmData.disks.push({number: this.number, type: this.selectedType, size: this.size, storage: this.storage });
+          this.number = 0;
+          this.size = "1G";
+          }
         }
       },
       removeDisk(index) { vmData.disks.splice(index, 1) }
@@ -641,10 +645,14 @@ deploymentCreatePage t = do
       number: 0,
       allowedDiskTypes: ['ide', 'sata', 'scsi', 'virtio'],
       selectedType: "ide",
-      size: "",
+      size: "1G",
       storage: "",
       addDisk() { if (this.number >= 0 && this.size.length > 0 && this.storage.length > 0)
-        { vmData.disks.push({number: this.number, type: this.selectedType, size: this.size, storage: this.storage })
+        { if (!vmData.disks.map(el => el.number).includes(this.number)) {
+          vmData.disks.push({number: this.number, type: this.selectedType, size: this.size, storage: this.storage });
+          this.number = 0;
+          this.size = "1G";
+          }
         }
       },
       removeDisk(index) { vmData.disks.splice(index, 1) }
