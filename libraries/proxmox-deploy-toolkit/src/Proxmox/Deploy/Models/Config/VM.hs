@@ -214,7 +214,7 @@ formatConfigVMPatch vmid TemplatedConfigVM { .. } = (Just . M.fromList) $
   initPassword = maybe [] ((:[]) . ("cipassword",) . String . T.pack) configVMInitPassword
   vmdisks = foldMap diskF configVMDisks
   diskF :: ConfigVMDisk -> [(String, Value)]
-  diskF d@(ConfigVMDisk { .. }) = [(show diskType <> show diskNumber, (String . T.pack) $ diskStorage <> ":" <> show vmid <> "/" <> configVMDiskPath vmid d <> ",iothread=1,size=" <> diskSize)]
+  diskF d@(ConfigVMDisk { .. }) = [(show diskType <> show diskNumber, (String . T.pack) $ diskStorage <> ":" <> show vmid <> "/" <> configVMDiskPath vmid d <> ",size=" <> diskSize <> (if diskType `elem` [VirtIODisk, ScsiDisk] then ",iothread=1" else ""))]
   networksInit = foldMap networkInitF (fromMaybe [] configVMNetworks)
   networkInitF :: ConfigVMNetwork -> [(String, Value)]
   networkInitF (ConfigVMNetwork { configVMNetworkNumber = Nothing }) = []
