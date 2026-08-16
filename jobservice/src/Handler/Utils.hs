@@ -34,6 +34,7 @@ import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Control.Monad.State
 import qualified Data.ByteString.Char8                    as BS
+import           Data.Functor                             ((<&>))
 import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Text                                (Text)
@@ -144,10 +145,11 @@ sendLogRequest deploymentId cfg loc src lvl msg = appTIO f cfg where
   f = do
     let str = (T.strip . T.pack . BS.unpack . fromLogStr) $ defaultLogStr loc src lvl msg
     if T.null str then pure () else do
-      $(logInfo) str
+      $(logInfo) str -- TODO: change method depending on level of log
+      logTime <- getUnixIntTime >>= \x -> liftIO $ formatUnixTimeLocal x
       deploymentEnv <- asks $ getEnvFor DeploymentService
       _ <- withTokenVariable $ \token -> do
-        defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentId str (BearerWrapper token)
+        defaultRetryClientC deploymentEnv $ D.postInstanceLog deploymentId ("[" <> T.pack logTime <> "] " <> str) (BearerWrapper token)
       pure ()
 
 setDeploymentInstanceStatus :: JobserviceMessageMeta -> DeploymentStatus -> AppT (Either String ())

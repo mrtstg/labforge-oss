@@ -15,11 +15,19 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 module Utils.Time
   ( getUnixIntTime
   , getUnixIntTimeMs
+  , formatUnixTime
+  , formatUnixTimeLocal
   ) where
 
 import           Control.Monad.IO.Class
 import           Data.Functor           ((<&>))
+import           Data.Time
 import           Data.Time.Clock.POSIX
+import           Data.Time.Format       (defaultTimeLocale, formatTime)
+
+defaultFormatTimeString = "%Y-%m-%d %H:%M:%S"
+
+defaultFormatTZTimeString = "%Y-%m-%d %H:%M:%S %Z"
 
 getUnixIntTimeMs :: (MonadIO m) => m Int
 getUnixIntTimeMs = liftIO getPOSIXTime <&> (floor . (* 1000))
@@ -28,3 +36,9 @@ getUnixIntTime :: (MonadIO m) => m Int
 getUnixIntTime = do
   posixTime <- liftIO getPOSIXTime
   (pure . fromIntegral . floor) posixTime
+
+formatUnixTimeLocal :: Real a => a -> IO String
+formatUnixTimeLocal timestamp = utcToLocalZonedTime (posixSecondsToUTCTime $ realToFrac timestamp) <&> formatTime defaultTimeLocale defaultFormatTZTimeString
+
+formatUnixTime :: Real a => a -> String
+formatUnixTime timestamp = formatTime defaultTimeLocale defaultFormatTimeString (posixSecondsToUTCTime (realToFrac timestamp))
