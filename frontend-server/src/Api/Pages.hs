@@ -274,7 +274,7 @@ deploymentInstancesPage did pageN refreshFlag groupFlag t = do
   let totallyEmpty = page == 1 && total == 0
   let group = fromMaybe "" groupFlag
   let (opts :: [(String, String)]) = [("x-init", "$watch('group', (newValue, oldValue) => { let u = new URL(document.URL); u.searchParams.delete('page'); u.searchParams.delete('refresh'); u.searchParams.delete('group'); u.searchParams.append('group', newValue); window.location.replace(u.href); })")]
-  (\v -> baseTemplate token Nothing (Just "Образы") v (Just genericInstanceActionFormData)) [shamlet|
+  (\v -> baseTemplate token Nothing ((Just . T.unpack) $ if not . null $ instances then briefDeploymentTitle (head instances) <> ": стенды" else "Стенды") v (Just genericInstanceActionFormData)) [shamlet|
 <div .container>
   <div .box.mb-3 x-data={group:null} *{opts}>
     <h2 .subtitle.is-5> Показывать для группы
