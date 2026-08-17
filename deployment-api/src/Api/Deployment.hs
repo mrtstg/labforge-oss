@@ -409,7 +409,6 @@ requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper tok
             helper ns
   in do
   networkLimit <- asks maxNetworks
-  $(logInfo) $ T.pack $ show networkLimit <> " " <> show amount
   when (amount > networkLimit || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
   d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
