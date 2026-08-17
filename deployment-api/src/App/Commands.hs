@@ -70,6 +70,8 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
   (authUrl, authManager) <- runLoggingT (requireServiceEnv AuthService) logFunction
   (clusterUrl, clusterManager) <- runLoggingT (requireServiceEnv ClusterManager) logFunction
   (jobUrl, jobManager) <- runLoggingT (requireServiceEnv JobserviceAPI) logFunction
+  vmMaximum <- runLoggingT (lookupEnvDefault "STAND_VM_LIMIT" 100) logFunction
+  networkMaximum <- runLoggingT (lookupEnvDefault "STAND_NETWORK_LIMIT" 100) logFunction
 
   redisConn <- redisConnectionFromEnv
   when (isNothing redisConn) $ do
@@ -88,6 +90,8 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     , tasksPool = error "Pool is not created"
     , redisConnection = fromJust redisConn
     , jobserviceEnv = mkClientEnv jobManager jobUrl
+    , maxVMs = vmMaximum
+    , maxNetworks = networkMaximum
     }
 
   tasksPool <- Pool.createPool handleTask (\m -> appTIO m poolConfig >> pure ()) 1
@@ -103,6 +107,8 @@ runCommand AppOpts { debugOn=debug, appCommand=RunServerOn port runMigrate } = d
     , tasksPool = tasksPool
     , redisConnection = fromJust redisConn
     , jobserviceEnv = jobserviceEnv poolConfig
+    , maxVMs = vmMaximum
+    , maxNetworks = networkMaximum
     }
   let app' = app config
   _ <- flip runLoggingT logFunction $ $(logInfo) "Starting server!"

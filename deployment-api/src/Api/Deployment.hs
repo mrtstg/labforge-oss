@@ -351,7 +351,8 @@ requestDeploymentVMID nodeName deploymentId (Just amount) (BearerWrapper token) 
           _ <- redisNXLockWrapper "global_vmid_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB (insert (UsedVMID {usedVMIDUsedBy=dId, usedVMIDNum=n})) >> pure Nothing
           helper ns
   in do
-  when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
+  vmidLimit <- asks maxVMs
+  when (amount > vmidLimit || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
   d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
   case d of
@@ -407,7 +408,9 @@ requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper tok
             _ <- redisNXLockWrapper "global_network_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB $ insert (UsedBridges {usedBridgesUsedBy=dId, usedBridgesName=T.pack n}) >> pure Nothing
             helper ns
   in do
-  when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
+  networkLimit <- asks maxNetworks
+  $(logInfo) $ T.pack $ show networkLimit <> " " <> show amount
+  when (amount > networkLimit || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid network amount" Null)
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
   d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
   case d of
@@ -462,7 +465,8 @@ requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper toke
           _ <- redisNXLockWrapper "global_display_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node}) >> pure Nothing
           helper ns
   in do
-    when (amount > 100 || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid VMID amount" Null)
+    maxDisplays <- asks maxVMs -- can't imagine case where amount of vm in stand is not close to amount of displays
+    when (amount > maxDisplays || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid display amount" Null)
     _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
     d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
     case d of

@@ -67,6 +67,8 @@ data Config = Config
   , authEnv            :: !ClientEnv
   , tasksPool          :: AsyncPool QueryRequest AppT
   , redisConnection    :: !Connection
+  , maxVMs             :: !Int
+  , maxNetworks        :: !Int
   }
 
 instance ServiceEnvironment Config where
