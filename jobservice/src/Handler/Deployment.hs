@@ -124,7 +124,7 @@ generateAndDeployTransaction target taskMeta@(JobserviceMessageMeta { deployment
               _ <- setDeploymentInstanceStatus taskMeta Failed
               pure False
             (Right actions) -> do
-              let cleanedActions = leaveLastItem ApplySDNNetworks actions
+              let cleanedActions = leaveLastItem UpdateNodeNetworks $ leaveLastItem ApplySDNNetworks actions
               $(logDebug) $ "Generated actions: " <> (T.pack . show) cleanedActions
               result <- (liftIO . runExceptT) $ (runStateT (unTransaction executeTransaction) (planState { transactionActions = cleanedActions }))
               case result of

@@ -125,7 +125,6 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                       Nothing -> pure ()
                       (Just vmids) -> do
                         $(logInfo) $ "[" <> deploymentId <> "] Allocated VMIDs"
-                        let existingNets = map (ExistingNetwork . configNetworkName) $ filter isExistingNetwork templateNetworks
                         let configuredNets = map configNetworkName templateNetworks
                         -- legacy fallback to old stands data where no SDN networks declared
                         let legacySdnNetworksNames = nub . filter (`notElem` configuredNets) . map configVMNetworkName $ foldMap (fromMaybe [] . configVMNetworks) templateVMs
