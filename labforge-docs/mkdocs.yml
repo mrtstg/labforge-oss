@@ -3,14 +3,14 @@ site_url: ""
 copyright: "2026, Ilya Zamaratskikh"
 site_author: "Ilya Zamaratskikh"
 
-repo_url: https://github.ru/mrtstg/labforge-oss
+repo_url: https://github.com/mrtstg/labforge-oss
 repo_name: labforge-oss
 
 extra:
   social:
     - icon: fontawesome/brands/github
       name: Github
-      link: https://github.ru/mrtstg/labforge-oss
+      link: https://github.com/mrtstg/labforge-oss
 
 theme:
   icon:
