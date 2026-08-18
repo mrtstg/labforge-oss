@@ -7,10 +7,10 @@
 и поместите туда установщик. Распакуйте его при помощи команды:
 
 ```bash
-tar xzvf labforge.tar.gz
+tar xzvf labforge.tar.gz -C <целевая директория>
 ```
 
-Загрузите образы в Docker:
+Перейдите в директорию, загрузите образы в Docker:
 
 ```bash
 make restore-images
