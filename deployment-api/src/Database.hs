@@ -82,12 +82,12 @@ UsedVMID
   usedBy DeploymentInstanceDataId OnDeleteCascade OnUpdateCascade
   Primary num usedBy
   deriving Show
-UsedDisplay
-  num Int
-  nodeName Text
-  usedBy DeploymentInstanceDataId OnDeleteCascade OnUpdateCascade
-  Primary num nodeName
-  deriving Show
+--UsedDisplay
+--  num Int
+--  nodeName Text
+--  usedBy DeploymentInstanceDataId OnDeleteCascade OnUpdateCascade
+--  Primary num nodeName
+--  deriving Show
 UsedBridges
   name Text Primary
   usedBy DeploymentInstanceDataId OnDeleteCascade OnUpdateCascade

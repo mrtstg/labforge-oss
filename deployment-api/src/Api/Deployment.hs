@@ -437,46 +437,49 @@ requestDeploymentNetworks nodeName deploymentId (Just amount) (BearerWrapper tok
                 (Just networks) -> pure networks
 
 requestDeploymentDisplay :: Text -> Text -> Maybe Int -> BearerWrapper -> AppT [Int]
-requestDeploymentDisplay _ _ Nothing (BearerWrapper token) = do
+requestDeploymentDisplay _ _ _ (BearerWrapper token) = do
   _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
-  sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
-requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper token) = let
-  allocateDisplays :: Text -> DeploymentInstanceDataId -> Int -> [Int] -> AppT (Maybe [Int])
-  allocateDisplays node dId amount = helper where
-    helper :: [Int] -> AppT (Maybe [Int])
-    helper [] = do
-      allocatedDisplays <- runDB $ count [ UsedDisplayUsedBy ==. dId ]
-      if allocatedDisplays >= amount then do
-        displays <- runDB $ selectList [ UsedDisplayUsedBy ==. dId ] [] <&> \x -> map (usedDisplayNum . entityVal) x
-        pure $ Just displays
-      else do
-        $(logError) "Lack of display pool!"
-        runDB $ deleteWhere [ UsedDisplayUsedBy ==. dId ]
-        pure Nothing
-    helper (n:ns) = do
-      allocatedDisplays <- runDB $ count [ UsedDisplayUsedBy ==. dId ]
-      if allocatedDisplays >= amount then do
-        displays <- runDB $ selectList [ UsedDisplayUsedBy ==. dId ] [] <&> \x -> map (usedDisplayNum . entityVal) x
-        pure $ Just displays
-      else do
-        displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
-        if displayHold then helper ns else do
-          _ <- redisNXLockWrapper "global_display_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node}) >> pure Nothing
-          helper ns
-  in do
-    maxDisplays <- asks maxVMs -- can't imagine case where amount of vm in stand is not close to amount of displays
-    when (amount > maxDisplays || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid display amount" Null)
-    _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
-    d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
-    case d of
-      Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
-      (Just _) -> do
-        clusterEnv <- asks $ getEnvFor ClusterManager
-        clusterInfo <- withTokenVariable'' $ \t -> defaultRetryClientC clusterEnv $ getNodeByName nodeName (BearerWrapper t)
-        allocRes <- allocateDisplays nodeName (DeploymentInstanceDataKey deploymentId) amount [x | x <- [nodeMinDisplay clusterInfo..nodeMaxDisplay clusterInfo], 5900 + x `notElem` nodeExcludedPorts clusterInfo]
-        case allocRes of
-          Nothing -> sendJSONError err400 (JSONError "allocationFailure" "Failed to allocate displays" Null)
-          (Just displays) -> pure displays
+  sendJSONError err409 (JSONError "unavailable" "Endpoint is not functional now" Null)
+--requestDeploymentDisplay _ _ Nothing (BearerWrapper token) = do
+--  _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+--  sendJSONError err400 (JSONError "badRequest" "Amount is not specified" Null)
+--requestDeploymentDisplay nodeName deploymentId (Just amount) (BearerWrapper token) = let
+--  allocateDisplays :: Text -> DeploymentInstanceDataId -> Int -> [Int] -> AppT (Maybe [Int])
+--  allocateDisplays node dId amount = helper where
+--    helper :: [Int] -> AppT (Maybe [Int])
+--    helper [] = do
+--      allocatedDisplays <- runDB $ count [ UsedDisplayUsedBy ==. dId ]
+--      if allocatedDisplays >= amount then do
+--        displays <- runDB $ selectList [ UsedDisplayUsedBy ==. dId ] [] <&> \x -> map (usedDisplayNum . entityVal) x
+--        pure $ Just displays
+--      else do
+--        $(logError) "Lack of display pool!"
+--        runDB $ deleteWhere [ UsedDisplayUsedBy ==. dId ]
+--        pure Nothing
+--    helper (n:ns) = do
+--      allocatedDisplays <- runDB $ count [ UsedDisplayUsedBy ==. dId ]
+--      if allocatedDisplays >= amount then do
+--        displays <- runDB $ selectList [ UsedDisplayUsedBy ==. dId ] [] <&> \x -> map (usedDisplayNum . entityVal) x
+--        pure $ Just displays
+--      else do
+--        displayHold <- runDB $ exists [ UsedDisplayNum ==. n, UsedDisplayNodeName ==. node ]
+--        if displayHold then helper ns else do
+--          _ <- redisNXLockWrapper "global_display_lock" 5 (getUnixIntTime <&> fromIntegral) (liftIO (randomRIO (200_000, 800_000) >>= \v -> threadDelay v) >> helper (n:ns)) $ runDB $ insert (UsedDisplay {usedDisplayUsedBy=dId, usedDisplayNum=n, usedDisplayNodeName=node}) >> pure Nothing
+--          helper ns
+--  in do
+--    maxDisplays <- asks maxVMs -- can't imagine case where amount of vm in stand is not close to amount of displays
+--    when (amount > maxDisplays || amount < 0) $ sendJSONError err400 (JSONError "badRequest" "Invalid display amount" Null)
+--    _ <- requireManyRealmRoles token [[deployTemplatesAdmin], [deployTemplateAlloc]]
+--    d <- runDB $ get (DeploymentInstanceDataKey deploymentId)
+--    case d of
+--      Nothing                                -> sendJSONError err404 (JSONError "notFound" "Instance not found" Null)
+--      (Just _) -> do
+--        clusterEnv <- asks $ getEnvFor ClusterManager
+--        clusterInfo <- withTokenVariable'' $ \t -> defaultRetryClientC clusterEnv $ getNodeByName nodeName (BearerWrapper t)
+--        allocRes <- allocateDisplays nodeName (DeploymentInstanceDataKey deploymentId) amount [x | x <- [nodeMinDisplay clusterInfo..nodeMaxDisplay clusterInfo], 5900 + x `notElem` nodeExcludedPorts clusterInfo]
+--        case allocRes of
+--          Nothing -> sendJSONError err400 (JSONError "allocationFailure" "Failed to allocate displays" Null)
+--          (Just displays) -> pure displays
 
 callGroupDeployment :: Int -> Maybe Text -> BearerWrapper -> AppT ()
 callGroupDeployment tID groupName (BearerWrapper token) = do
