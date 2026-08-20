@@ -4,7 +4,6 @@ module Cluster.Client
   , createNode
   , deleteNodeByName
   , getDeployNode
-  , getWebsockifyConfig
   ) where
 
 import           Cluster.Schema
@@ -18,5 +17,4 @@ getPagedNodes
   :<|> getNodeByName
   :<|> createNode
   :<|> deleteNodeByName
-  :<|> getDeployNode
-  :<|> getWebsockifyConfig = client api
+  :<|> getDeployNode = client api

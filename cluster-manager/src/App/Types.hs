@@ -29,16 +29,9 @@ data AppCommand = RunServerOn Int Bool
   | RemoveNode Text
   | CheckNode Text
   | AddNode
-    { nodeName'           :: !Text
-    , nodeApiUrl'         :: !Text
-    , nodeIgnoreSSL'      :: !Bool
-    , nodeApiToken'       :: !Text
-    , nodeStartVMID'      :: !Int
-    , nodeAgentUrl'       :: !Text
-    , nodeAgentToken'     :: !Text
-    , nodeDisplayNetwork' :: !Text
-    , nodeMinDisplay'     :: !Int
-    , nodeMaxDisplay'     :: !Int
-    , nodeDisplayIP'      :: !Text
-    , nodeExcludedPorts'  :: ![Int]
+    { nodeName'      :: !Text
+    , nodeApiUrl'    :: !Text
+    , nodeIgnoreSSL' :: !Bool
+    , nodeApiToken'  :: !Text
+    , nodeStartVMID' :: !Int
     } deriving (Show, Eq)

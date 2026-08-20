@@ -40,8 +40,6 @@ import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Ssl
 import           Proxmox.Retry
 import           Proxmox.Schema
-import           Redis.Environment
-import           Servant
 import           Servant.Client
 import           Service.Config
 import           Service.Environment
@@ -56,16 +54,9 @@ runCommand :: AppOpts -> IO ()
 runCommand AppOpts { debugOn = debug, appCommand = AddNode { .. } } = do
   let clusterData = ClusterNode { nodeStartVMID = Just nodeStartVMID'
     , nodeName=nodeName'
-    , nodeMinDisplay=nodeMinDisplay'
-    , nodeMaxDisplay=nodeMaxDisplay'
     , nodeIgnoreSSL=nodeIgnoreSSL'
-    , nodeExcludedPorts=nodeExcludedPorts'
-    , nodeDisplayNetwork=nodeDisplayNetwork'
-    , nodeDisplayIP=nodeDisplayIP'
     , nodeApiUrl=nodeApiUrl'
     , nodeApiToken=nodeApiToken'
-    , nodeAgentUrl=nodeAgentUrl'
-    , nodeAgentToken=nodeAgentToken'
     }
   let logFunction = if debug then defaultLogF else filterLogF LevelInfo
   url <- runLoggingT requirePostgresString logFunction

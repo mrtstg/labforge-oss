@@ -8,18 +8,11 @@ import           Data.Aeson
 import           Data.Text
 
 data ClusterNode = ClusterNode
-  { nodeName           :: !Text
-  , nodeApiUrl         :: !Text
-  , nodeIgnoreSSL      :: !Bool
-  , nodeApiToken       :: !Text
-  , nodeStartVMID      :: !(Maybe Int)
-  , nodeAgentUrl       :: !Text
-  , nodeAgentToken     :: !Text
-  , nodeDisplayNetwork :: !Text
-  , nodeMinDisplay     :: !Int
-  , nodeMaxDisplay     :: !Int
-  , nodeDisplayIP      :: !Text
-  , nodeExcludedPorts  :: ![Int]
+  { nodeName      :: !Text
+  , nodeApiUrl    :: !Text
+  , nodeIgnoreSSL :: !Bool
+  , nodeApiToken  :: !Text
+  , nodeStartVMID :: !(Maybe Int)
   } deriving (Show, Eq)
 
 instance ToJSON ClusterNode where
@@ -29,13 +22,6 @@ instance ToJSON ClusterNode where
     , "ignoreSSL" .= nodeIgnoreSSL
     , "apiToken" .= nodeApiToken
     , "startVMID" .= nodeStartVMID
-    , "agentUrl" .= nodeAgentUrl
-    , "agentToken" .= nodeAgentToken
-    , "displayNetwork" .= nodeDisplayNetwork
-    , "minDisplay" .= nodeMinDisplay
-    , "maxDisplay" .= nodeMaxDisplay
-    , "displayIP" .= nodeDisplayIP
-    , "excludedPorts" .= nodeExcludedPorts
     ]
 
 instance FromJSON ClusterNode where
@@ -45,10 +31,3 @@ instance FromJSON ClusterNode where
     <*> v .: "ignoreSSL"
     <*> v .: "apiToken"
     <*> v .:? "startVMID"
-    <*> v .: "agentUrl"
-    <*> v .: "agentToken"
-    <*> v .: "displayNetwork"
-    <*> v .:? "minDisplay" .!= 1
-    <*> v .:? "maxDisplay" .!= 5000
-    <*> v .: "displayIP"
-    <*> v .:? "excludedPorts" .!= []

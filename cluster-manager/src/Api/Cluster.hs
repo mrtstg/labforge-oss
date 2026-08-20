@@ -121,7 +121,7 @@ createNode nodeData token = do
   let name = nodeName nodeData
   nameTaken <- runDB $ exists [ DeployNodeName ==. name ]
   if nameTaken then sendJSONError err400 (JSONError "nameTaken" "Node name is taken" Null) else do
-    parseUrlRes <- mapM (liftIO . tryParseUrl . T.unpack) [nodeAgentUrl nodeData, nodeApiUrl nodeData]
+    parseUrlRes <- mapM (liftIO . tryParseUrl . T.unpack) [nodeApiUrl nodeData]
     case sequence parseUrlRes of
       (Left _) -> sendJSONError err400 (JSONError "badUrl" "Node url is invalid" Null)
       (Right _) -> do
@@ -164,22 +164,9 @@ getDeployNode token = do
                 Nothing -> sendJSONError err500 (JSONError "noAvailableNodes" "No nodes available!" Null)
                 (Just n) -> pure (deployNodeData n)
 
-getWebsockifyConfig :: AppT Text
-getWebsockifyConfig = let
-  helper :: Text -> [ClusterNode] -> Text
-  helper acc (ClusterNode { .. }:nodes) = do
-    let ports = filter (\x -> 5900 + x `notElem` nodeExcludedPorts) [nodeMinDisplay..nodeMaxDisplay]
-    let lines = map (\display -> nodeName <> "-" <> (T.pack . show) display <> ": " <> nodeDisplayIP <> ":" <> (T.pack . show) (5900 + display)) ports
-    helper (acc <> T.intercalate "\n" lines <> "\n") nodes
-  helper acc [] = acc
-  in do
-  allNodes <- runDB $ selectList ([] :: [Filter DeployNode]) []
-  pure $ helper "" (map (\(Entity _ d) -> deployNodeData d) allNodes)
-
 clusterServer :: ServerT ClusterManagerAPI AppT
 clusterServer = getPagedNodes
   :<|> getNodeByName
   :<|> createNode
   :<|> deleteNode
   :<|> getDeployNode
-  :<|> getWebsockifyConfig

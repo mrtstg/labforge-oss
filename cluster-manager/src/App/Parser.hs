@@ -43,13 +43,6 @@ createNodeParser = AddNode
   <*> switch (long "ignore-ssl" <> help "Ignore SSL check")
   <*> option str (long "token" <> help "PVE API token")
   <*> option auto (long "start-vmid" <> value 100 <> help "VMID to start from")
-  <*> option str (long "agent-url" <> help "Proxmox agent URL")
-  <*> option str (long "agent-token" <> help "Proxmox agent token")
-  <*> option str (long "display-network" <> value "0.0.0.0" <> help "Display network to listen")
-  <*> option auto (long "min-display" <> value 100 <> help "Start display value")
-  <*> option auto (long "max-display" <> value 5000 <> help "Max display value")
-  <*> option str (long "display-ip" <> help "Address for connecting to display")
-  <*> some (option auto (short 'p' <> help "Displays for excluding"))
 
 appParser :: Parser AppOpts
 appParser = AppOpts <$>
