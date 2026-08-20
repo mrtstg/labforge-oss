@@ -29,6 +29,9 @@
 использует `AUTH_URL`, `CLUSTER_URL`, `DEPLOYMENT_URL`, `KROKI_URL`, `JOBSERVICE_URL`; `deployment-api` — `CLUSTER_URL`,
 `JOBSERVICE_URL`, `AUTH_URL`; `jobservice` — `DEPLOYMENT_URL`, `CLUSTER_URL`, `JOBSERVICE_URL`, `AUTH_URL`.
 
+`websockify-go` использует `PROXMOX_API_URL` и `PROXMOX_API_TOKEN` для создания временных VNC proxy. Для внутреннего CA можно
+задать `PROXMOX_CA_FILE`; `PROXMOX_INSECURE_SKIP_VERIFY=true` явно отключает проверку сертификата и по умолчанию выключен.
+
 ## Пример конфигурации
 
 Файлы `*-sample.env` в корне проекта содержат образцы конфигурации. Утилита `make fill-envs` создаёт из них рабочие файлы

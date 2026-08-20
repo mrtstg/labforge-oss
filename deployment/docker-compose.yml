@@ -79,8 +79,6 @@ services:
     hostname: websockify
     network_mode: host
     restart: unless-stopped
-    volumes:
-      - ./websockify/tokens.cfg:/tokens.cfg:ro
     env_file:
       - ../.env
   dev-kroki:

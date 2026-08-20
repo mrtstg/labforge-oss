@@ -73,7 +73,7 @@
 | POST | `/api/cluster/nodes` | Добавление ноды (`ClusterNode`). Требует роль `cluster-admin` |
 | DELETE | `/api/cluster/nodes/{name}` | Удаление ноды. Требует роль `cluster-admin` |
 | GET | `/api/cluster/deploy/node` | Выбор доступной ноды для развертывания (с учётом нагрузки и занятых VMID) |
-| GET | `/api/cluster/websockify/config` | Конфигурация `tokens.cfg` для websockify (текст). **Не требует токена** |
+| GET | `/api/cluster/websockify/config` | Устаревшая конфигурация `tokens.cfg`; сохранена для совместимости и новым gateway не используется. **Не требует токена** |
 
 ### ClusterNode (JSON)
 
@@ -261,10 +261,10 @@
 
 ## websockify-go
 
-Проксирует VNC-трафик по WebSocket. Не имеет публичного REST API: принимает WebSocket-соединения
-на пути вида `/api/vm/{port}/vnc?token={порт}`, которые nginx проверяет через
-`/api/deployment/vmport/access`. Конфигурация соответствия «порт → адрес дисплея» берётся из
-`/api/cluster/websockify/config` или файла конфигурации.
+Проксирует VNC-трафик по WebSocket через Proxmox `vncproxy`. Не имеет публичного REST API: принимает WebSocket-соединения
+на пути вида `/api/vm/{node-vmid}/vnc?token={node-vmid}`, которые nginx проверяет через
+`/api/deployment/vmport/access`. Для каждого подключения сервис создаёт новый временный proxy и подключается к Proxmox
+`vncwebsocket`; API credentials и VNC ticket клиенту не передаются.
 
 ## proxmox-fs-agent
 

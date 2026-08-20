@@ -77,7 +77,6 @@ make build-ca
 И запустить все сервисы:
 
 ```bash
-touch deployment/websockify/tokens.cfg
 make deploy-prod
 make copy-nginx-prod
 docker restart labforge-nginx

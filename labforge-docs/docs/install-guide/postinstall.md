@@ -127,8 +127,7 @@ alias lnmgr="docker exec -it labforge-cluster ./haskell-binary"
 
 !!! warning "Что будет при несовпадении имен в Proxmox и базе данных?"
 
-    Из-за несовпадения имен алгоритм ротации серверов не будет способен найти сервер и развертывание завершится с ошибкой. После исправления имен
-    также придется заново заменить файл tokens.cfg
+    Из-за несовпадения имен алгоритм ротации серверов не сможет найти сервер, а развертывание завершится с ошибкой.
 
 После добавления, вы можете проверить доступ к ноде:
 
@@ -146,8 +145,16 @@ Successful response!
 ~ ➤ lnmgr delete --node example
 ```
 
-## Заполнение токен-файла
+## Настройка VNC gateway
 
-Для проксирования трафика до виртуальных машин используется сервис, использующий конфигурационный файл `tokens.cfg`. После добавления
-серверов Proxmox в базу данных (см. пункт выше) его можно получить по адресу `https://<домен UI системы>/api/cluster/websockify/config`.
-Сохраните его и поместите в директорию `deployment/websockify/tokens.cfg` и выполните команду `docker restart labforge-websockify`.
+VNC gateway подключается к Proxmox API напрямую. Укажите в `docker.env` адрес API и полный API-token:
+
+```env
+PROXMOX_API_URL=https://proxmox.example:8006
+PROXMOX_API_TOKEN=PVEAPIToken=user@pve!gateway=secret
+PROXMOX_CA_FILE=/path/to/internal-ca.pem
+PROXMOX_INSECURE_SKIP_VERIFY=false
+```
+
+`PROXMOX_CA_FILE` можно не задавать для сертификата от системно доверенного CA. Отключение проверки сертификата через
+`PROXMOX_INSECURE_SKIP_VERIFY=true` предназначено только для явно доверенной тестовой или закрытой сети.

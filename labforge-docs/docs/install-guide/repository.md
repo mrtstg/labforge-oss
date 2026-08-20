@@ -82,7 +82,6 @@ make build-nginx-prod
 И запустить все сервисы:
 
 ```bash
-touch deployment/websockify/tokens.cfg
 make deploy-prod
 ```
 

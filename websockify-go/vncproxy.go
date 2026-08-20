@@ -11,14 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package vncproxy provides a HTTP handler about VNC Proxy on Websocket.
 package main
 
 import (
-	"crypto/tls"
-	"fmt"
+	"context"
+	"errors"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -29,55 +27,32 @@ import (
 )
 
 type peer struct {
-	ProxyConfig
-
 	source *websocket.Websocket
-	target *net.TCPConn
-	closed int32
+	target *websocket.Websocket
+	header string
+	vm     string
 	start  time.Time
+	closed int32
+	conf   ProxyConfig
 }
 
-func (p *peer) Close(addr string, err error) {
+func (p *peer) Close(from string, err error) {
 	if atomic.CompareAndSwapInt32(&p.closed, 0, 1) {
-		p.target.Close()
-		p.source.SendClose(websocket.CloseNormalClosure, "close")
-		p.infof("close VNC: source=%s, target=%s, duration=%s, from=%s, err=%v",
-			p.source.RemoteAddr().String(), p.target.RemoteAddr().String(),
-			time.Since(p.start).String(), addr, err)
+		_ = p.target.SendClose(websocket.CloseNormalClosure, "close")
+		_ = p.source.SendClose(websocket.CloseNormalClosure, "close")
+		p.conf.infof("close VNC: vm=%s, duration=%s, from=%s, err=%v", p.vm, time.Since(p.start), from, err)
 	}
 }
 
-func newPeer(source *websocket.Websocket, target *net.TCPConn, now time.Time, c ProxyConfig) *peer {
-	return &peer{source: source, target: target, start: now, ProxyConfig: c}
-}
-
-// ProxyConfig is used to configure WsVncProxyHandler.
 type ProxyConfig struct {
 	TokenEndpoint string
-	ErrorLog func(format string, args ...interface{})
-	InfoLog  func(format string, args ...interface{})
-
-	// MaxMsgSize is used to control the size of the websocket message.
-	// The default is 64KB.
-	MaxMsgSize int
-
-	// The timeout is used to dial and the interval time of Ping-Pong.
-	// The default is 10s.
-	Timeout time.Duration
-
-	// UpgradeHeader is the additional headers to upgrade the websocket.
+	Proxmox       *ProxmoxClient
+	ErrorLog      func(format string, args ...interface{})
+	InfoLog       func(format string, args ...interface{})
+	MaxMsgSize    int
+	Timeout       time.Duration
 	UpgradeHeader http.Header
-
-	// Check whether the origin is allowed.
-	//
-	// The default is that the origin is allowed only when the header Origin
-	// does not exist, or exists and is equal to the requesting host.
-	CheckOrigin func(r *http.Request) bool
-
-	// Return a backend address to connect to by the request.
-	//
-	// It's required.
-	GetBackend func(r *http.Request) (addr string, err error)
+	CheckOrigin   func(r *http.Request) bool
 }
 
 func (c ProxyConfig) errorf(format string, args ...interface{}) {
@@ -92,47 +67,32 @@ func (c ProxyConfig) infof(format string, args ...interface{}) {
 	}
 }
 
-type ConnectionDetails struct {
-	header string
-	vm string
-}
-
-// WebsocketVncProxyHandler is a VNC proxy handler based on websocket.
 type WebsocketVncProxyHandler struct {
 	httpClient *http.Client
 	connection int64
-	peers      map[*peer]ConnectionDetails
+	peers      map[*peer]struct{}
 	exit       chan struct{}
-	lock       sync.Mutex
-
-	conf     ProxyConfig
-	upgrader websocket.Upgrader
+	closeOnce  sync.Once
+	lock       sync.RWMutex
+	conf       ProxyConfig
+	upgrader   websocket.Upgrader
 }
 
-// NewWebsocketVncProxyHandler returns a new WebsocketVncProxyHandler.
-//
-// Notice: it only supports the binary protocol.
 func NewWebsocketVncProxyHandler(conf ProxyConfig) *WebsocketVncProxyHandler {
-	if conf.GetBackend == nil {
-		panic(fmt.Errorf("GetBackend is required"))
+	if conf.Proxmox == nil {
+		panic("Proxmox client is required")
 	}
 	if conf.MaxMsgSize <= 0 {
 		conf.MaxMsgSize = 65535
 	}
 	if conf.Timeout <= 0 {
-		conf.Timeout = time.Second * 10
+		conf.Timeout = defaultTimeout
 	}
-
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		IdleConnTimeout: 5 * time.Second,
-	}
-	client := &http.Client{Transport: tr}
 	handler := &WebsocketVncProxyHandler{
-		httpClient: client,
-		conf:  conf,
-		exit:  make(chan struct{}),
-		peers: make(map[*peer]ConnectionDetails, 1024),
+		httpClient: &http.Client{Timeout: conf.Timeout},
+		conf:       conf,
+		exit:       make(chan struct{}),
+		peers:      make(map[*peer]struct{}),
 		upgrader: websocket.Upgrader{
 			MaxMsgSize:   conf.MaxMsgSize,
 			Timeout:      conf.Timeout,
@@ -144,22 +104,13 @@ func NewWebsocketVncProxyHandler(conf ProxyConfig) *WebsocketVncProxyHandler {
 	return handler
 }
 
-// Connections returns the number of the current websockets.
 func (h *WebsocketVncProxyHandler) Connections() int64 {
 	return atomic.LoadInt64(&h.connection)
 }
 
-func (h *WebsocketVncProxyHandler) incConnection() {
-	atomic.AddInt64(&h.connection, 1)
-}
-
-func (h *WebsocketVncProxyHandler) decConnection() {
-	atomic.AddInt64(&h.connection, -1)
-}
-
-func (h *WebsocketVncProxyHandler) addPeer(p *peer, header string, vm string) {
+func (h *WebsocketVncProxyHandler) addPeer(p *peer) {
 	h.lock.Lock()
-	h.peers[p] = ConnectionDetails { vm: vm, header: header }
+	h.peers[p] = struct{}{}
 	h.lock.Unlock()
 }
 
@@ -169,171 +120,193 @@ func (h *WebsocketVncProxyHandler) delPeer(p *peer) {
 	h.lock.Unlock()
 }
 
+func (h *WebsocketVncProxyHandler) peerSnapshot() []*peer {
+	// Network access checks must not hold the peers lock; otherwise one slow
+	// deployment-api response would block connection cleanup and registration.
+	h.lock.RLock()
+	peers := make([]*peer, 0, len(h.peers))
+	for p := range h.peers {
+		peers = append(peers, p)
+	}
+	h.lock.RUnlock()
+	return peers
+}
+
 func (h *WebsocketVncProxyHandler) tick() {
 	ticker := time.NewTicker(h.conf.Timeout * 8 / 10)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ticker.C:
-			isLocked := h.lock.TryLock()
-			if isLocked {
-				for peer, peerData := range h.peers {
-					if err := peer.source.SendPing(nil); err != nil {
-           		peer.Close(peer.source.RemoteAddr().String(), err)
-          	  continue
-        	}
-
-					req, err := http.NewRequest("GET", h.conf.TokenEndpoint, nil)
-					if err != nil {
-						h.conf.errorf("Failed to create request for validating token")
-						continue
-					}
-					req.Header.Set("Authorization", peerData.header)
-					req.Header.Set("X-VM-PORT", peerData.vm)
-					resp, err := h.httpClient.Do(req)
-					if err != nil {
-						h.conf.errorf("Failed to make check request: %s", err.Error())
-						continue
-					}
-					io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
-					if resp.StatusCode >= 400 && resp.StatusCode <= 500 {
-						h.conf.infof("Bad access check on %s\n", peerData.vm)
-						delete(h.peers, peer)
-						peer.Close("", nil)
-					}
+			for _, p := range h.peerSnapshot() {
+				if err := p.source.SendPing(nil); err != nil {
+					p.Close("client", err)
+					continue
 				}
-				h.lock.Unlock()
+				if err := p.target.SendPing(nil); err != nil {
+					p.Close("Proxmox", err)
+					continue
+				}
+				h.validateAccess(p)
 			}
 		case <-h.exit:
-			ticker.Stop()
-			h.lock.Lock()
-			for peer := range h.peers {
-				peer.Close("", nil)
-				delete(h.peers, peer)
+			for _, p := range h.peerSnapshot() {
+				p.Close("gateway", nil)
 			}
-			h.lock.Unlock()
 			return
 		}
 	}
 }
 
-// Close implements the interface io.Closer.
-func (h *WebsocketVncProxyHandler) Close() error { close(h.exit); return nil }
+func (h *WebsocketVncProxyHandler) validateAccess(p *peer) {
+	status, err := h.checkAccess(context.Background(), p.header, p.vm)
+	if err != nil {
+		h.conf.errorf("failed to validate access for %s: %v", p.vm, err)
+		return
+	}
+	if status >= 400 && status < 500 {
+		h.conf.infof("access revoked for %s", p.vm)
+		p.Close("authorization", nil)
+	}
+}
 
-// ServeHTTP implements http.Handler, but it won't return until the connection
-// has closed.
-//
-// Notice: for each connection, it will open other two goroutine,
-// except itself goroutine, for reading from websocket and the backend VNC.
+func (h *WebsocketVncProxyHandler) checkAccess(ctx context.Context, header, vm string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.conf.TokenEndpoint, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", header)
+	req.Header.Set("X-VM-PORT", vm)
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+
+func (h *WebsocketVncProxyHandler) Close() error {
+	h.closeOnce.Do(func() { close(h.exit) })
+	return nil
+}
+
 func (h *WebsocketVncProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	starttime := time.Now()
-
-	if strings.ToLower(r.Header.Get("Upgrade")) != "websocket" {
-		w.Header().Set("Connection", "close")
-		h.conf.errorf("not websocket: client=%s, upgrade=%s", r.RemoteAddr, r.Header.Get("Upgrade"))
+	start := time.Now()
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		http.Error(w, "websocket upgrade required", http.StatusBadRequest)
 		return
 	}
 
-	backend, err := h.conf.GetBackend(r)
+	identifier := r.URL.Query().Get("token")
+	target, err := ParseConsoleTarget(identifier)
 	if err != nil {
-		w.Header().Set("Connection", "close")
-		h.conf.errorf("cannot get backend: client=%s, url=%s, err=%s", r.RemoteAddr, r.RequestURI, err)
-		return
-	} else if backend == "" {
-		w.Header().Set("Connection", "close")
-		h.conf.errorf("no backend: client=%s, url=%s", r.RemoteAddr, r.RequestURI)
-		return
-	}
-
-	ws, err := h.upgrader.Upgrade(w, r, h.conf.UpgradeHeader)
-	if err != nil {
-		w.Header().Set("Connection", "close")
-		h.conf.errorf("cannot upgrade to websocket: client=%s, err=%s", r.RemoteAddr, err)
-		return
-	}
-
-	h.conf.infof("connecting to the VNC backend '%s' for '%s', url=%s", backend, r.RemoteAddr, r.RequestURI)
-
-	c, err := net.DialTimeout("tcp", backend, h.conf.Timeout)
-	if err != nil {
-		h.conf.errorf("cannot connect to the VNC backend '%s': %s", backend, err)
-		ws.SendClose(websocket.CloseAbnormalClosure, "cannot connect to the backend")
-		return
-	}
-	h.conf.infof("connected to the VNC backend '%s' for '%s', cost=%s",
-		backend, r.RemoteAddr, time.Since(starttime).String())
-
-	// getting data for access check
-	queryParams := r.URL.Query()
-	vmToken := queryParams.Get("token")
-	if vmToken == "" {
-		h.conf.errorf("invalid vm token value")
-		ws.SendClose(websocket.CloseAbnormalClosure, "cannot connect to the backend")
+		http.Error(w, "invalid console target", http.StatusBadRequest)
 		return
 	}
 	tokenCookie, err := r.Cookie("token")
-	if err != nil {
-		h.conf.errorf("no token cookie provided")
-		ws.SendClose(websocket.CloseAbnormalClosure, "cannot connect to the backend")
+	if err != nil || tokenCookie.Value == "" {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	cookieHeader := fmt.Sprintf("Bearer %s", tokenCookie.Value)
+	authHeader := "Bearer " + tokenCookie.Value
+	// nginx performs the same check on the public route, but repeating it here
+	// keeps the gateway safe if it is accidentally reachable on its own port.
+	accessStatus, err := h.checkAccess(r.Context(), authHeader, identifier)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
+		return
+	}
+	if accessStatus < 200 || accessStatus >= 300 {
+		status := http.StatusBadGateway
+		if accessStatus >= 400 && accessStatus < 500 {
+			status = accessStatus
+		}
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
 
-	h.incConnection()
-	defer h.decConnection()
-	peer := newPeer(ws, c.(*net.TCPConn), starttime, h.conf)
-	h.addPeer(peer, cookieHeader, vmToken)
-	defer h.delPeer(peer)
+	ctx, cancel := context.WithTimeout(r.Context(), h.conf.Timeout)
+	upstream, err := h.conf.Proxmox.OpenConsole(ctx, target)
+	cancel()
+	if err != nil {
+		status := upstreamStatus(err)
+		h.conf.errorf("cannot connect Proxmox console for %s: %v", identifier, err)
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
 
-	go h.readSource(peer)
-	h.readTarget(peer)
+	source, err := h.upgrader.Upgrade(w, r, h.conf.UpgradeHeader)
+	if err != nil {
+		_ = upstream.SendClose(websocket.CloseNormalClosure, "client upgrade failed")
+		return
+	}
+	// Proxmox has already accepted its private VNC password. Complete a separate
+	// no-auth RFB negotiation with the authorized browser before relaying the
+	// remainder of the byte stream in either direction.
+	pending, err := negotiateBrowserRFB(source)
+	if err != nil {
+		_ = upstream.SendClose(websocket.CloseProtocolError, "browser RFB negotiation failed")
+		_ = source.SendClose(websocket.CloseProtocolError, "RFB negotiation failed")
+		h.conf.errorf("cannot negotiate browser RFB for %s: %v", identifier, err)
+		return
+	}
+
+	p := &peer{
+		source: source,
+		target: upstream,
+		header: authHeader,
+		vm:     identifier,
+		start:  start,
+		conf:   h.conf,
+	}
+	atomic.AddInt64(&h.connection, 1)
+	defer atomic.AddInt64(&h.connection, -1)
+	h.addPeer(p)
+	defer h.delPeer(p)
+	h.conf.infof("connected Proxmox console for %s, client=%s, cost=%s", identifier, r.RemoteAddr, time.Since(start))
+
+	go h.pipe(p, p.source, p.target, "client", pending)
+	h.pipe(p, p.target, p.source, "Proxmox", nil)
 }
 
-func (h *WebsocketVncProxyHandler) readSource(p *peer) {
-	for {
-		msgs, err := p.source.RecvMsg()
-		if err != nil {
-			p.Close(p.source.RemoteAddr().String(), err)
+func (h *WebsocketVncProxyHandler) pipe(p *peer, source, target *websocket.Websocket, from string, initial []byte) {
+	// Each write completes before the next read, providing backpressure without
+	// buffering an unbounded amount of VNC traffic in the gateway.
+	if len(initial) != 0 {
+		if err := target.SendBinaryMsg(initial); err != nil {
+			p.Close(from, err)
 			return
 		}
-
-		for _, msg := range msgs {
-			//if msg.Type == websocket.MsgTypeBinary {
-			//	bytesAmount := len(msg.Data)
-			//	if bytesAmount >= 2 {
-			//		messageType, submessageType := int(msg.Data[0]), int(msg.Data[1])
-			//		if messageType == 255 && submessageType == 0 && bytesAmount >= 12 {
-			//			downFlag := uint16(msg.Data[2])<<8 | uint16(msg.Data[3])
-			//			keyCode := binary.BigEndian.Uint32(msg.Data[4:8])
-			//			if keyCode == 0xff0d && downFlag == 1 {
-			//				fmt.Println("Pressed down enter!")
-			//			} else {
-			//				fmt.Printf("Pressed key %d %x\n", downFlag, keyCode)
-			//			}
-			//		}
-			//	}
-			//}
-			if _, err = p.target.Write(msg.Data); err != nil {
-				p.Close(p.target.RemoteAddr().String(), err)
+	}
+	for {
+		messages, err := source.RecvMsg()
+		if err != nil {
+			p.Close(from, err)
+			return
+		}
+		for _, message := range messages {
+			if message.Type != websocket.MsgTypeBinary {
+				p.Close(from, errors.New("non-binary websocket message"))
+				return
+			}
+			if err := target.SendBinaryMsg(message.Data); err != nil {
+				p.Close(from, err)
+				return
 			}
 		}
 	}
 }
 
-func (h *WebsocketVncProxyHandler) readTarget(p *peer) {
-	for {
-		buf := make([]byte, 2048)
-		n, err := p.target.Read(buf)
-		if err != nil {
-			p.Close(p.target.RemoteAddr().String(), err)
-			return
+func upstreamStatus(err error) int {
+	var pveErr *upstreamError
+	if errors.As(err, &pveErr) {
+		if pveErr.timeout {
+			return http.StatusGatewayTimeout
 		}
-
-		if err = p.source.SendBinaryMsg(buf[:n]); err != nil {
-			p.Close(p.source.RemoteAddr().String(), err)
-			return
+		if pveErr.status == http.StatusBadRequest || pveErr.status == http.StatusNotFound {
+			return http.StatusConflict
 		}
 	}
+	return http.StatusBadGateway
 }
