@@ -141,48 +141,41 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                             let namesMap = M.mapKeys T.unpack . M.fromList $ zip (map T.pack networkToRename) networksNames
                             let networks = renameNetworks namesMap templateNetworks (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) (\oldN n -> BridgeNetwork {configNetworkComments=T.unpack $ T.pack oldN <> "@" <> templateTitle <> "|" <> userTag, configNetworkAutostart=True, configNetworkName=n})
                             let replacedNetworksVM = map (renameNet namesMap) templateVMs
-                            displayAllocRes'' <- withTokenVariable $ \t -> do
-                              defaultRetryClientC deploymentEnv (D.requestDeploymentDisplay nodeName deploymentId (Just $ length templateVMs) (BearerWrapper t))
-                            displayAllocRes' <- unpackError displayAllocRes'' errorF
-                            case displayAllocRes' of
+                            -- generating tags nodeName-VMID now
+                            let linksMap = M.fromList $ map (\(v, vmid) -> (configVMName v, T.unpack nodeName <> "-" <> show vmid)) $ zip replacedNetworksVM vmids
+                            let configuredVMs = zipWith (\d v -> v {configVMID = Just d, configVMTags = vmTags}) vmids replacedNetworksVM
+                            templates'' <- withTokenVariable $ \t -> do
+                              defaultRetryClientC deploymentEnv (D.getTemplatesListByNames (map (T.pack . configVMParentTemplate) configuredVMs) (BearerWrapper t))
+                            templates' <- unpackError templates'' errorF
+                            case templates' of
                               Nothing -> pure ()
-                              (Just vmDisplays) -> do
-                                $(logInfo) $ "[" <> deploymentId <> "] Allocated displays"
-                                let zippedDisplays = zip replacedNetworksVM vmDisplays
-                                let linksMap = M.mapKeys configVMName $ M.map (\d -> T.unpack nodeName <> "-" <> show d) $ M.fromList zippedDisplays
-                                let configuredVMs = zipWith (\d v -> v {configVMID = Just d, configVMTags = vmTags}) vmids (map (\ (v, d) -> v {configVMDisplay = Just d}) zippedDisplays)
-                                templates'' <- withTokenVariable $ \t -> do
-                                  defaultRetryClientC deploymentEnv (D.getTemplatesListByNames (map (T.pack . configVMParentTemplate) configuredVMs) (BearerWrapper t))
-                                templates' <- unpackError templates'' errorF
-                                case templates' of
+                              (Just templates) -> do
+                                $(logInfo) $ "[" <> deploymentId <> "] Got templates list"
+                                let deployConfig = DeployConfig { deployAgent=Just agentConfig
+                                  , deployVMs=configuredVMs
+                                  , deployNetworks=networks
+                                  , deployTemplates=templates
+                                  , deployParameters=deployNode
+                                  }
+                                let patch = DeploymentPatch {
+                                  patchInstanceVMLinks=Just linksMap
+                                  , patchInstanceState=Nothing
+                                  , patchInstanceNetworkMap=Just namesMap
+                                  , patchInstanceDeployConfig=Just deployConfig
+                                  }
+                                patchRes <- withTokenVariable $ \t ->
+                                  defaultRetryClientC deploymentEnv (D.patchDeploymentInstance deploymentId patch (BearerWrapper t))
+                                p <- unpackError patchRes errorF
+                                case p of
                                   Nothing -> pure ()
-                                  (Just templates) -> do
-                                    $(logInfo) $ "[" <> deploymentId <> "] Got templates list"
-                                    let deployConfig = DeployConfig { deployAgent=Just agentConfig
-                                      , deployVMs=configuredVMs
-                                      , deployNetworks=networks
-                                      , deployTemplates=templates
-                                      , deployParameters=deployNode
-                                      }
-                                    let patch = DeploymentPatch {
-                                      patchInstanceVMLinks=Just linksMap
-                                      , patchInstanceState=Nothing
-                                      , patchInstanceNetworkMap=Just namesMap
-                                      , patchInstanceDeployConfig=Just deployConfig
-                                      }
-                                    patchRes <- withTokenVariable $ \t ->
-                                      defaultRetryClientC deploymentEnv (D.patchDeploymentInstance deploymentId patch (BearerWrapper t))
-                                    p <- unpackError patchRes errorF
-                                    case p of
+                                  _ -> do
+                                    jobserviceEnv <- asks $ getEnvFor JobserviceAPI
+                                    jobRes <- withTokenVariable $ \t ->
+                                      defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage' (JobserviceDeployInstance {}) (Just m) (BearerWrapper t))
+                                    j <- unpackError jobRes errorF
+                                    case j of
                                       Nothing -> pure ()
                                       _ -> do
-                                        jobserviceEnv <- asks $ getEnvFor JobserviceAPI
-                                        jobRes <- withTokenVariable $ \t ->
-                                          defaultRetryClientC jobserviceEnv (J.insertJobserviceMessage' (JobserviceDeployInstance {}) (Just m) (BearerWrapper t))
-                                        j <- unpackError jobRes errorF
-                                        case j of
-                                          Nothing -> pure ()
-                                          _ -> do
-                                            $(logInfo) $ "[" <> deploymentId <> "] Sent new deploy job"
-                                            pure ()
+                                        $(logInfo) $ "[" <> deploymentId <> "] Sent new deploy job"
+                                        pure ()
 allocateNode _ _ = error "Invalid message"
