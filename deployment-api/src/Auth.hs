@@ -21,16 +21,15 @@ import           Config
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Data.Functor                        ((<&>))
+import           Data.List                           (find)
 import           Data.Maybe
 import           Data.Text                           (Text)
 import qualified Data.Text                           as T
 import           Database
 import           Database.Persist
-import           Models.JSONError
 import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Models.Config.VM
-import           Proxmox.Models.VM
 import           Redis.Common
 import           Text.Read                           (readMaybe)
 
@@ -45,60 +44,41 @@ findInstanceByVMPort :: Text -> AppT (Maybe (Entity DeploymentInstanceData, Conf
 findInstanceByVMPort vmPort = do
   case splitVmPort vmPort of
     Nothing -> pure Nothing
-    (Just (nodeName, display)) -> do
-      relatedAllocations <- runDB $ selectList [ UsedDisplayNum ==. display, UsedDisplayNodeName ==. nodeName ] []
-      relatedInstances <- runDB $ selectFirst
-        [ DeploymentInstanceDataId <-. map (usedDisplayUsedBy . entityVal) relatedAllocations
+    (Just (nodeName, vmid)) -> do
+      allocations <- runDB $ selectList [UsedVMIDNum ==. vmid] []
+      instances <- runDB $ selectList
+        [ DeploymentInstanceDataId <-. map (usedVMIDUsedBy . entityVal) allocations
         , DeploymentInstanceDataDeployConfig !=. Nothing ] []
-      case relatedInstances of
-        Nothing -> do
-          $(logWarn) "No related instances found!"
-          pure Nothing
-        Just e@(Entity _ DeploymentInstanceData { .. }) -> do
-          let usedVMName = filter (\vm -> configVMDisplay vm == Just display) (deployVMs $ fromJust deploymentInstanceDataDeployConfig)
-          case usedVMName of
-            [] -> do
-              $(logWarn) $ "Couldnt find VM with display " <> (T.pack . show) display
-              pure Nothing
-            (vm:[]) -> (pure . pure) (e, vm)
-            _manyVMs -> do
-              $(logError) $ "There is several VM with same display!"
-              pure Nothing
+      let matches = mapMaybe (matchVM nodeName vmid) instances
+      case matches of
+        [] -> $(logWarn) ("No VM found for " <> vmPort) >> pure Nothing
+        [match] -> pure $ Just match
+        _ -> $(logError) ("Several VMs found for " <> vmPort) >> pure Nothing
+  where
+    matchVM :: Text -> Int -> Entity DeploymentInstanceData -> Maybe (Entity DeploymentInstanceData, ConfigVM)
+    matchVM nodeName vmid entity@(Entity _ DeploymentInstanceData { deploymentInstanceDataDeployConfig = Just config }) = do
+      -- A VMID is only unique within its configured Proxmox node/cluster.
+      guard $ deployNodeName (deployParameters config) == nodeName
+      vm <- find ((== Just vmid) . configVMID) (deployVMs config)
+      pure (entity, vm)
+    matchVM _ _ _ = Nothing
 
 isUserAccessedVMPort :: [Text] -> [Text] -> Text -> Text -> AppT Bool
 isUserAccessedVMPort userGroups userRoles userId vmPort = let
   f :: AppT Bool
   f = do
     let deployTemplatesAdmin = "deployment-admin"
-    if deployTemplatesAdmin `elem` userRoles then pure True else do
-      case splitVmPort vmPort of
-        Nothing -> pure False
-        (Just (nodeName, display)) -> do
-          $(logDebug) $ "Checking access from " <> userId <> " to " <> nodeName <> ", " <> (T.pack . show) display
-          relatedAllocations <- runDB $ selectList [ UsedDisplayNum ==. display, UsedDisplayNodeName ==. nodeName ] []
-          relatedInstances <- runDB $ selectFirst
-            [ DeploymentInstanceDataId <-. map (usedDisplayUsedBy . entityVal) relatedAllocations
-            , DeploymentInstanceDataDeployConfig !=. Nothing ] []
-          case relatedInstances of
-            Nothing -> do
-              $(logWarn) "No related instances found!"
-              pure False
-            Just (Entity _ DeploymentInstanceData { .. }) -> do
-              let usedVMName = filter (\vm -> configVMDisplay vm == Just display) (deployVMs $ fromJust deploymentInstanceDataDeployConfig)
-              case usedVMName of
-                [] -> do
-                  $(logWarn) $ "Couldnt find VM with display " <> (T.pack . show) display
-                  pure False
-                (vm:[]) -> do
-                  ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-                  templateHidden <- runDB $ exists [ DeploymentTemplateHideGroup <-. userGroups, DeploymentTemplateHideDeployment ==. deploymentInstanceDataParent]
-                  if userId == deploymentTemplateDataOwnerId then $(logDebug) "Admin access. Allowed." >> pure True else do
-                    if userId /= deploymentInstanceDataOwnerId || templateHidden then $(logDebug) "Not admin and not owner" >> pure False else
-                      if T.pack (configVMName vm) `elem` deploymentTemplateDataAvailableVMs then $(logDebug) "Stand owner to available VM. Allowed." >> pure True else
-                        $(logDebug) "Stand owner to not available VM. Not allowed." >> pure False
-                _manyVMs -> do
-                  $(logError) $ "There is several VM with same display!"
-                  pure False
+    related <- findInstanceByVMPort vmPort
+    case related of
+      Nothing -> pure False
+      Just (Entity _ DeploymentInstanceData { .. }, vm) ->
+        if deployTemplatesAdmin `elem` userRoles then pure True else do
+          ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
+          templateHidden <- runDB $ exists [ DeploymentTemplateHideGroup <-. userGroups, DeploymentTemplateHideDeployment ==. deploymentInstanceDataParent]
+          if userId == deploymentTemplateDataOwnerId then $(logDebug) "Admin access. Allowed." >> pure True else do
+            if userId /= deploymentInstanceDataOwnerId || templateHidden then $(logDebug) "Not admin and not owner" >> pure False else
+              if T.pack (configVMName vm) `elem` deploymentTemplateDataAvailableVMs then $(logDebug) "Stand owner to available VM. Allowed." >> pure True else
+                $(logDebug) "Stand owner to not available VM. Not allowed." >> pure False
       in do
         ~(Right v) <- getOrCacheJsonValue (Just 10) (T.unpack $ userId <> vmPort) (f <&> Just)
         pure v
