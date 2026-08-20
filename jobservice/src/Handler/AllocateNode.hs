@@ -114,10 +114,6 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                       , deployNodeName = nodeName
                       , deployIgnoreSSL = nodeIgnoreSSL
                       }
-                    let agentConfig = DeployAgentConfig { configAgentURL = nodeAgentUrl
-                      , configAgentToken = nodeAgentToken
-                      , configAgentDisplayNetwork = nodeDisplayNetwork
-                      }
                     allocateRes'' <- withTokenVariable $ \t -> do
                       defaultRetryClientC deploymentEnv (D.requestDeploymentVMID nodeName deploymentId (Just $ length templateVMs) (BearerWrapper t))
                     allocateRes' <- unpackError allocateRes'' errorF
@@ -151,7 +147,7 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                               Nothing -> pure ()
                               (Just templates) -> do
                                 $(logInfo) $ "[" <> deploymentId <> "] Got templates list"
-                                let deployConfig = DeployConfig { deployAgent=Just agentConfig
+                                let deployConfig = DeployConfig { deployAgent=Nothing
                                   , deployVMs=configuredVMs
                                   , deployNetworks=networks
                                   , deployTemplates=templates
