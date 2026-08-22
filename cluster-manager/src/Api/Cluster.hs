@@ -51,8 +51,10 @@ import           Proxmox.Deploy.Models.Config
 import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Ssl
 import           Proxmox.Models
+import           Proxmox.Models.Cluster
 import           Proxmox.Models.Node                 (ProxmoxNode)
 import qualified Proxmox.Models.Node                 as Node
+import           Proxmox.Models.VM                   (ProxmoxVMStatus (VMRunning))
 import           Proxmox.Retry
 import           Proxmox.Schema
 import           Servant
@@ -128,6 +130,27 @@ createNode nodeData token = do
         _ <- runDB $ insert (DeployNode name nodeData)
         pure ()
 
+lookupVM :: Int -> BearerWrapper -> AppT String
+lookupVM vmid (BearerWrapper token) = do
+  _ <- requireRealmRoles token ["websockify-service"]
+  allNodes <- runDB $ selectList ([] :: [Filter DeployNode]) []
+  r <- returnFirstAvailable (map (\(Entity _ d) -> deployNodeData d) allNodes)
+  case r of
+    Nothing -> sendJSONError err500 (JSONError "noAvailableNodes" "No nodes available!" Null)
+    (Just (ClusterNode { nodeName = nodeName',.. })) -> do
+      mgr <- (liftIO . createProxmoxManager) (DeployConfig {deployVMs=[], deployTemplates=[], deployParameters=DeployParams {deployUrl=nodeApiUrl, deployToken=Just nodeApiToken, deployStartVMID=0, deployIgnoreSSL=nodeIgnoreSSL, deployNodeName=nodeName'}, deployNetworks=[], deployAgent=Nothing})
+      nodeUrl <- liftIO $ parseBaseUrl (T.unpack nodeApiUrl)
+      let state = ProxmoxState nodeUrl mgr
+      resp <- defaultRetryClient' state getClusterVMs
+      case resp of
+        (Left e) -> do
+          $(logError) $ "Failure response during getting cluster VMs: " <> (T.pack . show) e
+          sendJSONError err500 (JSONError "noAvailableNodes" "Error response from node" Null)
+        (Right resources) -> do
+          case find (\x -> isQEMUResource x && ((==) VMRunning . resourceStatus) x && ((==) (T.pack $ "qemu/" <> show vmid) . resourceId) x)  resources of
+            (Just (QEMUResource { .. })) -> pure (T.unpack resourceNode)
+            _anyOther -> sendJSONError err404 (JSONError "notFound" "VM not found" Null)
+
 getDeployNode :: BearerWrapper -> AppT ClusterNode
 getDeployNode token = do
   _ <- accessCheck token
@@ -170,3 +193,4 @@ clusterServer = getPagedNodes
   :<|> createNode
   :<|> deleteNode
   :<|> getDeployNode
+  :<|> lookupVM
