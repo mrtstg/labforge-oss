@@ -20,48 +20,41 @@ module Auth where
 import           Config
 import           Control.Monad.Logger
 import           Control.Monad.Reader
-import           Data.Functor                        ((<&>))
-import           Data.List                           (find)
+import           Data.Functor                    ((<&>))
+import           Data.List                       (find)
 import           Data.Maybe
-import           Data.Text                           (Text)
-import qualified Data.Text                           as T
+import           Data.Text                       (Text)
+import qualified Data.Text                       as T
 import           Database
 import           Database.Persist
 import           Proxmox.Deploy.Models.Config
-import           Proxmox.Deploy.Models.Config.Deploy
 import           Proxmox.Deploy.Models.Config.VM
 import           Redis.Common
-import           Text.Read                           (readMaybe)
+import           Text.Read                       (readMaybe)
 
-splitVmPort :: Text -> Maybe (Text, Int)
-splitVmPort portV = do
-  case T.splitOn "-" portV of
-    [] -> Nothing
-    [_] -> Nothing
-    lst -> readMaybe (T.unpack . last $ lst) >>= \x -> Just (T.intercalate "-" (init lst), x)
+splitVmPort :: Text -> Maybe Int
+splitVmPort = readMaybe . T.unpack
 
 findInstanceByVMPort :: Text -> AppT (Maybe (Entity DeploymentInstanceData, ConfigVM))
 findInstanceByVMPort vmPort = do
   case splitVmPort vmPort of
     Nothing -> pure Nothing
-    (Just (nodeName, vmid)) -> do
+    (Just vmid) -> do
       allocations <- runDB $ selectList [UsedVMIDNum ==. vmid] []
       instances <- runDB $ selectList
         [ DeploymentInstanceDataId <-. map (usedVMIDUsedBy . entityVal) allocations
         , DeploymentInstanceDataDeployConfig !=. Nothing ] []
-      let matches = mapMaybe (matchVM nodeName vmid) instances
+      let matches = mapMaybe (matchVM vmid) instances
       case matches of
         [] -> $(logWarn) ("No VM found for " <> vmPort) >> pure Nothing
         [match] -> pure $ Just match
         _ -> $(logError) ("Several VMs found for " <> vmPort) >> pure Nothing
   where
-    matchVM :: Text -> Int -> Entity DeploymentInstanceData -> Maybe (Entity DeploymentInstanceData, ConfigVM)
-    matchVM nodeName vmid entity@(Entity _ DeploymentInstanceData { deploymentInstanceDataDeployConfig = Just config }) = do
-      -- A VMID is only unique within its configured Proxmox node/cluster.
-      guard $ deployNodeName (deployParameters config) == nodeName
+    matchVM :: Int -> Entity DeploymentInstanceData -> Maybe (Entity DeploymentInstanceData, ConfigVM)
+    matchVM vmid entity@(Entity _ DeploymentInstanceData { deploymentInstanceDataDeployConfig = Just config }) = do
       vm <- find ((== Just vmid) . configVMID) (deployVMs config)
       pure (entity, vm)
-    matchVM _ _ _ = Nothing
+    matchVM _ _ = Nothing
 
 isUserAccessedVMPort :: [Text] -> [Text] -> Text -> Text -> AppT Bool
 isUserAccessedVMPort userGroups userRoles userId vmPort = let
