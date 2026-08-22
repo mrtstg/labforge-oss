@@ -19,8 +19,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	serviceTokens := NewServiceTokenClient(config.Auth)
 
 	proxyConfig := ProxyConfig{
+		ClusterURL:    config.ClusterURL,
+		ServiceTokens: serviceTokens,
 		TokenEndpoint: fmt.Sprintf("%s/api/deployment/vmport/access", config.DeploymentURL),
 		Proxmox:       proxmox,
 		InfoLog:       log.Printf,

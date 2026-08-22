@@ -79,24 +79,18 @@ func NewProxmoxClient(config ProxmoxConfig) (*ProxmoxClient, error) {
 }
 
 func ParseConsoleTarget(value string) (ConsoleTarget, error) {
-	// Split on the final hyphen because valid Proxmox node names may themselves
-	// contain hyphens (for example, nested-pve-1-101).
-	last := strings.LastIndexByte(value, '-')
-	if last < 1 || last == len(value)-1 {
-		return ConsoleTarget{}, fmt.Errorf("invalid console target")
-	}
-	node, vmidText := value[:last], value[last+1:]
-	if !validNodeName(node) {
-		return ConsoleTarget{}, fmt.Errorf("invalid console target")
-	}
-	vmid, err := strconv.Atoi(vmidText)
+	vmid, err := strconv.Atoi(value)
 	if err != nil || vmid <= 0 {
 		return ConsoleTarget{}, fmt.Errorf("invalid console target")
 	}
-	return ConsoleTarget{Node: node, VMID: vmid}, nil
+	// get filled later in vncproxy module
+	return ConsoleTarget{Node: "", VMID: vmid}, nil
 }
 
 func validNodeName(node string) bool {
+	if node == "" {
+		return false
+	}
 	for i, r := range node {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || (i > 0 && (r == '-' || r == '_' || r == '.')) {
 			continue

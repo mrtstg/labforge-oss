@@ -14,8 +14,17 @@ import (
 const defaultTimeout = 10 * time.Second
 
 type Config struct {
+	Auth          AuthConfig
+	ClusterURL    string
 	DeploymentURL string
 	Proxmox       ProxmoxConfig
+}
+
+type AuthConfig struct {
+	URL          string
+	ClientID     string
+	ClientSecret string
+	Timeout      time.Duration
 }
 
 type ProxmoxConfig struct {
@@ -27,11 +36,29 @@ type ProxmoxConfig struct {
 }
 
 func LoadConfigFromEnv() (Config, error) {
-	deploymentURL, err := requiredEnv("DEPLOYMENT_URL")
+	authURL, err := requiredServiceURL("AUTH_URL")
 	if err != nil {
 		return Config{}, err
 	}
-	deploymentURL = strings.TrimRight(deploymentURL, "/")
+
+	clusterURL, err := requiredServiceURL("CLUSTER_URL")
+	if err != nil {
+		return Config{}, err
+	}
+
+	deploymentURL, err := requiredServiceURL("DEPLOYMENT_URL")
+	if err != nil {
+		return Config{}, err
+	}
+
+	clientID, err := requiredEnv("KEYCLOAK_CLIENT_ID")
+	if err != nil {
+		return Config{}, err
+	}
+	clientSecret, err := requiredEnv("KEYCLOAK_CLIENT_SECRET")
+	if err != nil {
+		return Config{}, err
+	}
 
 	apiURLValue, err := requiredEnv("PROXMOX_API_URL")
 	if err != nil {
@@ -66,6 +93,13 @@ func LoadConfigFromEnv() (Config, error) {
 	}
 
 	return Config{
+		Auth: AuthConfig{
+			URL:          authURL,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Timeout:      defaultTimeout,
+		},
+		ClusterURL:    clusterURL,
 		DeploymentURL: deploymentURL,
 		Proxmox: ProxmoxConfig{
 			APIURL:             apiURL,
@@ -75,6 +109,21 @@ func LoadConfigFromEnv() (Config, error) {
 			Timeout:            defaultTimeout,
 		},
 	}, nil
+}
+
+func requiredServiceURL(name string) (string, error) {
+	value, err := requiredEnv(name)
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", fmt.Errorf("%s must be an absolute HTTP(S) URL", name)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("%s must not contain a query or fragment", name)
+	}
+	return strings.TrimRight(value, "/"), nil
 }
 
 func requiredEnv(name string) (string, error) {

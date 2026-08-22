@@ -20,9 +20,10 @@ func TestParseConsoleTarget(t *testing.T) {
 		vmid  int
 		valid bool
 	}{
-		{value: "node1-101", node: "node1", vmid: 101, valid: true},
-		{value: "nested-pve-1-101", node: "nested-pve-1", vmid: 101, valid: true},
-		{value: "pve.example_1-999", node: "pve.example_1", vmid: 999, valid: true},
+		{value: "101", node: "", vmid: 101, valid: true},
+		{value: "node1-101", valid: false},
+		{value: "nested-pve-1-101", valid: false},
+		{value: "pve.example_1-999", valid: false},
 		{value: "node1", valid: false},
 		{value: "-101", valid: false},
 		{value: "node1-0", valid: false},

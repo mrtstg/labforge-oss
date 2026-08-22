@@ -7,7 +7,11 @@ import (
 
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("AUTH_URL", "http://auth:8000/")
+	t.Setenv("CLUSTER_URL", "http://cluster:8000/")
 	t.Setenv("DEPLOYMENT_URL", "http://deployment:8000/")
+	t.Setenv("KEYCLOAK_CLIENT_ID", "websockify")
+	t.Setenv("KEYCLOAK_CLIENT_SECRET", "client-secret")
 	t.Setenv("PROXMOX_API_URL", "https://pve.example:8006/")
 	t.Setenv("PROXMOX_API_TOKEN", "PVEAPIToken=gateway@pve!console=secret")
 	t.Setenv("PROXMOX_CA_FILE", "")
@@ -24,8 +28,30 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	if config.DeploymentURL != "http://deployment:8000" {
 		t.Fatalf("unexpected deployment URL: %q", config.DeploymentURL)
 	}
+	if config.Auth.URL != "http://auth:8000" || config.Auth.ClientID != "websockify" || config.Auth.ClientSecret != "client-secret" {
+		t.Fatalf("unexpected auth config: %#v", config.Auth)
+	}
+	if config.ClusterURL != "http://cluster:8000" {
+		t.Fatalf("unexpected cluster URL: %q", config.ClusterURL)
+	}
 	if !config.Proxmox.InsecureSkipVerify {
 		t.Fatal("insecure TLS setting was not applied")
+	}
+}
+
+func TestLoadConfigRequiresServiceCredentials(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KEYCLOAK_CLIENT_SECRET", "")
+	if _, err := LoadConfigFromEnv(); err == nil {
+		t.Fatal("expected missing client secret to fail")
+	}
+}
+
+func TestLoadConfigRejectsInvalidServiceURL(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("AUTH_URL", "auth:8000")
+	if _, err := LoadConfigFromEnv(); err == nil {
+		t.Fatal("expected invalid auth URL to fail")
 	}
 }
 

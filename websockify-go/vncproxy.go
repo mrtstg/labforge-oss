@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -45,6 +46,8 @@ func (p *peer) Close(from string, err error) {
 }
 
 type ProxyConfig struct {
+	ClusterURL    string
+	ServiceTokens *ServiceTokenClient
 	TokenEndpoint string
 	Proxmox       *ProxmoxClient
 	ErrorLog      func(format string, args ...interface{})
@@ -81,6 +84,9 @@ type WebsocketVncProxyHandler struct {
 func NewWebsocketVncProxyHandler(conf ProxyConfig) *WebsocketVncProxyHandler {
 	if conf.Proxmox == nil {
 		panic("Proxmox client is required")
+	}
+	if conf.ServiceTokens == nil {
+		panic("service token client is required")
 	}
 	if conf.MaxMsgSize <= 0 {
 		conf.MaxMsgSize = 65535
@@ -170,6 +176,50 @@ func (h *WebsocketVncProxyHandler) validateAccess(p *peer) {
 	}
 }
 
+func (h *WebsocketVncProxyHandler) lookupNode(ctx context.Context, vmid int) (string, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		token, err := h.conf.ServiceTokens.Token(ctx)
+		if err != nil {
+			return "", err
+		}
+		node, status, err := h.lookupNodeWithToken(ctx, vmid, token)
+		if (status == http.StatusUnauthorized || status == http.StatusForbidden) && attempt == 0 {
+			// The token may have been revoked or its service roles may have changed
+			// before its advertised expiry. Refresh it and retry only once.
+			h.conf.ServiceTokens.Invalidate(token)
+			continue
+		}
+		return node, err
+	}
+	return "", errors.New("cluster-manager authentication failed")
+}
+
+func (h *WebsocketVncProxyHandler) lookupNodeWithToken(ctx context.Context, vmid int, token string) (string, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/api/cluster/vm/%d/node", h.conf.ClusterURL, vmid), nil)
+	if err != nil {
+		return "", 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		return "", 0, newServiceError("cluster-manager", 0, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxServiceResponseSize))
+		return "", resp.StatusCode, &serviceError{service: "cluster-manager", status: resp.StatusCode}
+	}
+
+	var node string
+	if err := decodeServiceJSON(resp.Body, &node); err != nil {
+		return "", resp.StatusCode, fmt.Errorf("invalid cluster-manager response: %w", err)
+	}
+	if !validNodeName(node) {
+		return "", resp.StatusCode, errors.New("invalid cluster-manager node name")
+	}
+	return node, resp.StatusCode, nil
+}
+
 func (h *WebsocketVncProxyHandler) checkAccess(ctx context.Context, header, vm string) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.conf.TokenEndpoint, nil)
 	if err != nil {
@@ -225,6 +275,16 @@ func (h *WebsocketVncProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 		http.Error(w, http.StatusText(status), status)
 		return
 	}
+	lookupCtx, lookupCancel := context.WithTimeout(r.Context(), h.conf.Timeout)
+	node, err := h.lookupNode(lookupCtx, target.VMID)
+	lookupCancel()
+	if err != nil {
+		status := upstreamStatus(err)
+		h.conf.errorf("cannot resolve Proxmox node for VM %s: %v", identifier, err)
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	target.Node = node
 
 	ctx, cancel := context.WithTimeout(r.Context(), h.conf.Timeout)
 	upstream, err := h.conf.Proxmox.OpenConsole(ctx, target)
@@ -299,6 +359,16 @@ func (h *WebsocketVncProxyHandler) pipe(p *peer, source, target *websocket.Webso
 }
 
 func upstreamStatus(err error) int {
+	var serviceErr *serviceError
+	if errors.As(err, &serviceErr) {
+		if serviceErr.timeout {
+			return http.StatusGatewayTimeout
+		}
+		if serviceErr.service == "cluster-manager" && serviceErr.status == http.StatusNotFound {
+			return http.StatusConflict
+		}
+		return http.StatusBadGateway
+	}
 	var pveErr *upstreamError
 	if errors.As(err, &pveErr) {
 		if pveErr.timeout {
