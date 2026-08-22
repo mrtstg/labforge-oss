@@ -72,19 +72,3 @@ Node created!
 Successful response!
 ~ ➤ lnmgr delete --node example
 ```
-
-## Настройка VNC gateway
-
-VNC gateway подключается к Proxmox API напрямую. Укажите в `docker.env` адрес API и полный API-token:
-
-```env
-PROXMOX_API_URL=https://proxmox.example:8006
-PROXMOX_API_TOKEN=PVEAPIToken=user@pve!gateway=secret
-PROXMOX_CA_FILE=/path/to/internal-ca.pem
-PROXMOX_INSECURE_SKIP_VERIFY=false
-```
-
-`PROXMOX_CA_FILE` можно не задавать для сертификата от системно доверенного CA. Отключение проверки сертификата через
-`PROXMOX_INSECURE_SKIP_VERIFY=true` предназначено только для явно доверенной тестовой или закрытой сети.
-
-После замены параметров выполните команду `make deploy-prod`

@@ -59,7 +59,7 @@
 2. Для каждого элемента конфигурации определяется стадия (`NetworkExists`, `VMExists`, `TemplateExists`,
    `VMStopped`, `SnapshotExists` и.т.д) и планируются необходимые действия.
 3. Итоговый список действий (`TransactionAction`) исполняется по порядку: создание SDN-сетей, клонирование VM,
-   назначение VMID, конфигурация cloud-init, подключение сетей, установка VNC-дисплея через файловый агент,
+   назначение VMID, конфигурация cloud-init, подключение сетей,
    запуск VM и применение сетей (`ApplySDNNetworks`).
 
 Доступные действия транзакции: `DeploySDNNetwork`, `DestroySDNNetwork`, `UnassignVMID`, `AssignVMID`, `CloneVM`,
