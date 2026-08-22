@@ -4,6 +4,7 @@ module Cluster.Client
   , createNode
   , deleteNodeByName
   , getDeployNode
+  , lookupVMNode
   ) where
 
 import           Cluster.Schema
@@ -17,4 +18,5 @@ getPagedNodes
   :<|> getNodeByName
   :<|> createNode
   :<|> deleteNodeByName
-  :<|> getDeployNode = client api
+  :<|> getDeployNode
+  :<|> lookupVMNode = client api
