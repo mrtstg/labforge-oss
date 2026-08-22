@@ -97,4 +97,4 @@ docker restart labforge-nginx
 
 !!! note "Я что-то изменил в конфигурационных файлах, что делать?"
 
-    Выполните еще раз `make deploy-prod`.
+    Выполните еще раз `make deploy-prod`. И через некоторое время рекомендуется перезапустить nginx - `docker restart labforge-nginx`
