@@ -138,7 +138,7 @@ allocateNode (env, msg) m@(JobserviceMessageMeta { .. }) = do
                             let networks = renameNetworks namesMap templateNetworks (\n -> SDNNetwork {configNetworkZone=sdnZone, configNetworkVLANAware=Nothing, configNetworkSubnets=[], configNetworkName=n}) (\oldN n -> BridgeNetwork {configNetworkComments=T.unpack $ T.pack oldN <> "@" <> templateTitle <> "|" <> userTag, configNetworkAutostart=True, configNetworkName=n})
                             let replacedNetworksVM = map (renameNet namesMap) templateVMs
                             -- generating tags nodeName-VMID now
-                            let linksMap = M.fromList $ map (\(v, vmid) -> (configVMName v, T.unpack nodeName <> "-" <> show vmid)) $ zip replacedNetworksVM vmids
+                            let linksMap = M.fromList $ map (\(v, vmid) -> (configVMName v, show vmid)) $ zip replacedNetworksVM vmids
                             let configuredVMs = zipWith (\d v -> v {configVMID = Just d, configVMTags = vmTags}) vmids replacedNetworksVM
                             templates'' <- withTokenVariable $ \t -> do
                               defaultRetryClientC deploymentEnv (D.getTemplatesListByNames (map (T.pack . configVMParentTemplate) configuredVMs) (BearerWrapper t))
