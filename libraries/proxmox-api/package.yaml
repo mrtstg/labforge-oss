@@ -59,6 +59,7 @@ library:
     - Proxmox.Models.VMConfig
     - Proxmox.Models.VM
     - Proxmox.Models.Snapshot
+    - Proxmox.Models.Cluster
     - Proxmox.Schema
     - Proxmox.Retry
     - Proxmox.Utils.Parsers

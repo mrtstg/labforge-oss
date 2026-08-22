@@ -39,12 +39,12 @@ library
       Proxmox.Models.VMConfig
       Proxmox.Models.VM
       Proxmox.Models.Snapshot
+      Proxmox.Models.Cluster
       Proxmox.Schema
       Proxmox.Retry
       Proxmox.Utils.Parsers
       Parsers.Network
   other-modules:
-      Proxmox.Models.Cluster
       Paths_proxmox_api
   autogen-modules:
       Paths_proxmox_api
