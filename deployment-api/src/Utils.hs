@@ -17,15 +17,9 @@ along with this program; if not, see <http://www.gnu.org/licenses>. -}
 {-# LANGUAGE TemplateHaskell   #-}
 module Utils where
 
-import           Auth
-import           Config
-import           Data.Map                            (Map)
-import qualified Data.Map                            as M
+import           Data.Map   (Map)
+import qualified Data.Map   as M
 import           Data.Maybe
-import           Data.Text                           (Text)
-import           Database
-import           Database.Persist
-import           Proxmox.Deploy.Models.Config.VM
 
 leaveLastItem :: (Eq a) => a -> [a] -> [a]
 leaveLastItem item = helper [] where
@@ -56,10 +50,10 @@ suggestNetworkBridges l namesMap = helper M.empty l where
           []      -> helper acc devices
           (mac:_) -> helper (M.insert mac newBridge acc) devices
 
-findVMByPort :: Text -> AppT (Maybe (ConfigVM, DeploymentInstanceData))
-findVMByPort port = do
-  related <- findInstanceByVMPort port
-  pure $ fmap (\(Entity _ instanceData, vm) -> (vm, instanceData)) related
+--findVMByPort :: Text -> AppT (Maybe (ConfigVM, DeploymentInstanceData))
+--findVMByPort port = do
+--  related <- findInstanceByVMPort port
+--  pure $ fmap (\(Entity _ instanceData, vm) -> (vm, instanceData)) related
 
 iterLetters :: Int -> [String]
 iterLetters 1 = map (:[]) ['a'..'z']

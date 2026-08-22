@@ -798,7 +798,7 @@ getVMPortPower vmPort (BearerWrapper token) = do
     (Just uid) -> do
       hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
-        ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
+        ~(Just (Entity _ instanceData, vmConfig)) <- findInstanceByVMPort vmPort
         let vmid = fromJust $ configVMID vmConfig
         case deploymentInstanceDataDeployConfig instanceData of
           Nothing -> sendJSONError err400 (JSONError "" "" Null)
@@ -828,7 +828,7 @@ switchVMPortPower vmPort (BearerWrapper token) = do
     (Just uid) -> do
       hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
-        ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
+        ~(Just (Entity _ instanceData, vmConfig)) <- findInstanceByVMPort vmPort
         let vmid = fromJust $ configVMID vmConfig
         case deploymentInstanceDataDeployConfig instanceData of
           Nothing -> sendJSONError err400 (JSONError "" "" Null)
@@ -875,7 +875,7 @@ getVMPortNetworks vmPort (BearerWrapper token) = do
     (Just uid) -> do
       hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "noAccess" "" Null) else do
-        ~(Just (vmConfig, instanceData)) <- findVMByPort vmPort
+        ~(Just (Entity _ instanceData, vmConfig)) <- findInstanceByVMPort vmPort
         let vmid = fromJust $ configVMID vmConfig
         case deploymentInstanceDataDeployConfig instanceData of
           Nothing -> sendJSONError err400 (JSONError "" "" Null)
