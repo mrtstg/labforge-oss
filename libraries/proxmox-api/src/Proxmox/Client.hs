@@ -41,6 +41,8 @@ module Proxmox.Client
   , applyNodeNetworks
   , deleteNodeInterface
   , createNodeInterface
+  , getClusterResources
+  , getClusterVMs -- TODO: add more cluster filters
   ) where
 
 
@@ -59,6 +61,7 @@ import           Network.HTTP.Client       (defaultManagerSettings, newManager,
                                             responseStatus)
 import           Network.HTTP.Types        (Status (..))
 import           Proxmox.Models
+import           Proxmox.Models.Cluster
 import           Proxmox.Models.Network
 import           Proxmox.Models.Node
 import           Proxmox.Models.SDNNetwork
@@ -102,7 +105,11 @@ getVersion
   :<|> asyncPutVMConfig
   :<|> applyNodeNetworks
   :<|> deleteNodeInterface
-  :<|> createNodeInterface = client api
+  :<|> createNodeInterface
+  :<|> getClusterResources = client api
+
+getClusterVMs :: ClientM [ClusterResource]
+getClusterVMs = getClusterResources (Just "vm") >>= \(ProxmoxResponse v _) -> pure v
 
 getActiveNodeTasks :: Text -> Maybe Text -> Maybe Int -> ClientM [ProxmoxTask]
 getActiveNodeTasks node tasktype limit = do

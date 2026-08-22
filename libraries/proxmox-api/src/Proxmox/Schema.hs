@@ -16,6 +16,7 @@ import qualified Data.Map                   as M
 import           Data.Text
 import           Network.HTTP.Conduit
 import           Proxmox.Models
+import           Proxmox.Models.Cluster
 import           Proxmox.Models.Network     (ProxmoxNetwork,
                                              ProxmoxNetworkCreate,
                                              ProxmoxNetworkFilter,
@@ -72,6 +73,7 @@ type ProxmoxAPI = "version" :> Get '[JSON] (ProxmoxResponse ProxmoxVersion)
   :<|> "nodes" :> NodeNameCapture :> "network" :> Put '[JSON] (ProxmoxResponse String)
   :<|> "nodes" :> NodeNameCapture :> "network" :> Capture "ifaceName" Text :> Delete '[JSON] (ProxmoxResponse ())
   :<|> "nodes" :> NodeNameCapture :> "network" :> ReqBody '[JSON] ProxmoxNetworkCreate :> Post '[JSON] (ProxmoxResponse ())
+  :<|> "cluster" :> "resources" :> QueryParam "type" Text :> Get '[JSON] (ProxmoxResponse [ClusterResource])
 
 runProxmoxState :: ProxmoxState -> ProxmoxM a -> IO a
 runProxmoxState = flip runReaderT
