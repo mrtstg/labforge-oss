@@ -21,6 +21,7 @@ REALM_ROLES=(
     "deployment-alloc"
     "deployment-instance-admin"
     "jobservice-task-admin"
+    "websockify-service"
 )
 REALM_CLIENTS=(
     "cluster-manager"
@@ -31,6 +32,7 @@ REALM_CLIENTS=(
     "auth-service"
     "jobservice"
     "jobservice-api"
+    "websockify"
 )
 USERS_ROLES=(
     "validate-users,cluster-admin"
@@ -41,6 +43,7 @@ USERS_ROLES=(
     "validate-users,role-read,group-read,role-manage,user-read,realm-management.manage-realm,realm-management.view-realm,realm-management.query-realms,realm-management.realm-admin"
     "deployment-admin,image-view,deployment-alloc,deployment-instance-admin,jobservice-send,user-read,cluster-admin,jobservice-task-admin"
     "jobservice-send,validate-users,jobservice-task-admin,user-read"
+    "websockify-service"
 )
 
 cd /opt/keycloak/bin/
