@@ -40,6 +40,7 @@ services:
     hostname: websockify
     restart: unless-stopped
     env_file:
+      - ../docker.env
       - ../websockify.env
   auth-service:
     profiles: ['app']
