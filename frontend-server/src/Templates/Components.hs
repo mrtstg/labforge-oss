@@ -427,7 +427,7 @@ genericDeploymentForm = let
       <div .control>
         <label .label> Имя сети
         <input .input type="text" x-model="input">
-      <button type=button .button.is-fullwidth @click="if (input.length > 0 && !networks.map(x => x.name).includes(input)) { networks.push({'type': 'sdn', 'name': input, 'zone': ''}); input = '' }"}> Добавить
+      <button type=button .button.is-fullwidth @click="if (input.length > 0 && !networks.map(x => x.name).includes(input)) { networks.push({'type': 'sdn', 'name': input}); input = '' }"}> Добавить
       <template x-for="(net, netIndex) in networks" *{netIndexKey}>
         <div .is-flex.is-flex-direction-row.is-align-items-center.is-fullwidth>
           <p .pr-2 x-text="net.name">
