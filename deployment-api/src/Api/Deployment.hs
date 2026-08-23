@@ -28,7 +28,6 @@ import           Api.BaseUrl
 import           Api.Keycloak.Models
 import           Api.Keycloak.Models.Introspect
 import           Api.Keycloak.Models.User
-import           Api.Keycloak.Token                       (withTokenVariable)
 import           Api.Keycloak.Utils
 import           Api.Retry
 import           Api.Utils
@@ -74,6 +73,7 @@ import           Proxmox.Deploy.Models.Config.Template
 import           Proxmox.Deploy.Models.Config.VM
 import           Proxmox.Deploy.Ssl
 import           Proxmox.Models
+import           Proxmox.Models.Cluster
 import           Proxmox.Models.Network
 import           Proxmox.Models.Snapshot
 import           Proxmox.Models.VM
@@ -779,15 +779,16 @@ getDeploymentInstance instanceId (BearerWrapper token) = do
               }
             case deploymentInstanceDataDeployConfig of
               Nothing -> pure base
-              (Just d@(DeployConfig { deployVMs = vms, deployParameters = DeployParams { deployNodeName = nodeName, deployUrl = nodeUrl } })) -> do
+              (Just d@(DeployConfig { deployVMs = vms, deployParameters = DeployParams { deployUrl = nodeUrl } })) -> do
                 url <- liftIO $ parseBaseUrl (T.unpack nodeUrl)
                 mgr <- liftIO $ createProxmoxManager d
                 let state = ProxmoxState url mgr
-                vmMap' <- defaultRetryClient' state $ P.getNodeVMsMap nodeName
-                case vmMap' of
+                clusterVM' <- defaultRetryClient' state $ P.getClusterVMs
+                case clusterVM' of
                   (Left _) -> pure base
-                  (Right vmMap) -> do
-                    let definedVMs = M.fromList $ map (\(p, n) -> (T.pack n, (== VMRunning) . vmStatus $ fromJust p)) $ filter (\(p, _) -> isJust p) $ map (\v-> (M.lookup (fromJust $ configVMID v) vmMap, configVMName v)) $ filter (isJust . configVMID) vms
+                  (Right clusterVM) -> do
+                    let vmids = mapMaybe configVMID vms
+                    let definedVMs = M.fromList $ map (\q -> (fromMaybe "-" (resourceName q), resourceStatus q == VMRunning)) $ filter ((`elem` vmids) . resourceVMID) clusterVM
                     pure $ base { instanceVMPower = definedVMs }
 
 getVMPortPower :: Text -> BearerWrapper -> AppT PowerState
@@ -802,23 +803,23 @@ getVMPortPower vmPort (BearerWrapper token) = do
         let vmid = fromJust $ configVMID vmConfig
         case deploymentInstanceDataDeployConfig instanceData of
           Nothing -> sendJSONError err400 (JSONError "" "" Null)
-          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { deployUrl = url', deployNodeName = nodeName } })) -> do
+          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { deployUrl = url' } })) -> do
             mgr <- liftIO $ createProxmoxManager deployConfig
             url <- liftIO $ parseBaseUrl (T.unpack url')
             let state = ProxmoxState url mgr
-            power' <- defaultRetryClient' state $ P.getVMPower nodeName vmid
-            case power' of
+            vms' <- defaultRetryClient' state P.getClusterVMs
+            case vms' of
               (Left e) -> do
                 $(logError) $ "Proxmox error response: " <> (T.pack . show) e
                 sendJSONError err500 (JSONError "internalError" "" Null)
-              (Right (ProxmoxResponse resp _)) -> do
-                case resp of
-                  Nothing  -> sendJSONError err400 (JSONError "" "" Null)
-                  (Just (ProxmoxVMStatusWrapper VMRunning)) -> pure (PowerState True)
-                  (Just (ProxmoxVMStatusWrapper VMStopped)) -> pure (PowerState False)
-                  (Just (ProxmoxVMStatusWrapper (VMUnknown vmStatus))) -> do
+              (Right vms) -> do
+                case findQEMUResourceById vmid vms of
+                  (Just (QEMUResource { resourceStatus = VMRunning })) -> pure (PowerState True)
+                  (Just (QEMUResource { resourceStatus = VMStopped })) -> pure (PowerState False)
+                  (Just (QEMUResource { resourceStatus = VMUnknown vmStatus })) -> do
                     $(logError) $ "Got unknown VM power status: " <> vmStatus
                     pure (PowerState False)
+                  _anyOther  -> sendJSONError err400 (JSONError "" "" Null)
 
 switchVMPortPower :: Text -> BearerWrapper -> AppT PowerState
 switchVMPortPower vmPort (BearerWrapper token) = do
@@ -832,25 +833,25 @@ switchVMPortPower vmPort (BearerWrapper token) = do
         let vmid = fromJust $ configVMID vmConfig
         case deploymentInstanceDataDeployConfig instanceData of
           Nothing -> sendJSONError err400 (JSONError "" "" Null)
-          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { deployUrl = url', deployNodeName = nodeName } })) -> do
+          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { deployUrl = url' } })) -> do
             mgr <- liftIO $ createProxmoxManager deployConfig
             url <- liftIO $ parseBaseUrl (T.unpack url')
             let state = ProxmoxState url mgr
-            power' <- defaultRetryClient' state $ P.getVMPower nodeName vmid
-            case power' of
+            vms <- defaultRetryClient' state P.getClusterVMs
+            case vms of
               (Left e) -> do
                 $(logError) $ "Proxmox error response: " <> (T.pack . show) e
                 sendJSONError err500 (JSONError "internalError" "" Null)
-              (Right (ProxmoxResponse resp _)) -> do
-                case resp of
-                  Nothing  -> sendJSONError err400 (JSONError "" "" Null)
-                  (Just (ProxmoxVMStatusWrapper vmPower)) -> do
+              (Right vms') -> do
+                case findQEMUResourceById vmid vms' of
+                  (Just (QEMUResource { resourceStatus = vmPower, .. })) -> do
                     lockExists <- getStringValue ("powerlock-" <> T.unpack vmPort) <&> isJust
                     if lockExists then ($(logInfo) $ "Powerlock on " <> vmPort) >> pure (PowerState $ vmPower == VMRunning) else do
                       _ <- cacheValue' ("powerlock-" <> T.unpack vmPort) "1" (Just 10)
                       let f = if vmPower == VMRunning then P.stopVM else P.startVM
-                      _ <- defaultRetryClient' state $ f nodeName vmid
+                      _ <- defaultRetryClient' state $ f resourceNode vmid
                       pure (PowerState (vmPower /= VMRunning))
+                  _anyOther  -> sendJSONError err400 (JSONError "" "" Null)
 
 getUndeployedVMAmount :: BearerWrapper -> AppT (M.Map Text Int)
 getUndeployedVMAmount (BearerWrapper token) = let
@@ -879,17 +880,24 @@ getVMPortNetworks vmPort (BearerWrapper token) = do
         let vmid = fromJust $ configVMID vmConfig
         case deploymentInstanceDataDeployConfig instanceData of
           Nothing -> sendJSONError err400 (JSONError "" "" Null)
-          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { deployUrl = url', deployNodeName = nodeName } })) -> do
+          (Just deployConfig@(DeployConfig { deployParameters = DeployParams { deployUrl = url' } })) -> do
             mgr <- liftIO $ createProxmoxManager deployConfig
             url <- liftIO $ parseBaseUrl (T.unpack url')
             let state = ProxmoxState url mgr
-            vmConfig' <- defaultRetryClient' state $ P.getVMConfig nodeName vmid
-            case vmConfig' of
-              (Right (ProxmoxResponse (Just vmCfg) _)) -> do
-                let devicesMap = vmNetworkDevices vmCfg
-                let reversedNames = (M.fromList . map (\(a, b) -> (b, a)) . M.toList) $ deploymentInstanceDataNetworkNamesMap instanceData
-                let netMap = suggestNetworkBridges (map snd (M.toList devicesMap)) reversedNames
-                pure netMap
+            vms' <- defaultRetryClient' state P.getClusterVMs
+            case vms' of
+              (Right vms) -> do
+                case findQEMUResourceById vmid vms of
+                  (Just (QEMUResource { .. })) -> do
+                    cfg <- defaultRetryClient' state $ P.getVMConfig resourceNode resourceVMID
+                    case cfg of
+                      (Right (ProxmoxResponse (Just vmCfg) _)) -> do
+                        let devicesMap = vmNetworkDevices vmCfg
+                        let reversedNames = (M.fromList . map (\(a, b) -> (b, a)) . M.toList) $ deploymentInstanceDataNetworkNamesMap instanceData
+                        let netMap = suggestNetworkBridges (map snd (M.toList devicesMap)) reversedNames
+                        pure netMap
+                      _anyOther -> sendJSONError err404 (JSONError "notFound" "" Null)
+                  _anyOther -> sendJSONError err500 (JSONError "internalError" "" Null)
               _ -> sendJSONError err500 (JSONError "internalError" "" Null)
 
 vmPortAccessCheck :: Text -> BearerWrapper -> AppT ()
@@ -920,19 +928,29 @@ getVMPortSnapshots vmPort = do
   ~(Just (DeploymentTemplateData { deploymentTemplateDataSnapshotPolicy = p@DeploymentSnapshotPolicy { .. }, .. })) <- runDB $ get deploymentInstanceDataParent
   case deploymentInstanceDataDeployConfig of
     Nothing -> pure (p, d, [], vmData)
-    (Just cfg@(DeployConfig { deployParameters = DeployParams { deployUrl=deployUrl, deployNodeName=deployNodeName } })) -> do
+    (Just cfg@(DeployConfig { deployParameters = DeployParams { deployUrl=deployUrl } })) -> do
       mgr <- liftIO $ createProxmoxManager cfg
       nodeUrl' <- liftIO $ tryParseUrl (T.unpack deployUrl)
       case nodeUrl' of
         (Left _) -> sendJSONError err500 (JSONError "serverError" "Failed to parse node URL" Null)
         (Right nodeUrl) -> do
           let state = ProxmoxState nodeUrl mgr
-          snapshots' <- defaultRetryClientC' state $ P.getVMSnapshots deployNodeName (fromMaybe 0 $ configVMID vmData)
-          case snapshots' of
+          vms' <- defaultRetryClientC' state P.getClusterVMs
+          case vms' of
             (Left e) -> do
               $(logError) $ T.pack $ "Error getting snapshots: " <> show e
-              sendJSONError err500 (JSONError "Internal error" "Failed to get snapshots" Null)
-            (Right (ProxmoxResponse { proxmoxData = snapshots })) -> pure (p, d, snapshots, vmData)
+              sendJSONError err500 (JSONError "Internal error" "Failed to get VM list" Null)
+            (Right vms) -> do
+              let vmid = fromMaybe 0 $ configVMID vmData
+              case findQEMUResourceById vmid vms of
+                (Just (QEMUResource { .. })) -> do
+                  snapshots' <- defaultRetryClientC' state $ P.getVMSnapshots resourceNode vmid
+                  case snapshots' of
+                    (Left e) -> do
+                      $(logError) $ T.pack $ "Error getting snapshots: " <> show e
+                      sendJSONError err500 (JSONError "Internal error" "Failed to get snapshots" Null)
+                    (Right (ProxmoxResponse { proxmoxData = snapshots })) -> pure (p, d, snapshots, vmData)
+                _anyOther -> sendJSONError err500 (JSONError "Internal error" "Failed to get VM" Null)
 
 listVMPortSnapshots :: Text -> BearerWrapper -> AppT [ProxmoxSnapshot]
 listVMPortSnapshots vmPort t@(BearerWrapper token) = let
