@@ -16,7 +16,7 @@ import           Proxmox.Utils.Parsers
 
 findQEMUTemplateById :: Int -> [ClusterResource] -> Maybe ClusterResource
 findQEMUTemplateById vmid resources = do
-  case findQEMUTemplateById vmid resources of
+  case findQEMUResourceById vmid resources of
     (Just r@(QEMUResource { resourceTemplate = True })) -> Just r
     (Just _)                                            -> Nothing
     Nothing                                             -> Nothing
