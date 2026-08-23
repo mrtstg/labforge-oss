@@ -147,7 +147,7 @@ lookupVM vmid (BearerWrapper token) = do
           $(logError) $ "Failure response during getting cluster VMs: " <> (T.pack . show) e
           sendJSONError err500 (JSONError "noAvailableNodes" "Error response from node" Null)
         (Right resources) -> do
-          case find (\x -> isQEMUResource x && ((==) VMRunning . resourceStatus) x && ((==) (T.pack $ "qemu/" <> show vmid) . resourceId) x)  resources of
+          case find (\x -> isQEMUResource x && ((==) VMRunning . resourceStatus) x && ((==) vmid . resourceVMID) x)  resources of
             (Just (QEMUResource { .. })) -> pure (T.unpack resourceNode)
             _anyOther -> sendJSONError err404 (JSONError "notFound" "VM not found" Null)
 
