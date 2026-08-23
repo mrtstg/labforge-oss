@@ -227,22 +227,23 @@ tasksPage pageN t = do
               <td> #{ checkUser jobserviceTaskMeta }
               <td>
                 $case jobserviceTaskMeta
-                  $of Nothing
-                    -
                   $of (Just (JobserviceMessageMeta { .. }))
                     <a href=/deployment/#{templateId}/instances> #{checkTemplate jobserviceTaskMeta}
+                  $of _anyOther
+                    -
               <td>
                 $case jobserviceTaskMeta
-                  $of Nothing
-                    -
                   $of (Just (JobserviceMessageMeta { .. }))
                     <a href="/instance/#{deploymentId}"> Открыть стенд
+                  $of _anyOther
+                    -
               <td>
                 <a href=/tasks/#{jobserviceTaskKey}/cancel .button.is-outlined.is-warning> Прервать
               <td>
-                $case jobserviceTaskGroup
-                  $of (Just group)
-                    <a href=/tasks/group/#{group}/cancel .button.is-outlined.is-danger> Удалить группу
+                $if isJust jobserviceTaskGroup
+                  $case jobserviceTaskGroup
+                    $of (Just group)
+                      <a href=/tasks/group/#{group}/cancel .button.is-outlined.is-danger> Удалить группу
     <nav .pagination.is-centered>
       <ul .pagination-list>
         $if page /= 1
