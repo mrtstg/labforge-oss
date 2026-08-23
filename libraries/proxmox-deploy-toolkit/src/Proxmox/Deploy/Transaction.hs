@@ -126,13 +126,13 @@ getVMID vmName (TransactionData vmIDMap) (DeployConfig {deployVMs=vms }) = do
       (vm:_) -> configVMID vm
 
 -- qmconfig
-waitTaskCompletion :: Int -> Int -> String -> Text -> StatefulTransactionT (Maybe Bool)
-waitTaskCompletion maxTries ts taskId taskType = helper 0 where
+waitTaskCompletion :: Text -> Int -> Int -> String -> Text -> StatefulTransactionT (Maybe Bool)
+waitTaskCompletion nodeName maxTries ts taskId taskType = helper 0 where
   helper :: Int -> StatefulTransactionT (Maybe Bool)
   helper n = do
     $(logDebug) $ "Waiting for task " <> (T.pack taskId) <> ", attempt " <> (T.pack . show) n
     if n >= maxTries then pure Nothing else do
-      (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+      (TransactionState { .. }) <- get
       tasks' <- defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName (Just 1) Nothing (Just ts) Nothing (Just ArchiveTasks) Nothing (Just taskType) Nothing Nothing
       case tasks' of
         (Left e) -> do
@@ -161,33 +161,39 @@ waitTaskCompletion maxTries ts taskId taskType = helper 0 where
 --TODO: max recursion depth
 powerVMWrapper :: Int -> Int -> StatefulTransactionT ()
 powerVMWrapper ts vmid = do
-  (TransactionState { transactionDeployConfig = (DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
-  vmState <- defaultRetryClient' transactionProxmoxState $ getVMPower nodeName vmid
-  case vmState of
-    (Left e) -> do
-      $(logError) $ "VM power request failure: " <> (T.pack . show) e
-      powerVMWrapper ts vmid
-    (Right (ProxmoxResponse {proxmoxData=Just (ProxmoxVMStatusWrapper Proxmox.Models.VM.VMRunning)})) -> do
-      $(logWarn) "VM is already running"
-      pure ()
+  (TransactionState {..}) <- get
+  vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+  case findQEMUResourceById vmid vms of
+    (Just (QEMUResource { .. })) -> do
+      vmState <- defaultRetryClient' transactionProxmoxState $ getVMPower resourceNode vmid
+      case vmState of
+        (Left e) -> do
+          $(logError) $ "VM power request failure: " <> (T.pack . show) e
+          powerVMWrapper ts vmid
+        (Right (ProxmoxResponse {proxmoxData=Just (ProxmoxVMStatusWrapper Proxmox.Models.VM.VMRunning)})) -> do
+          $(logWarn) "VM is already running"
+          pure ()
+        _anyOther -> do
+          powerTasks <- defaultRetryClient' transactionProxmoxState $ getNodeTasks' resourceNode Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) Nothing (Just "qmstart") Nothing (Just vmid)
+          case powerTasks of
+            (Left e) -> $(logError) . T.pack $ "Power task check failure: " <> show e
+            (Right (ProxmoxResponse {proxmoxData=tasks})) -> do
+              if any ((/= Just "OK") . taskStatus) tasks then do
+                $(logWarn) "Found error power task. Sleeping..."
+                liftIO $ threadDelay 10_000_000
+                nts <- getUnixIntTime
+                _ <- defaultRetryClient' transactionProxmoxState $ startVM resourceNode vmid
+                liftIO $ threadDelay 10_000_000
+                powerVMWrapper nts vmid
+              else do
+                liftIO $ threadDelay 3_000_000
+                nts <- getUnixIntTime
+                _ <- defaultRetryClient' transactionProxmoxState $ startVM resourceNode vmid
+                liftIO $ threadDelay 3_000_000
+                powerVMWrapper nts vmid
     _anyOther -> do
-      powerTasks <- defaultRetryClient' transactionProxmoxState $ getNodeTasks' nodeName Nothing Nothing (Just ts) Nothing (Just ArchiveTasks) Nothing (Just "qmstart") Nothing (Just vmid)
-      case powerTasks of
-        (Left e) -> $(logError) . T.pack $ "Power task check failure: " <> show e
-        (Right (ProxmoxResponse {proxmoxData=tasks})) -> do
-          if any ((/= Just "OK") . taskStatus) tasks then do
-            $(logWarn) "Found error power task. Sleeping..."
-            liftIO $ threadDelay 10_000_000
-            nts <- getUnixIntTime
-            _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
-            liftIO $ threadDelay 10_000_000
-            powerVMWrapper nts vmid
-          else do
-            liftIO $ threadDelay 3_000_000
-            nts <- getUnixIntTime
-            _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
-            liftIO $ threadDelay 3_000_000
-            powerVMWrapper nts vmid
+      $(logError) $ "Failed to get node location for VM " <> (T.pack . show) vmid
+      pure ()
 
 applySDNWrapper :: ClientM a -> StatefulTransactionT ()
 applySDNWrapper reloadFunction = do
@@ -455,7 +461,7 @@ executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneN
       case findQEMUResourceById vmid vms of
         (Just _) -> $(logWarn) $ T.pack $ "VM #" <> show vmid <> " already exists!"
         Nothing -> do
-          case findQEMUTemplateById vmid vms of
+          case findQEMUTemplateById proxmoxVMCloneVMID vms of
             (Just (QEMUResource { resourceNode = templateNodeName })) -> do
               let fullParams = params { proxmoxVMCloneNewID = vmid }
               cloneRes' <- defaultRetryClient' transactionProxmoxState $ cloneVM templateNodeName proxmoxVMCloneVMID fullParams
@@ -515,7 +521,7 @@ executeTransactionAction (ConfigureVM vmName vmConfig) = do
             (Just p) -> do
               callTime <- getUnixIntTime
               (ProxmoxResponse { proxmoxData = taskId }) <- defaultRetryClient' transactionProxmoxState (asyncPutVMConfig resourceNode vmid p) >>= defaultClientErrorWrapper
-              r <- waitTaskCompletion 60 callTime taskId "qmconfig"
+              r <- waitTaskCompletion resourceNode 60 callTime taskId "qmconfig"
               case r of
                 (Just True)  -> $(logInfo) "Successfully configured VM"
                 (Just False) -> throwError (ConfigurationError vmName)
@@ -769,67 +775,78 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
   helper ((NetworksRemoved vmName):ts) acc = helper ts (RemoveNetworks vmName:acc)
   helper ((SnapshotExists vmParams snapshotParams@(ProxmoxSnapshotCreate { snapshotCreateName = snapName })):ts) acc = do
     let vmName = configVMName vmParams
-    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = deployNodeName }}),  ..}) <- get
+    (TransactionState { transactionDeployConfig = deployConfig, ..}) <- get
     data' <- transactionDataGetF
     case getVMID vmName data' deployConfig of
       Nothing -> helper ts (MakeSnapshot vmName snapshotParams:acc)
       (Just vmID) -> do
-        (ProxmoxResponse { proxmoxData = snapshots }) <- (defaultRetryClient' transactionProxmoxState) (getVMSnapshots deployNodeName vmID) >>= defaultClientErrorWrapper
-        if any ((==) snapName . snapshotName) snapshots then do
-          $(logInfo) $ "Found snapshot " <> snapName <> " of VM " <> T.pack vmName
-          helper ts acc
-        else do
-          helper ts (MakeSnapshot vmName snapshotParams:acc)
+        vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+        case findQEMUResourceById vmID vms of
+          (Just (QEMUResource { .. })) -> do
+            (ProxmoxResponse { proxmoxData = snapshots }) <- defaultRetryClient' transactionProxmoxState (getVMSnapshots resourceNode vmID) >>= defaultClientErrorWrapper
+            if any ((==) snapName . snapshotName) snapshots then do
+              $(logInfo) $ "Found snapshot " <> snapName <> " of VM " <> T.pack vmName
+              helper ts acc
+            else do
+              helper ts (MakeSnapshot vmName snapshotParams:acc)
+          _anyOther -> helper ts (MakeSnapshot vmName snapshotParams:acc)
   helper ((SnapshotNotExists vmParams snapshotParams@(ProxmoxSnapshotCreate { snapshotCreateName = snapName })):ts) acc = do
     let vmName = configVMName vmParams
-    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = deployNodeName }}),  ..}) <- get
+    (TransactionState { transactionDeployConfig = deployConfig, ..}) <- get
     data' <- transactionDataGetF
     case getVMID vmName data' deployConfig of
       Nothing -> helper ts (DeleteSnapshot vmName snapshotParams:acc)
       (Just vmID) -> do
-        (ProxmoxResponse { proxmoxData = snapshots }) <- (defaultRetryClient' transactionProxmoxState) (getVMSnapshots deployNodeName vmID) >>= defaultClientErrorWrapper
-        if any ((==) snapName . snapshotName) snapshots then do
-          $(logInfo) $ "Found snapshot " <> snapName <> " of VM " <> T.pack vmName
-          helper ts (DeleteSnapshot vmName snapshotParams:acc)
-        else do
-          helper ts acc
+        vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+        case findQEMUResourceById vmID vms of
+          (Just (QEMUResource { .. })) -> do
+            (ProxmoxResponse { proxmoxData = snapshots }) <- defaultRetryClient' transactionProxmoxState (getVMSnapshots resourceNode vmID) >>= defaultClientErrorWrapper
+            if any ((==) snapName . snapshotName) snapshots then do
+              $(logInfo) $ "Found snapshot " <> snapName <> " of VM " <> T.pack vmName
+              helper ts (DeleteSnapshot vmName snapshotParams:acc)
+            else helper ts acc
+          _anyOther -> helper ts (DeleteSnapshot vmName snapshotParams:acc)
   helper ((VMRollbacked vmParams targetSnapshot):ts) acc = do
     let vmName = configVMName vmParams
     helper ts (RollbackVM vmName targetSnapshot:acc)
   helper ((NetworkConnected vmName networkConfig@(ConfigVMNetwork { .. })):ts) acc = do
-    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployNetworks = configNetworks, deployParameters = DeployParams { deployNodeName = deployNodeName }}),  ..}) <- get
+    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployNetworks = configNetworks}),  ..}) <- get
     let networkNames = map configNetworkName configNetworks
-    if configVMNetworkName `notElem` networkNames then throwError (NetworkIsNotDeclared $ configVMNetworkName) else do
+    if configVMNetworkName `notElem` networkNames then throwError (NetworkIsNotDeclared configVMNetworkName) else do
       data' <- transactionDataGetF
       case getVMID vmName data' deployConfig of
         Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
         (Just vmID) -> do
-          (ProxmoxResponse { proxmoxData = vmConfig'}) <- (defaultRetryClient' transactionProxmoxState) (getVMConfig deployNodeName vmID) >>= defaultClientErrorWrapper
-          case vmConfig' of
-            Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
-            (Just vmConfig) -> do
-              let bridges = vmNetworkBridges vmConfig
-              let networkToRemove = (map fst . filter ((==) configVMNetworkName . snd) . M.toList) bridges
-              case configVMNetworkNumber of
-                Nothing -> helper ts ([AttachNetwork vmName networkConfig] ++ map (DetachNetwork vmName) networkToRemove ++ acc)
-                (Just vmNumber) -> do
-                  case M.lookup vmNumber bridges of
+          vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+          case findQEMUResourceById vmID vms of
+            (Just (QEMUResource { .. })) -> do
+              (ProxmoxResponse { proxmoxData = vmConfig'}) <- defaultRetryClient' transactionProxmoxState (getVMConfig resourceNode vmID) >>= defaultClientErrorWrapper
+              case vmConfig' of
+                Nothing -> helper ts (AttachNetwork vmName networkConfig:acc)
+                (Just vmConfig) -> do
+                  let bridges = vmNetworkBridges vmConfig
+                  let networkToRemove = (map fst . filter ((==) configVMNetworkName . snd) . M.toList) bridges
+                  case configVMNetworkNumber of
                     Nothing -> helper ts ([AttachNetwork vmName networkConfig] ++ map (DetachNetwork vmName) networkToRemove ++ acc)
-                    (Just bridgeName) -> if bridgeName == configVMNetworkName then
-                      helper ts acc
-                    else helper ts ([AttachNetwork vmName networkConfig] ++ map (DetachNetwork vmName) networkToRemove ++ acc)
+                    (Just vmNumber) -> do
+                      case M.lookup vmNumber bridges of
+                        Nothing -> helper ts ([AttachNetwork vmName networkConfig] ++ map (DetachNetwork vmName) networkToRemove ++ acc)
+                        (Just bridgeName) -> if bridgeName == configVMNetworkName then
+                          helper ts acc
+                        else helper ts ([AttachNetwork vmName networkConfig] ++ map (DetachNetwork vmName) networkToRemove ++ acc)
+            _anyOther -> helper ts acc
   helper ((VMNotExists vm):ts) acc = do
     let vmName = configVMName vm
-    (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = deployNodeName }}),  ..}) <- get
+    (TransactionState { transactionDeployConfig = deployConfig, ..}) <- get
     data' <- transactionDataGetF
     case getVMID vmName data' deployConfig of
       Nothing -> helper ts acc
       (Just vmID) -> do
-        (ProxmoxResponse { proxmoxData = vmConfig'}) <- (defaultRetryClient' transactionProxmoxState) (getVMConfig deployNodeName vmID) >>= defaultClientErrorWrapper
-        case vmConfig' of
-          Nothing -> helper ts acc
-          _       -> do
+        vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+        case findQEMUResourceById vmID vms of
+          (Just (QEMUResource {})) -> do
             helper ts (UnassignVMID vmName:DestroyVM vmName:acc)
+          _anyOther -> helper ts acc
   helper ((TS.VMStopped vm):ts) acc = do
     actions <- genericPowerFunction VM.VMStopped vm
     helper ts (actions ++ acc)
@@ -842,13 +859,17 @@ genericPowerFunction targetStatus vmConfig = do
   let vmName = configVMName vmConfig
   let vmDelay = configVMDelay vmConfig
   let vmRunning = configVMRunning vmConfig
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = deployNodeName }}), ..}) <- get
+  (TransactionState { transactionDeployConfig = deployConfig, ..}) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> pure [TransactionDelayAfter vmDelay (TS.StartVM vmName) | transactionTarget == Deploy && vmRunning]
     (Just vmID) -> do
-      (ProxmoxResponse { proxmoxData = powerRes }) <- (defaultRetryClient' transactionProxmoxState) (getVMPower deployNodeName vmID) >>= defaultClientErrorWrapper
-      case powerRes of
-        Nothing -> pure [TransactionDelayAfter vmDelay (TS.StartVM vmName) | transactionTarget == Deploy && vmRunning]
-        (Just (ProxmoxVMStatusWrapper vmStatus)) -> do
-          pure [TransactionDelayAfter vmDelay $ if vmStatus == VM.VMRunning then TS.StopVM vmName else TS.StartVM vmName | vmStatus /= targetStatus]
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmID vms of
+        (Just (QEMUResource { .. })) -> do
+          (ProxmoxResponse { proxmoxData = powerRes }) <- (defaultRetryClient' transactionProxmoxState) (getVMPower resourceNode vmID) >>= defaultClientErrorWrapper
+          case powerRes of
+            Nothing -> pure [TransactionDelayAfter vmDelay (TS.StartVM vmName) | transactionTarget == Deploy && vmRunning]
+            (Just (ProxmoxVMStatusWrapper vmStatus)) -> do
+              pure [TransactionDelayAfter vmDelay $ if vmStatus == VM.VMRunning then TS.StopVM vmName else TS.StartVM vmName | vmStatus /= targetStatus]
+        _anyOther -> pure []
