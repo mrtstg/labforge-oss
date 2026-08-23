@@ -1,11 +1,11 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.39.6.
 --
 -- see: https://github.com/sol/hpack
 
 name:           proxmox-deploy-toolkit
-version:        0.1.3.8
+version:        0.1.3.9
 description:    Please see the README on GitHub at <https://github.com/learnew2/proxmox-deploy-toolkit#readme>
 homepage:       https://github.com/learnew2/proxmox-deploy-toolkit#readme
 bug-reports:    https://github.com/learnew2/proxmox-deploy-toolkit/issues

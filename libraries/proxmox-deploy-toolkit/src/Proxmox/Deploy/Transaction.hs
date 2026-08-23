@@ -25,19 +25,14 @@ module Proxmox.Deploy.Transaction
   ) where
 
 import           Control.Concurrent
-import           Control.Monad                            (unless, when)
-import           Control.Monad.Catch
 import           Control.Monad.Except
-import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.State
 import           Control.Monad.Trans.Writer
 import           Data.Aeson                               (Value (..))
 import           Data.Either
-import           Data.Functor                             ((<&>))
 import           Data.Functor.Identity
-import           Data.List                                (isInfixOf, nub,
-                                                           sortOn)
+import           Data.List                                (isInfixOf, nub)
 import           Data.Map                                 (Map)
 import qualified Data.Map                                 as M
 import           Data.Maybe
@@ -57,6 +52,7 @@ import qualified Proxmox.Deploy.Models.Transaction        as TS
 import           Proxmox.Deploy.Ssl
 import           Proxmox.Deploy.Types
 import           Proxmox.Models
+import           Proxmox.Models.Cluster
 import           Proxmox.Models.Network
 import           Proxmox.Models.SDNNetwork
 import           Proxmox.Models.SDNZone
@@ -70,7 +66,6 @@ import           Proxmox.Models.VMConfig
 import           Proxmox.Retry
 import           Proxmox.Schema                           (ProxmoxState (ProxmoxState))
 import           Servant.Client
-import           Servant.Client                           (parseBaseUrl)
 import           Utils
 
 snapshotPresent :: Text -> ProxmoxResponse [ProxmoxSnapshot] -> Bool
@@ -95,11 +90,8 @@ vmStateIs :: ProxmoxResponse (Maybe ProxmoxVMStatusWrapper) -> ProxmoxVMStatus -
 vmStateIs (ProxmoxResponse { proxmoxData = Just (ProxmoxVMStatusWrapper status) }) = (==status)
 vmStateIs _ = const False
 
-vmExists :: Int -> M.Map Int ProxmoxVM -> Bool
-vmExists vmid vmMap = isJust $ M.lookup vmid vmMap
-
-vmNotExists :: Int -> M.Map Int ProxmoxVM -> Bool
-vmNotExists vmid vmMap = not $ vmExists vmid vmMap
+clusterVMNotFound :: Int -> [ClusterResource] -> Bool
+clusterVMNotFound vmid = isNothing . findQEMUResourceById vmid
 
 vmUnlocked :: ProxmoxResponse (Maybe ProxmoxVMConfig) -> Bool
 vmUnlocked (ProxmoxResponse Nothing _) = False
@@ -242,105 +234,112 @@ executeTransactionAction (UnassignVMID vmName) = do
       () <- transactionDataSetF ntData
       return ()
 executeTransactionAction (DestroyVM vmName) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState $ getActiveNodesVMMap) >>= defaultClientErrorWrapper
-      if vmExists vmid vmMap then do
-        _ <- (defaultRetryClient' transactionProxmoxState) $ (deleteVM' nodeName vmid defaultProxmoxVMDeleteRequest)
-        deleteResult <- waitForClient
-          60_000_000
-          ("VM " <> (T.pack . show) vmid <> " still exists. Waiting...")
-          5
-          1_000_000
-          (defaultRetryClient' transactionProxmoxState getActiveNodesVMMap)
-          (vmNotExists vmid)
-        case deleteResult of
-          (Left e) -> throwError (ClientError e)
-          (Right True) -> $(logInfo) $ T.pack $ "VM " <> show vmName <> " is deleted"
-          (Right False) -> throwError (VMDeleteError vmid)
-      else $(logWarn) $ T.pack $ "VM " <> show vmName <> " is not found by its VMID (" <> show vmid <> ")"
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          _ <- defaultRetryClient' transactionProxmoxState $ deleteVM' resourceNode vmid defaultProxmoxVMDeleteRequest
+          deleteResult <- waitForClient
+            60_000_000
+            ("VM " <> (T.pack . show) vmid <> " still exists. Waiting...")
+            5
+            1_000_000
+            (defaultRetryClient' transactionProxmoxState getClusterVMs)
+            (clusterVMNotFound vmid)
+          case deleteResult of
+            (Left e) -> throwError (ClientError e)
+            (Right True) -> $(logInfo) $ T.pack $ "VM " <> show vmName <> " is deleted"
+            (Right False) -> throwError (VMDeleteError vmid)
+        _anyOther -> $(logWarn) $ T.pack $ "VM " <> show vmName <> " is not found by its VMID (" <> show vmid <> ")"
 executeTransactionAction (StopVM vmName) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap' <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap
-      case vmMap' of
-        (Left e) -> throwError (ClientError e)
-        (Right vmMap) -> do
-          case M.lookup vmid vmMap of
-            Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-            _ -> do
-              powerResult <- waitForClient
-                60_000_000
-                ("VM " <> (T.pack . show) vmid <> " is not powered on. Waiting...")
-                15
-                1_000_000
-                (defaultRetryClient' transactionProxmoxState (stopVM nodeName vmid >> (liftIO . threadDelay) 5_000_000 >> getVMPower nodeName vmid))
-                (`vmStateIs` VM.VMStopped)
-              case powerResult of
-                (Left e) -> throwError (ClientError e)
-                (Right True) -> $(logInfo) $ T.pack $ "Turned off VM " <> vmName <> "(#" <> show vmid <> ")"
-                (Right False) -> $(logWarn) $ T.pack $ "Failed to stop VM " <> vmName <> "(#" <> show vmid <> ")"
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          powerResult <- waitForClient
+            60_000_000
+            ("VM " <> (T.pack . show) vmid <> " is not powered on. Waiting...")
+            15
+            1_000_000
+            (defaultRetryClient' transactionProxmoxState (stopVM resourceNode vmid >> (liftIO . threadDelay) 5_000_000 >> getVMPower resourceNode vmid))
+            (`vmStateIs` VM.VMStopped)
+          case powerResult of
+            (Left e) -> throwError (ClientError e)
+            (Right True) -> $(logInfo) $ T.pack $ "Turned off VM " <> vmName <> "(#" <> show vmid <> ")"
+            (Right False) -> $(logWarn) $ T.pack $ "Failed to stop VM " <> vmName <> "(#" <> show vmid <> ")"
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (StartVM vmName) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
           initReqTime <- getUnixIntTime
-          _ <- defaultRetryClient' transactionProxmoxState $ startVM nodeName vmid
+          _ <- defaultRetryClient' transactionProxmoxState $ startVM resourceNode vmid
           _ <- powerVMWrapper initReqTime vmid
           pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (DetachNetwork vmName networkNumber) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      (ProxmoxResponse { proxmoxData = vmConfig'}) <- (defaultRetryClient' transactionProxmoxState) (getVMConfig nodeName vmid) >>= defaultClientErrorWrapper
-      case vmConfig' of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          let networkDevice = "net" <> show networkNumber
-          _ <- waitForClient
-            60_000_000
-            (T.pack $ "Waiting for configuration change of VM " <> show vmid)
-            10
-            1_000_000
-            (defaultRetryClient' transactionProxmoxState $ deleteVMConfig nodeName vmid [networkDevice] >> (liftIO . threadDelay) 2_000_000 >> getVMConfig nodeName vmid)
-            (vmDeviceNotPresent networkDevice)
-          pure ()
-executeTransactionAction (AttachNetwork vmName networkConfig) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
-  data' <- transactionDataGetF
-  case getVMID vmName data' deployConfig of
-    Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
-    (Just vmid) -> do
-      (ProxmoxResponse { proxmoxData = vmConfig'}) <- (defaultRetryClient' transactionProxmoxState) (getVMConfig nodeName vmid) >>= defaultClientErrorWrapper
-      case vmConfig' of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          case formatConfigVMNetwork networkConfig of
-            Nothing -> throwError (UnknownError $ "Failed to format network device string: " <> show networkConfig)
-            (Just (deviceName, deviceConfig)) -> do
-              _ <- (defaultRetryClient' transactionProxmoxState) (putVMConfig nodeName vmid (M.fromList [(deviceName, (String . T.pack) deviceConfig)])) >>= defaultClientErrorWrapper
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          (ProxmoxResponse { proxmoxData = vmConfig'}) <- (defaultRetryClient' transactionProxmoxState) (getVMConfig resourceNode vmid) >>= defaultClientErrorWrapper
+          case vmConfig' of
+            Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
+            _ -> do
+              let networkDevice = "net" <> show networkNumber
               _ <- waitForClient
                 60_000_000
                 (T.pack $ "Waiting for configuration change of VM " <> show vmid)
                 10
                 1_000_000
-                (defaultRetryClient' transactionProxmoxState $ getVMConfig nodeName vmid)
-                (vmDevicePresent deviceName)
+                (defaultRetryClient' transactionProxmoxState $ deleteVMConfig resourceNode vmid [networkDevice] >> (liftIO . threadDelay) 2_000_000 >> getVMConfig resourceNode vmid)
+                (vmDeviceNotPresent networkDevice)
               pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
+executeTransactionAction (AttachNetwork vmName networkConfig) = do
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
+  data' <- transactionDataGetF
+  case getVMID vmName data' deployConfig of
+    Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
+    (Just vmid) -> do
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          (ProxmoxResponse { proxmoxData = vmConfig'}) <- defaultRetryClient' transactionProxmoxState (getVMConfig resourceNode vmid) >>= defaultClientErrorWrapper
+          case vmConfig' of
+            Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
+            _ -> do
+              case formatConfigVMNetwork networkConfig of
+                Nothing -> throwError (UnknownError $ "Failed to format network device string: " <> show networkConfig)
+                (Just (deviceName, deviceConfig)) -> do
+                  _ <- (defaultRetryClient' transactionProxmoxState) (putVMConfig resourceNode vmid (M.fromList [(deviceName, (String . T.pack) deviceConfig)])) >>= defaultClientErrorWrapper
+                  _ <- waitForClient
+                    60_000_000
+                    (T.pack $ "Waiting for configuration change of VM " <> show vmid)
+                    10
+                    1_000_000
+                    (defaultRetryClient' transactionProxmoxState $ getVMConfig resourceNode vmid)
+                    (vmDevicePresent deviceName)
+                  pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
+-- TODO: legacy warning - FS agent is provided only for one node. Assuming that VM cant migrate before its start...
 executeTransactionAction (SetVMDisplay vmName vmDisplay) = do
   (TransactionState { transactionProxmoxState = proxmoxState, transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }), deployAgent = deployAgent }),.. }) <- get
   case deployAgent of
@@ -364,85 +363,85 @@ executeTransactionAction (SetVMDisplay vmName vmDisplay) = do
                   $(logInfo) $ T.pack $ "Display of VM " <> vmName <> " changed"
                   pure ()
 executeTransactionAction (MakeSnapshot vmName snapParams) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig, .. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) (getNodeVMsMap nodeName) >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          _ <- (defaultRetryClientC' transactionProxmoxState) (createSnapshot nodeName vmid snapParams) >>= defaultClientErrorWrapper
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          _ <- defaultRetryClientC' transactionProxmoxState (createSnapshot resourceNode vmid snapParams) >>= defaultClientErrorWrapper
           _ <- waitForClient
             300_000_000
             (T.pack $ "Waiting for snapshotting of VM " <> vmName)
             60
             1_000_000
-            (defaultRetryClient' transactionProxmoxState $ getVMSnapshots nodeName vmid)
+            (defaultRetryClient' transactionProxmoxState $ getVMSnapshots resourceNode vmid)
             (snapshotPresent (snapshotCreateName snapParams))
           pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (DeleteSnapshot vmName (ProxmoxSnapshotCreate { snapshotCreateName = snapName })) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) (getNodeVMsMap nodeName) >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          _ <- (defaultRetryClient' transactionProxmoxState) (deleteVMSnapshot nodeName vmid snapName) >>= defaultClientErrorWrapper
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          _ <- defaultRetryClient' transactionProxmoxState (deleteVMSnapshot resourceNode vmid snapName) >>= defaultClientErrorWrapper
           _ <- waitForClient
             300_000_000
             (T.pack $ "Waiting for snapshotting of VM " <> vmName)
             60
             1_000_000
-            (defaultRetryClient' transactionProxmoxState $ getVMSnapshots nodeName vmid)
+            (defaultRetryClient' transactionProxmoxState $ getVMSnapshots resourceNode vmid)
             (snapshotNotPresent snapName)
           pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (RollbackVM vmName snapName) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) (getNodeVMsMap nodeName) >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          _ <- (defaultRetryClient' transactionProxmoxState) (rollbackVM nodeName vmid (T.pack snapName) (ProxmoxRollbackParams True)) >>= defaultClientErrorWrapper
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          _ <- defaultRetryClient' transactionProxmoxState (rollbackVM resourceNode vmid (T.pack snapName) (ProxmoxRollbackParams True)) >>= defaultClientErrorWrapper
           _ <- waitForClient
             300_000_000
             (T.pack $ "Waiting for restoring of VM " <> vmName)
             60
             1_000_000
-            (defaultRetryClient' transactionProxmoxState $ getVMPower nodeName vmid)
+            (defaultRetryClient' transactionProxmoxState $ getVMPower resourceNode vmid)
             (`vmStateIs` VM.VMRunning)
           pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (RemoveNetworks vmName) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployParameters = (DeployParams { deployNodeName = nodeName }) }),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          (ProxmoxResponse { proxmoxData = vmCfg'}) <- (defaultRetryClient' transactionProxmoxState) (getVMConfig nodeName vmid) >>= defaultClientErrorWrapper
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          (ProxmoxResponse { proxmoxData = vmCfg'}) <- defaultRetryClient' transactionProxmoxState (getVMConfig resourceNode vmid) >>= defaultClientErrorWrapper
           case vmCfg' of
             Nothing -> throwError (VMConfigIsNotFound vmName)
             (Just vmCfg) -> do
-              _ <- (defaultRetryClient' transactionProxmoxState) (deleteVMConfig nodeName vmid (map (\x -> "net" <> show x) (vmConfigNetworkNumbers vmCfg)))
+              _ <- defaultRetryClient' transactionProxmoxState (deleteVMConfig resourceNode vmid (map (\x -> "net" <> show x) (vmConfigNetworkNumbers vmCfg)))
               _ <- waitForClient
                 60_000_000
                 (T.pack $ "Waiting for configuration change of VM " <> show vmid)
                 10
                 1_000_000
-                (defaultRetryClient' transactionProxmoxState $ getVMConfig nodeName vmid)
+                (defaultRetryClient' transactionProxmoxState $ getVMConfig resourceNode vmid)
                 vmNetworksEmpty
               pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneName = vmName',.. })) = do
   let vmName = T.unpack $ fromJust vmName'
   (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig {deployTemplates = templates}),.. }) <- get
@@ -452,17 +451,14 @@ executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneN
   case getVMID vmName data' deployConfig of
     Nothing -> throwError (MachineHasNoID vmName)
     (Just vmid) -> do
-      nodeMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodeVMNodeMap >>= defaultClientErrorWrapper
-      case M.lookup vmid nodeMap of
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
         (Just _) -> $(logWarn) $ T.pack $ "VM #" <> show vmid <> " already exists!"
         Nothing -> do
-          case M.lookup proxmoxVMCloneVMID nodeMap of
-            Nothing -> case filter ((==proxmoxVMCloneVMID) . configTemplateID) templates of
-              (template:_) -> throwError (TemplateNodeNotFound template)
-              []           -> error "unreachable"
-            (Just templateNodeName) -> do
+          case findQEMUTemplateById vmid vms of
+            (Just (QEMUResource { resourceNode = templateNodeName })) -> do
               let fullParams = params { proxmoxVMCloneNewID = vmid }
-              cloneRes' <- (defaultRetryClient' transactionProxmoxState) $ cloneVM (T.pack templateNodeName) proxmoxVMCloneVMID fullParams
+              cloneRes' <- defaultRetryClient' transactionProxmoxState $ cloneVM templateNodeName proxmoxVMCloneVMID fullParams
               case cloneRes' of
                 (Left e) -> throwError (ClientError e)
                 (Right _) -> do
@@ -478,62 +474,65 @@ executeTransactionAction (CloneVM params@(ProxmoxVMCloneParams { proxmoxVMCloneN
                     (Left e)      -> throwError (ClientError e)
                     (Right False) -> throwError (VMLocked proxmoxVMCloneNewID)
                     _             -> pure ()
+            _anyOther -> case filter ((==proxmoxVMCloneVMID) . configTemplateID) templates of
+              (template:_) -> throwError (TemplateNodeNotFound template)
+              []           -> error "unreachable"
 executeTransactionAction (AllocateDisk vmName diskConfig) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
           let payload = configVMDiskToRequest vmid diskConfig
           let p = configVMDiskPath vmid diskConfig
-          _ <- defaultRetryClient' transactionProxmoxState (allocateStorageContent nodeName (T.pack . diskStorage $ diskConfig) payload) >>= defaultClientErrorWrapper
+          _ <- defaultRetryClient' transactionProxmoxState (allocateStorageContent resourceNode (T.pack . diskStorage $ diskConfig) payload) >>= defaultClientErrorWrapper
           allocResult <- waitForClient
             10_000_000
             "Waiting for allocating disk"
             60
             1_000_000
-            (defaultRetryClient' transactionProxmoxState $ getStorageContent nodeName (T.pack . diskStorage $ diskConfig) Nothing (Just vmid))
+            (defaultRetryClient' transactionProxmoxState $ getStorageContent resourceNode (T.pack . diskStorage $ diskConfig) Nothing (Just vmid))
             (\(ProxmoxResponse { proxmoxData = disks }) -> any (\(ProxmoxStorageContent { proxmoxContentVolID = volid }) -> p `isInfixOf` volid) disks)
           case allocResult of
             (Left e)      -> throwError (ClientError e)
             (Right False) -> throwError (AllocationFailed vmName diskConfig)
             _             -> pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (ConfigureVM vmName vmConfig) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
           case formatConfigVMPatch vmid vmConfig of
             Nothing -> $(logError) "Failed to create VM patch payload"
             (Just p) -> do
               callTime <- getUnixIntTime
-              (ProxmoxResponse { proxmoxData = taskId }) <- defaultRetryClient' transactionProxmoxState (asyncPutVMConfig nodeName vmid p) >>= defaultClientErrorWrapper
+              (ProxmoxResponse { proxmoxData = taskId }) <- defaultRetryClient' transactionProxmoxState (asyncPutVMConfig resourceNode vmid p) >>= defaultClientErrorWrapper
               r <- waitTaskCompletion 60 callTime taskId "qmconfig"
               case r of
                 (Just True)  -> $(logInfo) "Successfully configured VM"
                 (Just False) -> throwError (ConfigurationError vmName)
                 Nothing      -> throwError (ConfigurationError vmName)
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (ConfigureVMRaw vmName payload) = do
-  (TransactionState { transactionDeployConfig = deployConfig@(DeployConfig { deployParameters = DeployParams { deployNodeName = nodeName }}),.. }) <- get
+  (TransactionState { transactionDeployConfig = deployConfig,.. }) <- get
   data' <- transactionDataGetF
   case getVMID vmName data' deployConfig of
     Nothing -> $(logWarn) $ T.pack $ "VM " <> vmName <> " has no allocated VMID"
     (Just vmid) -> do
-      vmMap <- (defaultRetryClient' transactionProxmoxState) getActiveNodesVMMap >>= defaultClientErrorWrapper
-      case M.lookup vmid vmMap of
-        Nothing -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
-        _ -> do
-          _ <- defaultRetryClient' transactionProxmoxState (putVMConfig nodeName vmid payload) >>= defaultClientErrorWrapper
+      vms <- defaultRetryClient' transactionProxmoxState getClusterVMs >>= defaultClientErrorWrapper
+      case findQEMUResourceById vmid vms of
+        (Just (QEMUResource { .. })) -> do
+          _ <- defaultRetryClient' transactionProxmoxState (putVMConfig resourceNode vmid payload) >>= defaultClientErrorWrapper
           pure ()
+        _anyOther -> $(logWarn) $ T.pack $ "VM with VMID " <> show vmid <> " not found."
 executeTransactionAction (TransactionDelayAfter secondsPause action) = do
   () <- executeTransactionAction action
   (liftIO . threadDelay . (* 1_000_000)) secondsPause
@@ -687,7 +686,7 @@ planTransactionStages (DeployConfig { deployVMs=vms, deployTemplates=templates, 
         map (NetworkConnected vmName) enumNets
   generateNetworks (RawVM {}) = [] -- TODO: add support
   in (snd . runIdentity . runWriterT) (if target == Deploy then f else f')
---(DeployConfig { deployNetworks = configNetworks, deployTemplates = vmTemplates, deployParameters = DeployParams { deployNodeName = deployNodeName } })
+
 planTransactionActions :: [TransactionStage] -> [ProxmoxNetwork] -> [ProxmoxSDNZone] -> [ProxmoxSDNNetwork] -> [ProxmoxStorage] -> Map Int ProxmoxVM -> TransactionState -> IO (Either TransactionException [TransactionAction])
 planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state' = do
   result <- runExceptT $ (runStateT (unTransaction $ helper stages []) state')
@@ -740,7 +739,7 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
       Nothing -> throwError (TemplateNotFound t)
       (Just (ProxmoxVM { vmTemplate=True, vmLock=Nothing })) -> helper ts acc
       _vmInvalid -> throwError (NonTemplateLink t)
-  helper ((VMExists vm@(RawVM { configVMID = vmID, configVMName = vmName, configVMDelay = delay })):ts) acc = do
+  helper ((VMExists vm@(RawVM { configVMID = vmID, configVMName = vmName })):ts) acc = do
     case vmID of
       Nothing -> helper ts (CreateVM vm:AssignVMID vmName:acc)
       (Just vmID') -> do
