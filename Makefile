@@ -140,5 +140,5 @@ restore-images: ./images
 		echo "Restoring $(image)"; docker load -i ./images/$(call escape_image, $(image)).tar;)
 
 bundle:
-	find ./ -type f -regextype posix-egrep \( -regex "(\./Makefile|.*-sample.env|\./images/.*|\./deployment/.*|\./install/.*|\./proxmox-compose/proxmox-compose)" -and -not -regex "(.*\.(crt|key)|.*tokens\.cfg|\./deployment/nginx/ssl/.*)" \) 2> /dev/null > release-files || exit 0
+	find ./ -type f -regextype posix-egrep \( -regex "(\./Makefile|.*-sample.env|\./images/.*|\./deployment/.*|\./install/.*|\./proxmox-compose/proxmox-compose)" -and -not -regex "(.*\.(crt|key)|.*tokens\.cfg|\./deployment/nginx/ssl/.*|\./install/scripts.*)" \) 2> /dev/null > release-files || exit 0
 	tar --owner root --group root -zcvf labforge.tar.gz -T release-files && rm release-files || rm release-files
