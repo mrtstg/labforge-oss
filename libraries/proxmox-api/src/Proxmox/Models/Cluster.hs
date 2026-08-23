@@ -4,13 +4,22 @@ module Proxmox.Models.Cluster
   ( ClusterResource(..)
   , isQEMUResource
   , findQEMUResourceById
+  , findQEMUTemplateById
   ) where
 
 import           Data.Aeson
-import qualified Data.Aeson.KeyMap as KV
-import           Data.List         (find)
-import           Data.Text         (Text, pack)
+import qualified Data.Aeson.KeyMap     as KV
+import           Data.List             (find)
+import           Data.Text             (Text, pack)
 import           Proxmox.Models.VM
+import           Proxmox.Utils.Parsers
+
+findQEMUTemplateById :: Int -> [ClusterResource] -> Maybe ClusterResource
+findQEMUTemplateById vmid resources = do
+  case findQEMUTemplateById vmid resources of
+    (Just r@(QEMUResource { resourceTemplate = True })) -> Just r
+    (Just _)                                            -> Nothing
+    Nothing                                             -> Nothing
 
 findQEMUResourceById :: Int -> [ClusterResource] -> Maybe ClusterResource
 findQEMUResourceById vmid = find ((==) (pack $ "qemu/" <> show vmid) . resourceId) . filter isQEMUResource
@@ -20,14 +29,15 @@ isQEMUResource (QEMUResource {}) = True
 isQEMUResource _                 = False
 
 data ClusterResource = QEMUResource
-  { resourceId     :: !Text
-  , resourceNode   :: !Text
-  , resourceName   :: !Text
-  , resourceStatus :: !ProxmoxVMStatus
+  { resourceId       :: !Text
+  , resourceNode     :: !Text
+  , resourceName     :: !Text
+  , resourceStatus   :: !ProxmoxVMStatus
+  , resourceTemplate :: !Bool
   } | OtherResource -- TODO: temporary placeholder
   deriving (Show, Eq, Ord)
 
 instance FromJSON ClusterResource where
   parseJSON = withObject "ClusterResource" $ \v -> case KV.lookup "type" v of
-    (Just (String "qemu")) -> QEMUResource <$> v .: "id" <*> v .: "node" <*> v .:? "name" .!= "" <*> v .: "status"
+    (Just (String "qemu")) -> QEMUResource <$> v .: "id" <*> v .: "node" <*> v .:? "name" .!= "" <*> v .: "status" <*> notNullWrapper (KV.lookup "template" v) variableBooleanParser
     _anyOther -> pure OtherResource
