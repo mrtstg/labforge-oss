@@ -834,7 +834,7 @@ planTransactionActions stages bridges sdnZones sdnNetworks storages vmMap state'
                         (Just bridgeName) -> if bridgeName == configVMNetworkName then
                           helper ts acc
                         else helper ts ([AttachNetwork vmName networkConfig] ++ map (DetachNetwork vmName) networkToRemove ++ acc)
-            _anyOther -> helper ts acc
+            _anyOther -> helper ts (AttachNetwork vmName networkConfig:acc)
   helper ((VMNotExists vm):ts) acc = do
     let vmName = configVMName vm
     (TransactionState { transactionDeployConfig = deployConfig, ..}) <- get
@@ -872,4 +872,5 @@ genericPowerFunction targetStatus vmConfig = do
             Nothing -> pure [TransactionDelayAfter vmDelay (TS.StartVM vmName) | transactionTarget == Deploy && vmRunning]
             (Just (ProxmoxVMStatusWrapper vmStatus)) -> do
               pure [TransactionDelayAfter vmDelay $ if vmStatus == VM.VMRunning then TS.StopVM vmName else TS.StartVM vmName | vmStatus /= targetStatus]
-        _anyOther -> pure []
+
+        _anyOther -> pure [TransactionDelayAfter vmDelay (TS.StartVM vmName) | transactionTarget == Deploy && vmRunning]
