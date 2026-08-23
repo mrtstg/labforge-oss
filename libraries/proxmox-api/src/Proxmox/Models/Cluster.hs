@@ -3,12 +3,17 @@
 module Proxmox.Models.Cluster
   ( ClusterResource(..)
   , isQEMUResource
+  , findQEMUResourceById
   ) where
 
 import           Data.Aeson
 import qualified Data.Aeson.KeyMap as KV
-import           Data.Text
+import           Data.List         (find)
+import           Data.Text         (Text, pack)
 import           Proxmox.Models.VM
+
+findQEMUResourceById :: Int -> [ClusterResource] -> Maybe ClusterResource
+findQEMUResourceById vmid = find ((==) (pack $ "qemu/" <> show vmid) . resourceId) . filter isQEMUResource
 
 isQEMUResource :: ClusterResource -> Bool
 isQEMUResource (QEMUResource {}) = True
