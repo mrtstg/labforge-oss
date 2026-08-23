@@ -67,16 +67,8 @@ jobservicePower m@(JobserviceMessageMeta { .. }) env powerOn mask = do
         Nothing -> do
           pure ()
         (Just deployConfig@(DeployConfig { deployParameters = DeployParams { .. }, .. })) -> do
-          let f = if powerOn then P.startVM else P.stopVM
-          mgr <- liftIO $ createProxmoxManager deployConfig
-          url' <- liftIO $ tryParseUrl (T.unpack deployUrl)
-          case url' of
-            (Left _) -> do
-              pure ()
-            (Right url) -> do
-              let state = ProxmoxState url mgr
-              let vmNames = map (T.pack . configVMName) deployVMs
-              forM_ (filter (createMaskFunction vmNames mask) deployVMs) $ \vm -> do
-                let vmId = fromMaybe (-1) $ configVMID vm
-                _ <- R.defaultRetryClient' state (f deployNodeName vmId)
-                $(logInfo) $ "Turned " <> (if powerOn then "on " else "off ") <> (T.pack . show) vmId
+          let vmNames = map (T.pack . configVMName) deployVMs
+          let filterF = createMaskFunction vmNames mask
+          let f = if powerOn then VMRunning else VMStopped
+          _ <- deployTransaction (map f (filter filterF deployVMs)) deploymentId deployConfig
+          pure ()
