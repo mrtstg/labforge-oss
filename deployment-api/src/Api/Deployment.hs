@@ -788,7 +788,7 @@ getDeploymentInstance instanceId (BearerWrapper token) = do
                   (Left _) -> pure base
                   (Right clusterVM) -> do
                     let vmids = mapMaybe configVMID vms
-                    let definedVMs = M.fromList $ map (\q -> (fromMaybe "-" (resourceName q), resourceStatus q == VMRunning)) $ filter ((`elem` vmids) . resourceVMID) clusterVM
+                    let definedVMs = M.fromList $ map (\q -> (fromMaybe "-" (resourceName q), resourceStatus q == VMRunning)) $ filter (\q -> isQEMUResource q && resourceVMID q `elem` vmids) clusterVM
                     pure $ base { instanceVMPower = definedVMs }
 
 getVMPortPower :: Text -> BearerWrapper -> AppT PowerState
