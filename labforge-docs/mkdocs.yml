@@ -54,6 +54,7 @@ nav:
   - Руководство установки:
     - Требования к окружению: install-guide/requirements.md
     - Установка из установщика: install-guide/installer.md
+    - Сетевые и пользовательские доступы: install-guide/network-access.md
     - Пост-установочные шаги: install-guide/postinstall.md
   - Работа с Keycloak:
     - Вход в Realm: keycloak/entering-realm.md
