@@ -1,99 +1,112 @@
 @startuml
 !theme plain
+' Внешние потребители
+actor "Пользователь" as user
 
-actor "Конечный пользователь" as user
-
-artifact nginx
-component "websockify-go"
-component "frontend-server"
-component "deployment-api"
-component "cluster-manager"
-
-storage #white;line:white; {
-artifact Kroki
-component "kroki-proxy"
+' Единая точка входа
+package "Пограничный слой" #EEF7FF {
+  artifact nginx
 }
 
-storage #white;line:white; {
-artifact Grafana
-artifact "nginx-prometheus-exporter" as nginxe
-database Prometheus
-artifact Cadvisor
+' Авторизация
+package "Авторизация" #FFF7EE {
+  artifact Keycloak
+  component "auth-service" as au
+  person "LDAP/AD/FreeIPA" as ldap
 }
 
-cloud Authorization {
-artifact Keycloak
-component "auth-service"
-person "LDAP/AD/FreeIPA" as ldap
+package "Служебные сервисы" #F5FFF5 {
+
+  package "Конвейер развертывания" #E8F7E8 {
+    component "cluster-manager" as cm
+    component "deployment-api" as da
+    component "jobservice-api" as ja
+    component "jobservice" as jw
+  }
+
+  package "Интеграции и шлюзы" #E8EFF7 {
+    component "frontend-server" as fe
+    component "websockify-go" as ws
+    component "kroki-proxy" as kp
+  }
+
+  cm <-left-> da
+  jw <-up- cm
+  jw <-up-> ja
+  ja --> da
+
+  fe --> kp
+  fe --> cm
+  fe --> da
+  fe --> ja
+  fe --> au
+  ws --> cm
+  ws --> da
+  kp --> da
 }
 
-storage #white;line:white; {
-database PostgreSQL
-queue RabbitMQ
-artifact Redis
+' Мониторинг
+package "Мониторинг" #F5F0FF {
+  artifact Grafana
+  artifact Alloy
+  artifact Loki
+  database Prometheus
+  artifact Cadvisor
+  artifact "nginx-prometheus-exporter" as nginxe
 }
 
-cloud "Proxmox node N" as proxmox {
-component "proxmox-fs-agent"
-component "Proxmox API"
-entity "VNC ports" as vnc
+' Инфраструктура
+package "Инфраструктура" #FFF5FA {
+  database PostgreSQL
+  queue RabbitMQ
+  artifact Redis
+  artifact Kroki
 }
 
-storage #white;line:white; {
-component "jobservice"
-component "jobservice-api"
+' Целевые гипервизоры
+package "Кластер Proxmox (узлы 1..N)" #FFFFE6 {
+  component "Proxmox API" as pveapi
+  entity "VNC-подключение" as vnc
 }
 
 user -> nginx
 
-nginx --> "deployment-api"
-nginx --> "frontend-server"
-nginx --> "kroki-proxy"
-nginx --> "Grafana"
-nginx --> "websockify-go"
+nginx --> fe
+nginx --> da
+nginx --> Grafana
+nginx --> ws
 
 nginxe --> nginx
-
 Prometheus --> nginxe
 Prometheus --> Cadvisor
-
+Alloy --> Loki
+Alloy --> Prometheus
 Grafana --> Prometheus
+Grafana --> Loki
 
-"kroki-proxy" -up-> Kroki
-"kroki-proxy" --> "deployment-api"
-"kroki-proxy" --> Redis
+da --> PostgreSQL
+da --> pveapi
+da --> Redis
+da --> au
 
-"frontend-server" --> "kroki-proxy"
-"frontend-server" --> "cluster-manager"
-"frontend-server" --> "deployment-api"
-"frontend-server" --> "jobservice-api"
-"frontend-server" --> "auth-service"
+cm --> PostgreSQL
+cm --> pveapi
+cm --> au
 
-"deployment-api" --> "cluster-manager"
-"deployment-api" -down-> "jobservice-api"
-"deployment-api" --> PostgreSQL
-"deployment-api" --> "Proxmox API"
-"deployment-api" --> Redis
-"deployment-api" --> "proxmox-fs-agent"
-"deployment-api" --> "auth-service"
+jw --> RabbitMQ
 
-"auth-service" --> Keycloak
-"auth-service" --> Redis
+ja --> RabbitMQ
+ja --> Redis
+
+au --> Keycloak
+au --> Redis
 Keycloak --> ldap
 
-"cluster-manager" --> PostgreSQL
-"cluster-manager" -- "Proxmox API"
-"cluster-manager" --> "deployment-api"
-"cluster-manager" --> "auth-service"
+kp --> Kroki
+kp --> Redis
 
-"jobservice" -up-> RabbitMQ
-"jobservice" --> "deployment-api"
-"jobservice" --> "cluster-manager"
-"jobservice" --> "jobservice-api"
+ws --> au
+ws --> pveapi
+ws --> vnc
 
-"jobservice-api" --> RabbitMQ
-"jobservice-api" --> Redis
-"jobservice-api" --> "deployment-api"
-
-"websockify-go" --> vnc
 @enduml

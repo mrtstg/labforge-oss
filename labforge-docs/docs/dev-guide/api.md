@@ -73,7 +73,7 @@
 | POST | `/api/cluster/nodes` | Добавление ноды (`ClusterNode`). Требует роль `cluster-admin` |
 | DELETE | `/api/cluster/nodes/{name}` | Удаление ноды. Требует роль `cluster-admin` |
 | GET | `/api/cluster/deploy/node` | Выбор доступной ноды для развертывания (с учётом нагрузки и занятых VMID) |
-| GET | `/api/cluster/websockify/config` | Устаревшая конфигурация `tokens.cfg`; сохранена для совместимости и новым gateway не используется. **Не требует токена** |
+| GET | `/api/cluster/vm/{vmid}/node` | Поиск ноды, на которой запущена VM по VMID (`qemu/<vmid>`). Требует роль `websockify-service` |
 
 ### ClusterNode (JSON)
 
@@ -83,14 +83,7 @@
   "apiUrl": "https://192.168.1.101:8006/api2/json",
   "ignoreSSL": true,
   "apiToken": "root@pam!token=...",
-  "startVMID": 100,
-  "agentUrl": "https://192.168.1.101:8000",
-  "agentToken": "...",
-  "displayNetwork": "0.0.0.0",
-  "minDisplay": 100,
-  "maxDisplay": 5000,
-  "displayIP": "192.168.1.101",
-  "excludedPorts": [8006, 8000]
+  "startVMID": 100
 }
 ```
 
@@ -133,7 +126,7 @@
 | Метод | Путь | Описание |
 |---|---|---|
 | GET | `/api/deployment/vmid/{node}/{instanceId}?amount=` | Выделить N VMID на ноде. Требует `deployment-alloc` |
-| GET | `/api/deployment/display/{node}/{instanceId}?amount=` | Выделить N дисплеев на ноде. Требует `deployment-alloc` |
+| GET | `/api/deployment/display/{node}/{instanceId}?amount=` | Выделить N дисплеев на ноде. Требует `deployment-alloc`. **В текущей версии эндпоинт не функционален** |
 | GET | `/api/deployment/network/{node}/{instanceId}?amount=` | Выделить N имён сетей (SDN). Требует `deployment-alloc` |
 | GET | `/api/deployment/vm/allocations/amount/undeployed` | Карта нод → число неразвернутых VM. Требует `cluster-admin` |
 
@@ -152,15 +145,14 @@
 
 ### Операции над VM по порту
 
-Порт — это ключ вида `имя_ноды-N` (например, `pve-1-105`). Эти эндпоинты используются фронтендом
-и websockify.
+Порт — это ключ в виде VMID виртуальной машины. Эти эндпоинты используются фронтендом и websockify.
 
 | Метод | Путь | Описание |
 |---|---|---|
 | GET | `/api/deployment/vm/{port}/power` | Текущее состояние питания |
 | GET | `/api/deployment/vm/{port}/power/switch` | Переключить питание (с защитой от частых запросов) |
 | GET | `/api/deployment/vm/{port}/networks` | Карта MAC-адрес → название сети |
-| GET | `/api/deployment/vmport/access` | Проверка доступа к VNC-порту (заголовок `X-VM-PORT`) |
+| GET | `/api/deployment/vmport/access` | Проверка доступа к VNC-порту (заголовок `X-VM-PORT`). Используется nginx и websockify |
 | GET | `/api/deployment/vm/{port}/snapshot/policy` | Политика снапшотов |
 | GET | `/api/deployment/vm/{port}/snapshot?name=` | Создать снапшот |
 | DELETE | `/api/deployment/vm/{port}/snapshot?name=` | Удалить снапшот |
@@ -261,10 +253,19 @@
 
 ## websockify-go
 
-Проксирует VNC-трафик по WebSocket через Proxmox `vncproxy`. Не имеет публичного REST API: принимает WebSocket-соединения
-на пути вида `/api/vm/{node-vmid}/vnc?token={node-vmid}`, которые nginx проверяет через
-`/api/deployment/vmport/access`. Для каждого подключения сервис создаёт новый временный proxy и подключается к Proxmox
-`vncwebsocket`; API credentials и VNC ticket клиенту не передаются.
+Проксирует VNC-трафик по WebSocket до консолей виртуальных машин. Не имеет публичного REST API: принимает
+WebSocket-соединения на пути вида `/api/vm/{vmid}/vnc?token={vmid}`, которые nginx проверяет через
+`/api/deployment/vmport/access`. Токен — это только VMID: имя ноды больше не зашивается в токен.
+
+Порядок подключения:
+1. По токену (VMID) запрашивается имя ноды у `cluster-manager` (`/api/cluster/vm/{vmid}/node`). Для этого сервис
+   получает служебный client-credentials токен через `auth-service` (`KEYCLOAK_CLIENT_ID/SECRET`).
+2. Найденная нода используется для открытия временного VNC proxy через Proxmox API (`vncproxy`), VNC ticket и API
+   credentials клиенту не передаются.
+3. С проксируемым браузером выполняется отдельная RFB-negotiation без аутентификации, затем трафик ретранслируется.
+
+Доступ периодически перепроверяется через `/api/deployment/vmport/access` (заголовок `Authorization` + `X-VM-PORT`);
+при отзыве доступа соединение закрывается.
 
 ## proxmox-fs-agent
 
@@ -274,3 +275,5 @@
 | Метод | Путь | Описание |
 |---|---|---|
 | POST | `/args/vnc/{vmid}` | Установка VNC-дисплея для VM. Тело: `{"display": <число>, "network": "<сеть>"}`. Требует Bearer-токен агента (`PROXMOX_AGENT_ACCESS_TOKEN`) |
+
+**В текущей версии не используется и не поставляется в составе установщика системы.**
