@@ -12,49 +12,80 @@ if [ ! -f ".clients.json" ]; then
 fi
 
 OUTPUT_PATH=$(echo "$FILE_PATH" | sed 's|-sample||')
-cp $FILE_PATH $OUTPUT_PATH || exit 2
-grep "KEYCLOAK_CLIENT_SECRET" $FILE_PATH &> /dev/null
-if [[ $? -ne 0 ]]; then
-    echo "Keycloak secret is not found"
+touch "$OUTPUT_PATH"
+
+# --- resolve dynamic replacement values from sample + .clients.json ---
+CLIENT_ID=$(grep "KEYCLOAK_CLIENT_ID=" "$FILE_PATH" | cut -d "=" -f2)
+if [ -z "$CLIENT_ID" ]; then
+    echo "Cant get key client ID"
 else
-    CLIENT_ID=$(grep "KEYCLOAK_CLIENT_ID=" $FILE_PATH | cut -d "=" -f2)
-    if [[ -z "$CLIENT_ID" ]]; then
-        echo "Cant key client ID"
-    else
-        echo "Got client ID: ${CLIENT_ID}"
-    fi
-    CLIENT_SECRET=$(cat .clients.json | jq ".[] | select(.clientId==\"$CLIENT_ID\")" | jq .secret -r)
-    if [[ -z "$CLIENT_SECRET" ]]; then
-        echo "Client secret not found"
-    else
-        sed -i "s|KEYCLOAK_CLIENT_SECRET=.*|KEYCLOAK_CLIENT_SECRET=$CLIENT_SECRET|" $OUTPUT_PATH
-    fi
+    echo "Got client ID: ${CLIENT_ID}"
+fi
+KEYCLOAK_CLIENT_SECRET=$(cat .clients.json | jq ".[] | select(.clientId==\"$CLIENT_ID\")" | jq .secret -r)
+if [ -z "$KEYCLOAK_CLIENT_SECRET" ]; then
+    echo "Keycloak client secret not found"
 fi
 
-grep "AUTH_KEYCLOAK_SECRET" $FILE_PATH &> /dev/null
-if [[ $? -ne 0 ]]; then
-    echo "Auth keycloak secret is not found"
+AUTH_CLIENT_ID=$(grep "AUTH_KEYCLOAK_CLIENT=" "$FILE_PATH" | cut -d "=" -f2)
+if [ -z "$AUTH_CLIENT_ID" ]; then
+    echo "Cant get auth client ID"
 else
-    CLIENT_ID=$(grep "AUTH_KEYCLOAK_CLIENT=" $FILE_PATH | cut -d "=" -f2)
-    if [[ -z "$CLIENT_ID" ]]; then
-        echo "Cant key client ID"
-    else
-        echo "Got client ID: ${CLIENT_ID}"
-    fi
-    CLIENT_SECRET=$(cat .clients.json | jq ".[] | select(.clientId==\"$CLIENT_ID\")" | jq .secret -r)
-    if [[ -z "$CLIENT_SECRET" ]]; then
-        echo "Client secret not found"
-    else
-        sed -i "s|AUTH_KEYCLOAK_SECRET=.*|AUTH_KEYCLOAK_SECRET=$CLIENT_SECRET|" $OUTPUT_PATH
-    fi
+    echo "Got auth client ID: ${AUTH_CLIENT_ID}"
+fi
+AUTH_KEYCLOAK_SECRET=$(cat .clients.json | jq ".[] | select(.clientId==\"$AUTH_CLIENT_ID\")" | jq .secret -r)
+if [ -z "$AUTH_KEYCLOAK_SECRET" ]; then
+    echo "Auth keycloak client secret not found"
 fi
 
-grep "AUTH_CALLBACK_URL" $FILE_PATH &> /dev/null
-if [[ $? -eq 0 ]]; then
-    sed -i "s|AUTH_CALLBACK_URL=.*|AUTH_CALLBACK_URL=${FRONTEND_HOSTNAME}/api/auth/callback|" $OUTPUT_PATH
-fi
+AUTH_CALLBACK_URL="${FRONTEND_HOSTNAME}/api/auth/callback"
+KEYCLOAK_URL="${KC_HOSTNAME}"
 
-grep "KEYCLOAK_URL" $FILE_PATH &> /dev/null
-if [[ $? -eq 0 ]]; then
-    sed -i "s|KEYCLOAK_URL=.*|KEYCLOAK_URL=${KC_HOSTNAME}|" $OUTPUT_PATH
-fi
+# --- add missing lines from sample; keep existing values intact ---
+while IFS= read -r line || [ -n "$line" ]; do
+    key="${line%%=*}"
+    # non key=value lines (empty, comments, sections): add verbatim only if missing
+    if [ -z "$key" ] || [ "$key" = "$line" ]; then
+        grep -qxF -- "$line" "$OUTPUT_PATH" || printf '%s\n' "$line" >> "$OUTPUT_PATH"
+        continue
+    fi
+    case "$key" in
+        KEYCLOAK_CLIENT_SECRET|AUTH_KEYCLOAK_SECRET|AUTH_CALLBACK_URL|KEYCLOAK_URL)
+            # replacement params: handled below, always overwritten
+            ;;
+        *)
+            # ordinary param: add only if key missing
+            if grep -q -- "^${key}=" "$OUTPUT_PATH"; then
+                echo "Key ${key} already exists in ${OUTPUT_PATH}, skipped"
+            else
+                printf '%s\n' "$line" >> "$OUTPUT_PATH"
+                echo "Added missing key ${key} to ${OUTPUT_PATH}"
+            fi
+            ;;
+    esac
+done < "$FILE_PATH"
+
+# --- replacement params: ensure line exists, then update regardless of value ---
+for param in KEYCLOAK_CLIENT_SECRET AUTH_KEYCLOAK_SECRET AUTH_CALLBACK_URL KEYCLOAK_URL; do
+    # only touch params present in the -sample file
+    if ! grep -q -- "^${param}=" "$FILE_PATH"; then
+        continue
+    fi
+    if ! grep -q -- "^${param}=" "$OUTPUT_PATH"; then
+        sample_val=$(grep "^${param}=" "$FILE_PATH" | cut -d "=" -f2-)
+        printf '%s=%s\n' "$param" "$sample_val" >> "$OUTPUT_PATH"
+        echo "Added missing key ${param} to ${OUTPUT_PATH}"
+    fi
+    value="${!param}"
+    if [ -n "$value" ]; then
+        sed -i "s|^${param}=.*|${param}=${value}|" "$OUTPUT_PATH"
+        case "$param" in
+            KEYCLOAK_CLIENT_SECRET|AUTH_KEYCLOAK_SECRET)
+                echo "Updated ${param} (secret hidden)"
+                ;;
+            *)
+                echo "Updated ${param}=${value}"
+                ;;
+        esac
+    fi
+done
+
