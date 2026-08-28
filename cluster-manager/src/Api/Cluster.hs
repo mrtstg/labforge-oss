@@ -54,7 +54,7 @@ import           Proxmox.Models
 import           Proxmox.Models.Cluster
 import           Proxmox.Models.Node                 (ProxmoxNode)
 import qualified Proxmox.Models.Node                 as Node
-import           Proxmox.Models.VM                   (ProxmoxVMStatus (VMRunning))
+import           Proxmox.Models.VM
 import           Proxmox.Retry
 import           Proxmox.Schema
 import           Servant
@@ -171,11 +171,10 @@ getDeployNode token = do
           deploymentEnv <- asks $ getEnvFor DeploymentService
           undeployedMap <- withTokenVariable'' $ \t -> do
             defaultRetryClientC deploymentEnv (D.getUndeployedVMAmount (BearerWrapper t))
-          nodeVMAmount <- traverse (\x -> defaultRetryClient' state ((getNodeVMs . T.pack . Node.nodeName) x >>= \(ProxmoxResponse vms _) -> pure (T.pack . Node.nodeName $ x, length vms + fromMaybe 0 (M.lookup (T.pack . Node.nodeName $ x) undeployedMap)))) nodes
+          nodeVMAmount <- traverse (\x -> defaultRetryClient' state ((getNodeVMs . T.pack . Node.nodeName) x >>= \(ProxmoxResponse vms _) -> pure (T.pack . Node.nodeName $ x, length (filter (not . vmTemplate) vms) + fromMaybe 0 (M.lookup (T.pack . Node.nodeName $ x) undeployedMap)))) nodes
           let nodeAmountMap = M.fromList $ map (fromRight ("", 0)) nodeVMAmount
           let totalNodes = sum $ map (snd . fromRight ("", 0)) nodeVMAmount
           let nodeMetrics = sortOn snd $ map (\x -> (x,) $ measureNode x + ((fromIntegral .  fromMaybe totalNodes) (M.lookup (T.pack . Node.nodeName $ x) nodeAmountMap)) / fromIntegral totalNodes) nodes
-          $(logDebug) $ (T.pack . show) nodeMetrics
           let nodesList = map entityVal allNodes
           let nodesNamesList = map (T.unpack . Database.deployNodeName) nodesList
           case find ((`elem` nodesNamesList) . Node.nodeName . fst) nodeMetrics of
