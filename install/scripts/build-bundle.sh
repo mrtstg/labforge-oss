@@ -5,7 +5,7 @@ make build-websockify
 make build-lib-image
 make build-lib-bin-image
 make build-images
-make build-fs-agent
+# make build-fs-agent
 make -C proxmox-compose build
 make save-images
 make bundle
