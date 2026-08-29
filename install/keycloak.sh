@@ -28,7 +28,7 @@ REALM_CLIENTS=(
     "deployment-api"
     "frontend-service"
     "kroki-proxy"
-    "ln2"
+    "$USER_LOGIN_CLIENT"
     "auth-service"
     "jobservice"
     "jobservice-api"
@@ -122,14 +122,14 @@ for (( i = 0; i <${#REALM_CLIENTS[@]}; i++)); do
     fi
 done
 
-./kcadm.sh get -r ln2 clients --limit 100 --offset 0 --fields 'id,clientId,name,secret' > /tmp/clients.json
+./kcadm.sh get -r $KEYCLOAK_REALM clients --limit 100 --offset 0 --fields 'id,clientId,name,secret' > /tmp/clients.json
 
 echo "Creating composites"
 REALM_CLIENT_ID=$(cat /tmp/clients.json | jq ".[] | select(.clientId==\"realm-management\")" | jq .id -r)
 if [[ -z "$REALM_CLIENT_ID" ]]; then
     echo "Realm client not found"
 else
-    ./kcadm.sh get clients/$REALM_CLIENT_ID/roles -r ln2 --limit 100 > /tmp/roles.json
+    ./kcadm.sh get clients/$REALM_CLIENT_ID/roles -r $KEYCLOAK_REALM --limit 100 > /tmp/roles.json
     TARGET_ROLES=(
         "manage-users"
         "query-users"
@@ -140,12 +140,12 @@ else
         if [[ -z "$ROLE_ID" ]]; then
             echo "Client role not found"
         else
-            ./kcadm.sh create -r ln2 roles/realm-manager/composites -b "[{\"id\":\"$ROLE_ID\"}]"
+            ./kcadm.sh create -r $KEYCLOAK_REALM roles/realm-manager/composites -b "[{\"id\":\"$ROLE_ID\"}]"
         fi
     done
 fi
 rm -f /tmp/roles.json
-./kcadm.sh get -r ln2 roles --limit 100 > /tmp/realm_roles.json
+./kcadm.sh get -r $KEYCLOAK_REALM roles --limit 100 > /tmp/realm_roles.json
 for role in "${REALM_ROLES[@]}"; do
     if [[ "$role" == "full-admin" ]]; then
         continue
@@ -154,7 +154,7 @@ for role in "${REALM_ROLES[@]}"; do
         if [[ -z "$ROLE_ID" ]]; then
             echo "Role not found"
         else
-            ./kcadm.sh create -r ln2 roles/full-admin/composites -b "[{\"id\":\"$ROLE_ID\"}]"
+            ./kcadm.sh create -r $KEYCLOAK_REALM roles/full-admin/composites -b "[{\"id\":\"$ROLE_ID\"}]"
         fi
     fi
 done
@@ -169,7 +169,7 @@ for role in "${CREATOR_ROLES[@]}"; do
     if [[ -z "$ROLE_ID" ]]; then
         echo "Role not found"
     else
-        ./kcadm.sh create -r ln2 roles/creator-minimal/composites -b "[{\"id\":\"$ROLE_ID\"}]"
+        ./kcadm.sh create -r $KEYCLOAK_REALM roles/creator-minimal/composites -b "[{\"id\":\"$ROLE_ID\"}]"
     fi
 done
 rm -f /tmp/realm_roles.json
