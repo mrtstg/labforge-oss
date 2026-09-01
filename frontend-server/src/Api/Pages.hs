@@ -628,7 +628,8 @@ deploymentCreatePage t = do
       removeENet(i) { this.networks.splice(i, 1) },
       sendRequest() {
         var availableVMs = this.vms.filter(i => i.available).map(i => i.name);
-        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, networks: this.networks, vms: this.vms, snapshot: this.snapshotPolicy});
+        var processedNetworks = this.networks.map(i => i.type == 'sdn' ? { ...i, zone: '' } : i)
+        var payload = JSON.stringify({title: this.title, availableVMs: availableVMs, networks: processedNetworks, vms: this.vms, snapshot: this.snapshotPolicy});
         fetch("/api/deployment/deployments", {
           method: "POST",
           body: payload,
