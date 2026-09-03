@@ -35,14 +35,38 @@ type peer struct {
 	start  time.Time
 	closed int32
 	conf   ProxyConfig
+
+	sourceMu sync.Mutex // serializes writes to the browser websocket
+	targetMu sync.Mutex // serializes writes to the Proxmox websocket
 }
 
 func (p *peer) Close(from string, err error) {
 	if atomic.CompareAndSwapInt32(&p.closed, 0, 1) {
+		p.targetMu.Lock()
 		_ = p.target.SendClose(websocket.CloseNormalClosure, "close")
+		p.targetMu.Unlock()
+		p.sourceMu.Lock()
 		_ = p.source.SendClose(websocket.CloseNormalClosure, "close")
+		p.sourceMu.Unlock()
 		p.conf.infof("close VNC: vm=%s, duration=%s, from=%s, err=%v", p.vm, time.Since(p.start), from, err)
 	}
+}
+
+// sendTargetMsg is the single serialized write path to the Proxmox websocket.
+// pipe() and any periodic keepalive must go through it so two goroutines never
+// write the same connection concurrently (the underlying library has no write
+// mutex of its own).
+func (p *peer) sendTargetMsg(data []byte) error {
+	p.targetMu.Lock()
+	defer p.targetMu.Unlock()
+	return p.target.SendBinaryMsg(data)
+}
+
+// sendSourcePing serializes the keepalive ping to the browser websocket.
+func (p *peer) sendSourcePing() error {
+	p.sourceMu.Lock()
+	defer p.sourceMu.Unlock()
+	return p.source.SendPing(nil)
 }
 
 type ProxyConfig struct {
@@ -145,14 +169,14 @@ func (h *WebsocketVncProxyHandler) tick() {
 		select {
 		case <-ticker.C:
 			for _, p := range h.peerSnapshot() {
-				if err := p.source.SendPing(nil); err != nil {
+				if err := p.sendSourcePing(); err != nil {
 					p.Close("client", err)
 					continue
 				}
-				if err := p.target.SendPing(nil); err != nil {
-					p.Close("Proxmox", err)
-					continue
-				}
+				// No ping is sent to the Proxmox leg: SendPing does not verify a
+				// pong, so it conveys no liveness signal, and a blind write would
+				// race with pipe() over the same connection. Target liveness is
+				// surfaced by pipe() reading from it (EOF on close).
 				h.validateAccess(p)
 			}
 		case <-h.exit:
@@ -177,12 +201,17 @@ func (h *WebsocketVncProxyHandler) validateAccess(p *peer) {
 }
 
 func (h *WebsocketVncProxyHandler) lookupNode(ctx context.Context, vmid int) (string, error) {
-	for attempt := 0; attempt < 2; attempt++ {
+	const attempts = 3
+	for attempt := 0; attempt < attempts; attempt++ {
 		token, err := h.conf.ServiceTokens.Token(ctx)
 		if err != nil {
 			return "", err
 		}
 		node, status, err := h.lookupNodeWithToken(ctx, vmid, token)
+		if status == http.StatusNotFound && attempt < attempts-1 {
+			time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+			continue
+		}
 		if (status == http.StatusUnauthorized || status == http.StatusForbidden) && attempt == 0 {
 			// The token may have been revoked or its service roles may have changed
 			// before its advertised expiry. Refresh it and retry only once.
@@ -191,7 +220,7 @@ func (h *WebsocketVncProxyHandler) lookupNode(ctx context.Context, vmid int) (st
 		}
 		return node, err
 	}
-	return "", errors.New("cluster-manager authentication failed")
+	return "", errors.New("cluster-manager lookup failed")
 }
 
 func (h *WebsocketVncProxyHandler) lookupNodeWithToken(ctx context.Context, vmid int, token string) (string, int, error) {
@@ -332,9 +361,10 @@ func (h *WebsocketVncProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 
 func (h *WebsocketVncProxyHandler) pipe(p *peer, source, target *websocket.Websocket, from string, initial []byte) {
 	// Each write completes before the next read, providing backpressure without
-	// buffering an unbounded amount of VNC traffic in the gateway.
+	// buffering an unbounded amount of VNC traffic in the gateway. All target
+	// writes go through sendTargetMsg so they serialize with any other writer.
 	if len(initial) != 0 {
-		if err := target.SendBinaryMsg(initial); err != nil {
+		if err := p.sendTargetMsg(initial); err != nil {
 			p.Close(from, err)
 			return
 		}
@@ -350,7 +380,7 @@ func (h *WebsocketVncProxyHandler) pipe(p *peer, source, target *websocket.Webso
 				p.Close(from, errors.New("non-binary websocket message"))
 				return
 			}
-			if err := target.SendBinaryMsg(message.Data); err != nil {
+			if err := p.sendTargetMsg(message.Data); err != nil {
 				p.Close(from, err)
 				return
 			}
