@@ -19,5 +19,5 @@ import           System.IO
 
 main :: IO ()
 main = do
-  hSetBuffering stdout NoBuffering
+  hSetBuffering stdout LineBuffering
   mainF
