@@ -42,18 +42,25 @@ lookupToken token = let
     Config { .. } <- ask
     tokenResp <- runClientApp keycloakEnv $ validateToken keycloakRealm (IntrospectRequest {reqToken=token, reqClientSecret=keycloakClientSecret, reqClientID=keycloakClientID})
     case tokenResp of
-      (Left _) -> sendJSONError err401 (JSONError "unauthorized" "Failed to check token" Null)
+      (Left e) -> do
+        $(logError) $ "Token validation error: " <> (pack . show) e
+        sendJSONError err401 (JSONError "unauthorized" "Failed to check token" Null)
       (Right resp) -> do
         $(logDebug) $ "Cached new token value!"
         endTime <- liftIO getCPUTime
         let diff = (fromIntegral (endTime - startTime)) / (10^12)
         $(logDebug) $ "Got token data in " <> (pack . show) diff
-        (pure . Just) resp
+        case resp of
+          (ActiveToken {}) -> (pure . Just) resp
+          _                -> pure Nothing
   in do
     v <- getOrCacheJsonValue (Just 10) (unpack token) getTokenResp
     $(logDebug) $ "Checking token " <> token <> ":" <> (pack . show) v
     case v of
-      (Left _) -> sendJSONError err401 (JSONError "unauthorized" "Failed to check token" Null)
+      (Left "Failed to get value!") -> pure InactiveToken
+      (Left e) -> do
+        $(logError) $ "Token validation error: " <> (pack . show) e
+        sendJSONError err401 (JSONError "unauthorized" "Failed to check token" Null)
       (Right resp) -> pure resp
 
 
