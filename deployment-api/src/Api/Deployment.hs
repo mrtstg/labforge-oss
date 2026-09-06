@@ -904,8 +904,12 @@ vmPortAccessCheck :: Text -> BearerWrapper -> AppT ()
 vmPortAccessCheck vmPort (BearerWrapper token) = do
   r <- lookupToken token
   case r of
-    InactiveToken -> sendJSONError err401 (JSONError "" "" Null)
-    (ActiveToken { tokenUUID = Nothing }) -> sendJSONError err401 (JSONError "" "" Null)
+    InactiveToken -> do
+      $(logError) $ "VMPort " <> vmPort <> ": inactive token"
+      sendJSONError err401 (JSONError "" "" Null)
+    (ActiveToken { tokenUUID = Nothing }) -> do
+      $(logError) $ "VMPort " <> vmPort <> ": token without UUID"
+      sendJSONError err401 (JSONError "" "" Null)
     (ActiveToken { tokenUUID = Just uid,.. }) -> do
       hasAccess <- isUserAccessedVMPort tokenGroups tokenRealmRoles uid vmPort
       if not hasAccess then sendJSONError err403 (JSONError "" "" Null) else pure ()

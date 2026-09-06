@@ -63,15 +63,31 @@ isUserAccessedVMPort userGroups userRoles userId vmPort = let
     let deployTemplatesAdmin = "deployment-admin"
     related <- findInstanceByVMPort vmPort
     case related of
-      Nothing -> pure False
-      Just (Entity _ DeploymentInstanceData { .. }, vm) ->
-        if deployTemplatesAdmin `elem` userRoles then pure True else do
-          ~(Just (DeploymentTemplateData { .. })) <- runDB $ get deploymentInstanceDataParent
-          templateHidden <- runDB $ exists [ DeploymentTemplateHideGroup <-. userGroups, DeploymentTemplateHideDeployment ==. deploymentInstanceDataParent]
-          if userId == deploymentTemplateDataOwnerId then $(logDebug) "Admin access. Allowed." >> pure True else do
-            if userId /= deploymentInstanceDataOwnerId || templateHidden then $(logDebug) "Not admin and not owner" >> pure False else
-              if T.pack (configVMName vm) `elem` deploymentTemplateDataAvailableVMs then $(logDebug) "Stand owner to available VM. Allowed." >> pure True else
-                $(logDebug) "Stand owner to not available VM. Not allowed." >> pure False
+      Nothing -> do
+        $(logError) $ "VMPort" <> vmPort <> ": did not found instance"
+        pure False
+      Just (Entity (DeploymentInstanceDataKey instanceKey) DeploymentInstanceData { .. }, vm) -> do
+        if deployTemplatesAdmin `elem` userRoles then do
+          $(logInfo) $ "VMPort " <> vmPort <> ": request from template-admin (" <> userId <> ")"
+          pure True
+        else do
+          parent <- runDB $ get deploymentInstanceDataParent
+          case parent of
+            Nothing -> do
+              $(logError) $ "VMport " <> vmPort <> ": failed to get parent template of instance " <> instanceKey
+              pure False
+            (Just (DeploymentTemplateData { .. })) -> do
+              templateHidden <- runDB $ exists [ DeploymentTemplateHideGroup <-. userGroups, DeploymentTemplateHideDeployment ==. deploymentInstanceDataParent]
+              if userId == deploymentTemplateDataOwnerId then do
+                $(logInfo) $ "VMPort " <> vmPort <> ": request from template owner (" <> userId <> ")"
+                pure True
+              else do
+                case (userId /= deploymentInstanceDataOwnerId, templateHidden) of
+                  (True, _) -> $(logError) ("VMPort " <> vmPort <> ": user " <> userId <> " is now owner of stand") >> pure False
+                  (False, True) -> $(logError) ("VMPort " <> vmPort <> ": stand is hidden from user " <> userId) >> pure False
+                  (False, False) -> do
+                    if T.pack (configVMName vm) `elem` deploymentTemplateDataAvailableVMs then $(logDebug) "Stand owner to available VM. Allowed." >> pure True else
+                      $(logError) ("VMPort" <> vmPort <> ": user " <> userId <> " requested unavailable VM " <> (T.pack . configVMName) vm) >> pure False
       in do
         ~(Right v) <- getOrCacheJsonValue (Just 10) (T.unpack $ userId <> vmPort) (f <&> Just)
         pure v
