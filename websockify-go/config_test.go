@@ -34,8 +34,36 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	if config.ClusterURL != "http://cluster:8000" {
 		t.Fatalf("unexpected cluster URL: %q", config.ClusterURL)
 	}
+	if config.ClientMaxMessageSize != defaultClientMaxMessageSize || config.Proxmox.MaxMessageSize != defaultProxmoxMaxMessageSize {
+		t.Fatalf("unexpected message-size defaults: client=%d Proxmox=%d", config.ClientMaxMessageSize, config.Proxmox.MaxMessageSize)
+	}
 	if !config.Proxmox.InsecureSkipVerify {
 		t.Fatal("insecure TLS setting was not applied")
+	}
+}
+
+func TestLoadConfigAppliesMessageSizeOverrides(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("VNC_CLIENT_MAX_MESSAGE_BYTES", "2097152")
+	t.Setenv("VNC_PROXMOX_MAX_MESSAGE_BYTES", "33554432")
+	config, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ClientMaxMessageSize != 2097152 || config.Proxmox.MaxMessageSize != 33554432 {
+		t.Fatalf("unexpected message-size overrides: client=%d Proxmox=%d", config.ClientMaxMessageSize, config.Proxmox.MaxMessageSize)
+	}
+}
+
+func TestLoadConfigRejectsInvalidMessageSizes(t *testing.T) {
+	for _, value := range []string{"nope", "0", "-1", "268435457"} {
+		t.Run(value, func(t *testing.T) {
+			setRequiredEnv(t)
+			t.Setenv("VNC_PROXMOX_MAX_MESSAGE_BYTES", value)
+			if _, err := LoadConfigFromEnv(); err == nil {
+				t.Fatalf("expected message size %q to fail", value)
+			}
+		})
 	}
 }
 

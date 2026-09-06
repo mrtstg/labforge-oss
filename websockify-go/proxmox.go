@@ -23,11 +23,12 @@ type ConsoleTarget struct {
 }
 
 type ProxmoxClient struct {
-	baseURL   *url.URL
-	apiToken  string
-	tlsConfig *tls.Config
-	timeout   time.Duration
-	http      *http.Client
+	baseURL        *url.URL
+	apiToken       string
+	tlsConfig      *tls.Config
+	timeout        time.Duration
+	maxMessageSize int
+	http           *http.Client
 }
 
 type proxmoxProxyResponse struct {
@@ -65,16 +66,21 @@ func NewProxmoxClient(config ProxmoxConfig) (*ProxmoxClient, error) {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
+	maxMessageSize := config.MaxMessageSize
+	if maxMessageSize <= 0 {
+		maxMessageSize = defaultProxmoxMaxMessageSize
+	}
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
 		IdleConnTimeout: 30 * time.Second,
 	}
 	return &ProxmoxClient{
-		baseURL:   config.APIURL,
-		apiToken:  config.APIToken,
-		tlsConfig: tlsConfig,
-		timeout:   timeout,
-		http:      &http.Client{Transport: transport, Timeout: timeout},
+		baseURL:        config.APIURL,
+		apiToken:       config.APIToken,
+		tlsConfig:      tlsConfig,
+		timeout:        timeout,
+		maxMessageSize: maxMessageSize,
+		http:           &http.Client{Transport: transport, Timeout: timeout},
 	}, nil
 }
 
@@ -139,7 +145,7 @@ func (c *ProxmoxClient) OpenConsole(ctx context.Context, target ConsoleTarget) (
 		var netErr net.Error
 		return nil, &upstreamError{timeout: errors.As(err, &netErr) && netErr.Timeout()}
 	}
-	ws.SetTimeout(c.timeout).SetMaxMsgSize(65535)
+	ws.SetTimeout(c.timeout).SetMaxMsgSize(c.maxMessageSize)
 	// The websocket upgrade only authenticates access to the short-lived VNC
 	// listener. Complete the separate RFB password exchange here so neither the
 	// ticket nor the generated console password ever has to reach the browser.

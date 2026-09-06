@@ -22,12 +22,13 @@ func main() {
 	serviceTokens := NewServiceTokenClient(config.Auth)
 
 	proxyConfig := ProxyConfig{
-		ClusterURL:    config.ClusterURL,
-		ServiceTokens: serviceTokens,
-		TokenEndpoint: fmt.Sprintf("%s/api/deployment/vmport/access", config.DeploymentURL),
-		Proxmox:       proxmox,
-		InfoLog:       log.Printf,
-		ErrorLog:      log.Printf,
+		ClusterURL:           config.ClusterURL,
+		ServiceTokens:        serviceTokens,
+		TokenEndpoint:        fmt.Sprintf("%s/api/deployment/vmport/access", config.DeploymentURL),
+		Proxmox:              proxmox,
+		ClientMaxMessageSize: config.ClientMaxMessageSize,
+		InfoLog:              log.Printf,
+		ErrorLog:             log.Printf,
 		CheckOrigin: func(*http.Request) bool {
 			return true
 		},

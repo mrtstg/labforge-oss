@@ -11,13 +11,19 @@ import (
 	"time"
 )
 
-const defaultTimeout = 10 * time.Second
+const (
+	defaultTimeout               = 10 * time.Second
+	defaultClientMaxMessageSize  = 1 << 20
+	defaultProxmoxMaxMessageSize = 64 << 20
+	maxConfiguredMessageSize     = 256 << 20
+)
 
 type Config struct {
-	Auth          AuthConfig
-	ClusterURL    string
-	DeploymentURL string
-	Proxmox       ProxmoxConfig
+	Auth                 AuthConfig
+	ClusterURL           string
+	DeploymentURL        string
+	ClientMaxMessageSize int
+	Proxmox              ProxmoxConfig
 }
 
 type AuthConfig struct {
@@ -32,6 +38,7 @@ type ProxmoxConfig struct {
 	APIToken           string
 	CAFile             string
 	InsecureSkipVerify bool
+	MaxMessageSize     int
 	Timeout            time.Duration
 }
 
@@ -56,6 +63,14 @@ func LoadConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	clientSecret, err := requiredEnv("KEYCLOAK_CLIENT_SECRET")
+	if err != nil {
+		return Config{}, err
+	}
+	clientMaxMessageSize, err := messageSizeEnv("VNC_CLIENT_MAX_MESSAGE_BYTES", defaultClientMaxMessageSize)
+	if err != nil {
+		return Config{}, err
+	}
+	proxmoxMaxMessageSize, err := messageSizeEnv("VNC_PROXMOX_MAX_MESSAGE_BYTES", defaultProxmoxMaxMessageSize)
 	if err != nil {
 		return Config{}, err
 	}
@@ -99,16 +114,30 @@ func LoadConfigFromEnv() (Config, error) {
 			ClientSecret: clientSecret,
 			Timeout:      defaultTimeout,
 		},
-		ClusterURL:    clusterURL,
-		DeploymentURL: deploymentURL,
+		ClusterURL:           clusterURL,
+		DeploymentURL:        deploymentURL,
+		ClientMaxMessageSize: clientMaxMessageSize,
 		Proxmox: ProxmoxConfig{
 			APIURL:             apiURL,
 			APIToken:           apiToken,
 			CAFile:             strings.TrimSpace(os.Getenv("PROXMOX_CA_FILE")),
 			InsecureSkipVerify: insecure,
+			MaxMessageSize:     proxmoxMaxMessageSize,
 			Timeout:            defaultTimeout,
 		},
 	}, nil
+}
+
+func messageSizeEnv(name string, defaultValue int) (int, error) {
+	value, ok := os.LookupEnv(name)
+	if !ok || strings.TrimSpace(value) == "" {
+		return defaultValue, nil
+	}
+	size, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || size <= 0 || size > maxConfiguredMessageSize {
+		return 0, fmt.Errorf("%s must be a positive integer no greater than %d", name, maxConfiguredMessageSize)
+	}
+	return size, nil
 }
 
 func requiredServiceURL(name string) (string, error) {
