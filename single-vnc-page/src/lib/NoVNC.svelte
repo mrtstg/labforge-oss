@@ -5,9 +5,13 @@
   let desktopName = ""
   let connected: boolean = false
   let quality: number = 7
-  let timeoutId: number | null = null
+  const initialReconnectDelay = 2000
+  const maximumReconnectDelay = 30000
+  let reconnectDelay = initialReconnectDelay
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let mounted = false
 
-  let key = {}
+  let key = 0
 
   export let getPowerCallback: () => Promise<string | null> = async () => { return null }
   //export let setPowerCallback: () => Promise<ErrorWrapper<VMPowerSwitchErrorKind> | string>
@@ -26,6 +30,12 @@
 
   const updateConnect = (state: boolean) => {
     connected = state
+    if (state) {
+      reconnectDelay = initialReconnectDelay
+      clearReconnectTimer()
+    } else {
+      scheduleReconnect()
+    }
   }
 
   const changeQuality = (delta: number) => {
@@ -34,21 +44,35 @@
     }
   }
 
-  const connectRFB = () => {
-    key = {}
+  const clearReconnectTimer = () => {
+    if (reconnectTimer != null) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
+  // Recreate noVNC only after a real disconnect. Backoff avoids a reconnect
+  // storm when the gateway or Proxmox node is unavailable for a longer time.
+  const scheduleReconnect = () => {
+    if (!mounted || connected || reconnectTimer != null) {
+      return
+    }
+    const delay = reconnectDelay
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      if (mounted && !connected) {
+        key += 1
+        reconnectDelay = Math.min(reconnectDelay * 2, maximumReconnectDelay)
+      }
+    }, delay)
   }
 
   onMount(() => {
-    setInterval(() => {
-      if (!connected) {
-        connectRFB()
-      }
-    }, 2000)
+    mounted = true
 
     return () => {
-      if (timeoutId != null) {
-        clearInterval(timeoutId)
-      }
+      mounted = false
+      clearReconnectTimer()
     }
   })
 

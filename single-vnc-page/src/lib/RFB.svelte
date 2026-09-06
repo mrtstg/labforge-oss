@@ -13,6 +13,7 @@
   export let onDisconnectCallback: () => Promise<void> = async () => {}
 
   onMount(() => {
+    let active = true
     rfb = new RFB(parent, url)
     rfb.compressionLevel = 5
     rfb.qualityLevel = quality
@@ -21,12 +22,33 @@
     rfb.clipViewport = false
     rfb.scaleViewport = true
 
-    rfb.addEventListener("desktopname", desktopCallback)
-    rfb.addEventListener("connect", (_) => { connectCallback(true); onConnectCallback() })
-    rfb.addEventListener("disconnect", (_) => { connectCallback(false); onDisconnectCallback() })
+    const handleDesktopName = (event: CustomEvent<{ name: string }>) => {
+      if (active) desktopCallback(event)
+    }
+    const handleConnect = () => {
+      if (!active) return
+      connectCallback(true)
+      void onConnectCallback()
+    }
+    const handleDisconnect = () => {
+      if (!active) return
+      connectCallback(false)
+      void onDisconnectCallback()
+    }
+
+    rfb.addEventListener("desktopname", handleDesktopName)
+    rfb.addEventListener("connect", handleConnect)
+    rfb.addEventListener("disconnect", handleDisconnect)
 
     return () => {
       if (rfb != null) {
+        // A keyed reconnect destroys the previous RFB instance. Mark it
+        // inactive before disconnecting so its cleanup event cannot schedule
+        // another reconnect on top of the new connection attempt.
+        active = false
+        rfb.removeEventListener("desktopname", handleDesktopName)
+        rfb.removeEventListener("connect", handleConnect)
+        rfb.removeEventListener("disconnect", handleDisconnect)
         rfb.disconnect()
       }
     }
