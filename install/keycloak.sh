@@ -59,6 +59,8 @@ if [ $? -eq 1 ]; then
         echo "Failed to create realm!"
         exit 1
     fi
+    echo "Setting token lifespan"
+    ./kcadm.sh update realms/$KEYCLOAK_REALM -s accessTokenLifespan=3600
 else
     echo "Realm exists!"
 fi
@@ -90,7 +92,22 @@ for client in "${REALM_CLIENTS[@]}"; do
     if [ $? -ne 0 ]; then
         echo "Client $client does not exists!"
         if [ "$USER_LOGIN_CLIENT" = "$client" ]; then
-            ./kcadm.sh create clients -r $KEYCLOAK_REALM -s 'name=AuthPortal' -s clientId=$client -s 'redirectUris=["*"]' -s 'webOrigins=["*"]' -s 'standardFlowEnabled=true' -s 'serviceAccountsEnabled=false' -s rootUrl="$FRONTEND_HOSTNAME"
+            ./kcadm.sh create clients -r $KEYCLOAK_REALM -f - << EOF
+{
+  "clientId": "$client",
+  "enabled": true,
+  "name": "AuthPortal",
+  "clientAuthenticatorType": "client-secret",
+  "redirectUris": ["*"],
+  "webOrigins": ["*"],
+  "standardFlowEnabled": true,
+  "serviceAccountsEnabled": false,
+  "rootUrl": "$FRONTEND_HOSTNAME",
+  "attributes": {
+    "use.refresh.tokens": "false"
+  }
+}
+EOF
             echo '{"name": "group-membership-mapper","protocol": "openid-connect","protocolMapper": "oidc-group-membership-mapper","consentRequired": false,"config": {"access.token.claim": "true","claim.name": "groups","id.token.claim": "true","jsonType.label": "String","multivalued": "true","userinfo.token.claim": "true","full.path": "false"}}' > /tmp/mapper.json
             clientid=$(./kcadm.sh get clients -r $KEYCLOAK_REALM --fields id,clientId | jq -r '.[] | select(.clientId==("'$client'")) | .id')
             ./kcadm.sh create clients/$clientid/protocol-mappers/models -r $KEYCLOAK_REALM -f /tmp/mapper.json
