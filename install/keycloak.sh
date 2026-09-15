@@ -60,7 +60,7 @@ if [ $? -eq 1 ]; then
         exit 1
     fi
     echo "Setting token lifespan"
-    ./kcadm.sh update realms/$KEYCLOAK_REALM -s accessTokenLifespan=3600
+    ./kcadm.sh update realms/$KEYCLOAK_REALM -s accessTokenLifespan=$((3600 * 3)) -s ssoSessionIdleTimeout=$((3600 * 4)) -s ssoSessionMaxLifespan=$((3600 * 10)) -s clientSessionIdleTimeout=0 -s clientSessionMaxLifespan=0
 else
     echo "Realm exists!"
 fi
